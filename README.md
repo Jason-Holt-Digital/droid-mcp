@@ -1,8 +1,10 @@
 # droid-mcp
 
-An MCP server that lets any MCP client (Droid, Claude Code, Cursor, other agents) find, start, steer and read Factory Droid sessions, including mission/workstream orchestrators and their agents. It reads local session files, runs its own sessions through `@factory/droid-sdk`, and reaches sessions held elsewhere through the Factory REST API when an API key is available.
+An MCP server that lets any MCP client (Droid, Claude Code, Cursor, other agents) find, start, steer and read Factory Droid sessions on every Droid computer you have, including mission/workstream orchestrators and their agents. It reads local session files, runs its own sessions through `@factory/droid-sdk`, and reaches sessions on every other online Droid computer (your own computers and Factory cloud computers) through the Factory REST API when an API key is available.
 
-Status: early (0.1.0). Tested on macOS with droid CLI 1.10.0, `@factory/droid-sdk` 0.11.0 and Node 26 (`engines` requires Node >= 24). The only platform-specific code is the Keychain lookup for `FACTORY_API_KEY`, which runs only on `darwin`; elsewhere the key must come from the environment. Linux is untested.
+Droids can also call back. In HTTP mode, a hook on each computer posts an event to the server's `POST /events` when a session finishes, asks a question, needs a permission or ends. The server keeps recent events for `droid_events` and can forward them to a webhook that wakes your agent.
+
+Status: early (0.1.0). Tested on macOS with droid CLI 1.10.0, `@factory/droid-sdk` 0.11.0 and Node 26 (`engines` requires Node >= 24). The only platform-specific server code is the Keychain lookup for secrets (`FACTORY_API_KEY`, the events token, the webhook URL and key), which runs only on `darwin`; elsewhere they must come from the environment. Linux is untested.
 
 ## Install & set up
 
@@ -33,7 +35,7 @@ npm test
 
 ### 3. Optional: add a `FACTORY_API_KEY`
 
-Without a key, the server works with local session files and the sessions it starts itself, using your droid CLI login. A key enables the REST backend, which reaches sessions on other machines, sessions held by the desktop app, and workstream sessions. When a key is found, spawned sessions also use it instead of the CLI login.
+Without a key, the server works with local session files and the sessions it starts itself, using your droid CLI login. A key enables the REST backend, which lists your Droid computers and reaches sessions on every other online computer (your own and Factory cloud computers), sessions held by the desktop app, and workstream sessions. When a key is found, spawned sessions also use it instead of the CLI login.
 
 Create a key on the [API Keys page](https://app.factory.ai/settings/api-keys) in Factory settings. Then give it to the server in one of two ways:
 
@@ -197,32 +199,90 @@ From the repo directory, use the MCP Inspector CLI. List the tools:
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/list
 ```
 
-Expect 8 tools: `droid_find`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
+Expect 10 tools: `droid_find`, `droid_computers`, `droid_events`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
 
-Call two read-only tools:
+Call three read-only tools:
 
 ```sh
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_models --tool-arg filter=opus
+npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_computers
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_find --tool-arg limit=5
 ```
 
-Then, from a connected client, ask it to call `droid_models` and `droid_find`. Both are read-only and spend no model tokens.
+Then, from a connected client, ask it to call `droid_computers` and `droid_find`. Both are read-only and spend no model tokens.
+
+### 7. Optional: callbacks from every computer
+
+Callbacks need HTTP mode (step 5). A hook on each computer posts events to `https://<host>/events`; see [Callbacks](#callbacks) for what it sends.
+
+Create an events token. It is separate from `DROID_MCP_TOKEN`; use a different value. On macOS, store it in the Keychain:
+
+```sh
+security add-generic-password -s droid-mcp -a EVENTS_TOKEN -w "$(openssl rand -hex 32)"
+security find-generic-password -s droid-mcp -a EVENTS_TOKEN -w   # prints it, for the installers below
+```
+
+Elsewhere, or instead, set `DROID_MCP_EVENTS_TOKEN=<token>` in the server's environment (for example in `~/.droid-mcp/run.sh` or `~/.droid-mcp/env`). Restart the server. Until the token is set, `POST /events` answers 404.
+
+Then install the hook on every computer that runs Droid sessions, with the same token. Run the installer from a clone of this repo on that computer.
+
+macOS and Linux (needs `python3`):
+
+```sh
+DROID_MCP_EVENTS_TOKEN=<token> python3 scripts/install_hooks.py --url https://<host>/events
+python3 scripts/install_hooks.py --url https://<host>/events --token-stdin < token.txt   # or read it from stdin
+python3 scripts/install_hooks.py --url https://<host>/events                            # or type it at a hidden prompt
+python3 scripts/install_hooks.py --uninstall
+```
+
+On the machine that runs the server, the URL can be `http://127.0.0.1:<port>/events`.
+
+Windows (PowerShell 5.1 or later; the token comes from `DROID_MCP_EVENTS_TOKEN`, `-TokenStdin` or a hidden prompt):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-hooks.ps1 -Url https://<host>/events
+powershell -ExecutionPolicy Bypass -File scripts\install-hooks.ps1 -Uninstall
+```
+
+What the installer changes:
+
+- Copies the hook script to `~/.factory/droid-mcp/`.
+- Writes `~/.factory/droid-mcp/hook.json` with the URL and token, mode 600 (on Windows, readable only by the current user). The token is never printed.
+- Adds the hook for `Stop`, `Notification` and `SessionEnd` to `~/.factory/hooks.json`, keeping your other hooks and saving a timestamped backup first.
+- Running it again replaces its own entries instead of adding more. `--uninstall` / `-Uninstall` removes them and the `~/.factory/droid-mcp/` directory.
+
+New sessions pick the hook up. Droid snapshots hooks at startup, so a session that was already running may need a restart.
+
+Each computer must reach the server URL. Over a tailnet, `tailscale serve` (step 5) gives `https://<your-host>.<tailnet>.ts.net:8443/events`. A Factory cloud computer needs a network route to that URL too.
+
+Optionally, forward events to a webhook, for example a Grok Bot webhook routine. Set both:
+
+- `DROID_MCP_WEBHOOK_URL` (or Keychain account `WEBHOOK_URL`): where to POST each forwarded event.
+- `DROID_MCP_WEBHOOK_KEY` (or Keychain account `WEBHOOK_KEY`): sent as `Authorization: Bearer <key>` and `X-Automation-Key: <key>`.
+
+Each forward has an 8 s timeout and one try. Failures go to the server log. Restart the server after changing either value.
 
 ## Configuration
 
-- `FACTORY_API_KEY` (default unset): enables the REST backend, and is used for spawned sessions instead of the CLI login. On macOS, the server falls back to the Keychain (step 3).
+- `FACTORY_API_KEY` (default unset): enables the REST backend (other computers, workstream children), and is used for spawned sessions instead of the CLI login. On macOS, the server falls back to the Keychain (step 3).
 - `DROID_MCP_ROOTS` (default `~/repos`): colon-separated directories a session cwd must resolve inside.
 - `DROID_MCP_MAX_AUTONOMY` (default `high`): autonomy cap, one of `off`, `low`, `medium`, `high`; any other value means `off`.
-- `DROID_MCP_TOKEN` (default unset): bearer token; required with `--http`.
+- `DROID_MCP_TOKEN` (default unset): bearer token for the MCP endpoint; required with `--http`.
+- `DROID_MCP_EVENTS_TOKEN` (default unset): bearer token for `POST /events`; enables callbacks in HTTP mode. On macOS, falls back to Keychain account `EVENTS_TOKEN` (step 7).
+- `DROID_MCP_WEBHOOK_URL` (default unset): webhook that receives forwarded events. Falls back to Keychain account `WEBHOOK_URL`.
+- `DROID_MCP_WEBHOOK_KEY` (default unset): key sent to the webhook; forwarding needs both URL and key. Falls back to Keychain account `WEBHOOK_KEY`.
 
 ## How the tools fit together
 
 ```text
-Discover            Start or steer          Follow and approve                        Read or stop
-droid_find    ─┐    droid_start ─┐          droid_wait ── pending prompt? ──► droid_respond
-droid_models  ─┴──► droid_send  ─┴─► turn ─► droid_wait ── state "idle" ─────► droid_result
-                                     runs in                                   droid_cancel
-                                     background
+Discover               Start or steer          Follow and approve                        Read or stop
+droid_computers  ─┐
+droid_find       ─┤    droid_start ─┐          droid_wait ── pending prompt? ──► droid_respond
+droid_models     ─┴──► droid_send  ─┴─► turn ─► droid_wait ── state "idle" ─────► droid_result
+                                        runs in                                   droid_cancel
+                                        background
+
+Callback           hook on any computer ─► POST /events ─► droid_events or webhook ─► droid_send, droid_respond
 ```
 
 Terms used below:
@@ -234,16 +294,18 @@ Terms used below:
 
 ## Access at a glance
 
-The server uses three backends. Each edge into a backend is labeled with the credential it needs.
+The server uses three backends and accepts events from hooks. Each edge is labeled with the credential it needs.
 
 ```mermaid
 flowchart LR
-  client["MCP client"] -->|"stdio or HTTP"| server["droid-mcp"]
+  client["MCP client"] -->|"stdio, or HTTP with<br/>DROID_MCP_TOKEN"| server["droid-mcp"]
   server -->|"read-only<br/>no credential"| files[("Local session files<br/>~/.factory/sessions<br/>~/.factory/settings.json")]
   server -->|"@factory/droid-sdk<br/>FACTORY_API_KEY if found,<br/>else droid CLI login"| exec["droid exec child process"]
   exec -->|"writes"| files
   server -->|"FACTORY_API_KEY"| rest["Factory REST API<br/>https://api.factory.ai"]
-  rest --> daemons["Desktop app, other machines<br/>and the cloud,<br/>holding the session"]
+  rest --> computers["Every online Droid computer:<br/>your own computers (daemon, desktop app)<br/>and Factory cloud computers"]
+  hooks["Hook on each computer<br/>Stop, Notification, SessionEnd"] -->|"POST /events<br/>DROID_MCP_EVENTS_TOKEN"| server
+  server -->|"DROID_MCP_WEBHOOK_KEY<br/>optional"| webhook["Webhook<br/>wakes your agent"]
   server --> helpers["Helpers: git diff HEAD (diffs),<br/>rg (transcript search),<br/>droid exec --help (model list)"]
 ```
 
@@ -251,21 +313,53 @@ Sessions this server starts live in memory. When the stdio client disconnects, o
 
 ### Tools
 
-"Read-only" means the tool is registered with `readOnlyHint: true` (`src/tools.ts`). All results are JSON text, trimmed to about 8 KB; event text is clipped at 4000 characters with `truncated: true`.
+"Read-only" means the tool is registered with `readOnlyHint: true` (`src/tools.ts`). All results are JSON text, trimmed to about 8 KB; `droid_wait` event text is clipped at 4000 characters with `truncated: true`.
+
+The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel` and `droid_result` takes a name or id from `droid_computers`. Without it, the tool uses the computer where `droid_find` or a posted event last saw the session, or else this machine. If that computer is offline, the call fails at once with its last heartbeat time instead of hanging. A paused cloud computer is allowed.
 
 #### droid_find
 
 ![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY optional](https://img.shields.io/badge/FACTORY__API__KEY-optional-lightgrey)
 
-- Reads: session headers and settings; transcripts when `content: true`; child sessions of listed workstreams when a key is set. Changes nothing.
+- Reads: session headers and settings on this machine; the session list of every other online computer over REST (first 100 sessions per computer); transcripts when `content: true`; child sessions of listed workstreams when a key is set. Changes nothing.
 - Backend: local files (`~/.factory/sessions`), `rg`, Factory REST API (optional).
-- Credential: none; `FACTORY_API_KEY` for the child-session summary.
-- Parameters: `query`, `content`, `scope` (`workstreams`, `sessions`, `all`), `cwd`, `includeArchived`, `includeSubagents`, `limit` (1-200, default 40), `cursor`.
+- Credential: none for this machine; `FACTORY_API_KEY` for other computers and the child-session summary.
+- Parameters: `query`, `content`, `scope` (`workstreams`, `sessions`, `all`), `cwd`, `computer`, `includeArchived`, `includeSubagents`, `limit` (1-200, default 40), `cursor`.
 - Notes:
-  - Groups workstreams (orchestrator first, then agents) and standalone sessions by repo.
-  - `query` matches title, id prefix or cwd; with `content: true` it searches transcripts with `rg -F` (40 s timeout).
+  - Asks every online computer at once, with an 8 s timeout per computer. A slow or failing computer does not fail the call.
+  - The `computers` field reports `searched`, `skipped` (paused or offline, with last heartbeat), `failed` (with the error) and `truncated` (computers with more than 100 sessions, of which only the first 100 are listed).
+  - `computer` limits the search to one computer.
+  - Groups workstreams (orchestrator first, then agents) across computers. Standalone sessions are grouped by repo on this machine and by computer elsewhere. Each session names its computer, and the server remembers it for the other tools.
+  - `query` matches title, id prefix or cwd. With `content: true` it searches transcripts with `rg -F` (40 s timeout) on this machine only, and other computers are not searched.
   - Hidden by default: archived sessions and subagents.
-  - With a key, each listed workstream gets a `children` summary from REST, including agents on other machines.
+  - With a key, each listed workstream gets a `children` summary from REST, including agents on other computers.
+
+#### droid_computers
+
+![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY optional](https://img.shields.io/badge/FACTORY__API__KEY-optional-lightgrey)
+
+- Reads: your computer list from REST; `~/.factory/computer.json` to know which one is this machine. Changes nothing.
+- Backend: Factory REST API.
+- Credential: `FACTORY_API_KEY`; without it, the list holds only this machine.
+- Parameters: none.
+- Notes:
+  - Returns `id`, `name`, `kind` (`own`, `cloud`), `state` (`online`, `paused`, `offline`), `lastSeen`, `thisMachine` and `providerStatus` for each computer. See [Computers and online state](#computers-and-online-state).
+  - Always fetches a fresh list; other tools reuse a list for up to 30 s.
+  - When several computers share a name, tools refuse that name and list the matching ids; pass an id instead.
+
+#### droid_events
+
+![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![HTTP mode](https://img.shields.io/badge/needs-HTTP%20mode-lightgrey)
+
+- Reads: the last 500 events that hooks posted to `POST /events`. Changes nothing.
+- Backend: in-memory event ring.
+- Credential: none for the tool; hooks post with `DROID_MCP_EVENTS_TOKEN`.
+- Parameters: `after`, `limit` (1-200, default 50), `kinds` (`finished`, `question`, `permission`, `ended`).
+- Notes:
+  - Without `after`, returns the latest events. With it, returns events after that `seq`, oldest first. It does not wait; pass `nextAfter` back as `after`.
+  - Each event has `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text`, `cwd`, `tags` and `forwarded`.
+  - `missed: true` means events after `after` already dropped out of the ring. `forwarding` says whether a webhook is configured.
+  - Event text is untrusted session content. See [Callbacks](#callbacks).
 
 #### droid_models
 
@@ -296,7 +390,7 @@ Sessions this server starts live in memory. When the stdio client disconnects, o
 - Changes: sends a prompt as the user; changes model, tools and autonomy; may resume a local session. Writes `~/.droid-mcp/state.json`.
 - Backend: own child process, Factory REST API, or a new `droid exec` (local resume).
 - Credential: own session's existing connection; `FACTORY_API_KEY` for REST; CLI login for local resume (only reachable without a key).
-- Parameters: `session`, `prompt`, `idempotencyKey` (required), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings.
+- Parameters: `session`, `computer`, `prompt`, `idempotencyKey` (required), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings.
 - Notes: returns `via` (`own`, `local-resume`, `rest`), `nextSeq` for own and resumed sessions, `messageId` for REST. `queue` is refused while a turn is running.
 
 #### droid_wait
@@ -306,7 +400,7 @@ Sessions this server starts live in memory. When the stdio client disconnects, o
 - Reads: new events, local transcript messages (user and assistant text only), or REST messages and pending prompts. Changes nothing.
 - Backend: in-memory event log, local transcript, Factory REST API. Polls every 1 s (local file) or 2 s (REST).
 - Credential: none for local; `FACTORY_API_KEY` for REST.
-- Parameters: `session`, `afterSeq`, `waitMs` (default 25000, max 50000), `maxEvents` (1-200, default 50).
+- Parameters: `session`, `computer`, `afterSeq`, `waitMs` (default 25000, max 50000), `maxEvents` (1-200, default 50).
 - Notes:
   - Without `afterSeq`, returns the latest events at once. With it, waits for an assistant message, prompt, error or state change.
   - `attention` lists pending prompts with their `requestId` (`null` for local transcript reads).
@@ -319,7 +413,7 @@ Sessions this server starts live in memory. When the stdio client disconnects, o
 - Changes: answers or cancels a permission prompt or AskUser question, which lets a paused turn continue and spend tokens.
 - Backend: own child process or Factory REST API.
 - Credential: none for own sessions; `FACTORY_API_KEY` otherwise.
-- Parameters: `session`, `requestId`, then `decision` and `comment`, or `answers` (one per question), or `cancel`.
+- Parameters: `session`, `computer`, `requestId`, then `decision` and `comment`, or `answers` (one per question), or `cancel`.
 - Notes: `decision` must be one of the offered options.
 
 #### droid_cancel
@@ -330,7 +424,7 @@ Sessions this server starts live in memory. When the stdio client disconnects, o
 - Changes: interrupts a turn; closes an own session.
 - Backend: own child process or Factory REST API.
 - Credential: none for own sessions; `FACTORY_API_KEY` otherwise (`scope: "turn"` only).
-- Parameters: `session`, `scope` (`turn`, `session`).
+- Parameters: `session`, `computer`, `scope` (`turn`, `session`).
 - Notes: `scope: "session"` works only for own sessions.
 
 #### droid_result
@@ -340,7 +434,7 @@ Sessions this server starts live in memory. When the stdio client disconnects, o
 - Reads: latest result text; `git diff HEAD` in the session's cwd. Changes nothing.
 - Backend: in-memory result, local transcript, Factory REST API, `git`.
 - Credential: none for local; `FACTORY_API_KEY` for sessions not on this machine.
-- Parameters: `session`, `include` (`text`, `diff`), `offset`, `maxBytes` (1-32768, default 6000).
+- Parameters: `session`, `computer`, `include` (`text`, `diff`), `offset`, `maxBytes` (1-32768, default 6000).
 - Notes: paged by byte offset; pass `nextOffset` back as `offset`.
 
 ### Which backend a call uses
@@ -373,6 +467,60 @@ Per-tool differences:
 
 Local resume happens only without a key, only with `allowLocalResume: true`, and only for a standalone session that has readable settings, is not archived, is not a subagent, was not modified in the last 30 minutes, and has a recorded autonomy within the cap. The resumed session becomes an own session.
 
+## Computers and online state
+
+A Droid computer is either your own machine running the Droid daemon (`kind: "own"`) or a Factory cloud computer (`kind: "cloud"`). `droid_computers` sorts each into `online`, `paused` or `offline` (`src/computers.ts`):
+
+- Own computer: `online` when its daemon heartbeat (`lastSeenAt`) is under 5 minutes old, otherwise `offline`. Heartbeats arrive about every 60 s; the worst gap measured was about 150 s.
+- Cloud computer: follows the sandbox state. `running` is `online`. `paused` is `paused`: `droid_find` skips it, but a tool that names it is allowed, since Factory may resume it. Anything else is `offline`.
+
+Factory's own `status` field says `active` even when an own computer's daemon is dead, and a call to a dead daemon hangs about 30 s before failing with 503. That is why the server judges liveness by the heartbeat and fails fast on offline computers.
+
+## Callbacks
+
+A hook on each computer reports session events to the server. Your agent reads them with `droid_events`, or a webhook wakes it, and it answers with `droid_send` or `droid_respond`.
+
+```mermaid
+sequenceDiagram
+  participant D as Droid session (any computer)
+  participant H as Hook script
+  participant S as droid-mcp
+  participant W as Webhook (optional)
+  participant C as CTO agent (MCP client)
+  D->>H: Stop, Notification or SessionEnd
+  H-->>D: exits 0 at once, no output
+  H->>S: POST /events (events token, 3 s timeout)
+  S->>S: keep in a ring of 500 events (droid_events)
+  opt forwarding rule matches and a webhook is set
+    S->>W: POST event (8 s timeout, one try)
+    W->>C: wake
+  end
+  C->>S: droid_events
+  C->>S: droid_send or droid_respond
+  S->>D: prompt or answer over REST
+```
+
+Event kinds (`hooks/droid_mcp_hook.py`):
+
+- `finished`: a `Stop` hook. Text is the end of the last reply (up to 300 characters).
+- `question`: a `Stop` whose last reply has a line starting `QUESTION:` (text runs from that line), or a `Notification` of type `elicitation_dialog`.
+- `permission`: a `Notification` of type `permission_prompt`.
+- `ended`: a `SessionEnd` hook. Text is the reason.
+- Ignored: the `idle_prompt` and `auth_success` notifications.
+
+To get a question back from a session, tell it to end its reply with a line starting `QUESTION:`.
+
+Forwarding rule (`src/events.ts`):
+
+- `question` and `permission` are always forwarded.
+- `finished` and `ended` are forwarded only for sessions tagged `cto` or started by this server process.
+- The same session and kind are never forwarded twice within 30 s.
+- The webhook gets `source: "droid-mcp"`, `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text` and `cwd`.
+
+Every event is kept for `droid_events`, forwarded or not. Events live in memory only and are lost when the server restarts.
+
+The hook never blocks Droid. On macOS and Linux it forks, posts in the background with a 3 s timeout, and the parent exits at once. On Windows it posts synchronously with a 3 s timeout. Either way it always exits 0 and prints nothing, so a down server does not show up in the session.
+
 ## What the agent can and cannot touch
 
 ### Filesystem
@@ -387,7 +535,7 @@ Local resume happens only without a key, only with `allowLocalResume: true`, and
     - `droid_start` fork source (the source's own cwd)
     - `droid_find`, `droid_wait`, `droid_result` text (any local transcript)
     - REST sends, `droid_respond`, `droid_cancel` (any session the key can reach)
-- Files read: `~/.factory/sessions/*/*.jsonl` and their `.settings.json` files (`src/catalog.ts`), `~/.factory/settings.json` (`src/models.ts`), and `~/.droid-mcp/state.json` (`src/runs.ts`).
+- Files read: `~/.factory/sessions/*/*.jsonl` and their `.settings.json` files (`src/catalog.ts`), `~/.factory/settings.json` (`src/models.ts`), `~/.factory/computer.json` (`src/computers.ts`), and `~/.droid-mcp/state.json` (`src/runs.ts`).
 - The only file the server writes is `~/.droid-mcp/state.json`, through a temporary file in the same directory and a rename. The directory is created with mode `0700` and the file with `0600` (`src/runs.ts`).
 - Droid writes its own session files. The agent inside a session starts in its cwd, but autonomy, not the roots list, decides what its commands can touch.
 
@@ -460,8 +608,9 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 
 - `--http <host:port>` requires `DROID_MCP_TOKEN`. Every request must send `Authorization: Bearer <token>`, compared with `timingSafeEqual` (`src/main.ts`).
 - Any request with an `Origin` header is rejected with 403, so browsers cannot call the server (`src/main.ts`).
-- `DROID_MCP_TOKEN` is deleted from the process environment at startup, so spawned sessions do not inherit it (`src/main.ts`).
+- `DROID_MCP_TOKEN`, `DROID_MCP_EVENTS_TOKEN` and `DROID_MCP_WEBHOOK_KEY` are deleted from the process environment at startup, so spawned sessions do not inherit them (`src/main.ts`).
 - Each request gets a fresh, stateless MCP server; sessions and runs are shared across requests (`src/main.ts`).
+- `POST /events` takes only `DROID_MCP_EVENTS_TOKEN`, and the MCP endpoint takes only `DROID_MCP_TOKEN` (`src/http.ts`). Without an events token, `/events` answers 404. Bodies over 16 KB get 413; invalid events get 400; accepted ones get 202 with `seq` and `forwarded`.
 
 ### What it never does
 
@@ -496,10 +645,14 @@ It needs at least one local workstream session with its orchestrator, and a tran
 - A fork keeps its source session loaded until the fork is closed.
 - Mission mode is untested live.
 - REST `droid_wait` assumes `getMessages` returns the newest messages (see the comment in `src/tools.ts`).
-- Sessions on other machines are reachable by REST, but `droid_find` lists only local session files (plus the REST child summary for local workstreams).
 - `droid_wait` on a local transcript cannot see pending prompts or tool events.
 - After an own session is closed, `droid_wait` and `droid_result` keep reading its in-memory state. If a later `droid_send` reaches it over REST, they do not see the new turn.
 - Linux is untested.
+- `droid_find` and the other tools cannot reach an offline computer; Factory does not wake it.
+- Hooks on cloud computers need a network route to the server URL.
+- Events are kept in memory and lost when the server restarts.
+- The Windows hook and installer are tested only with PowerShell 7 on Linux so far.
+- `droid_start` still starts sessions on this machine only.
 
 ## Security notes
 
@@ -508,6 +661,10 @@ It needs at least one local workstream session with its orchestrator, and a tran
 - REST sends act as the owner of `FACTORY_API_KEY`, on any session that key can reach.
 - Prompts are sent as the user; the session sees them as the user's own messages.
 - When a key is found, the SDK passes it to spawned `droid exec` processes as `FACTORY_API_KEY`, so commands an agent runs in those sessions can read it.
+- The events token can only append events. It cannot call tools: the MCP token is not accepted on `/events`, and the events token is not accepted on the MCP endpoint.
+- The events token sits in `~/.factory/droid-mcp/hook.json` on every computer with the hook, where agents can read it. Anyone with it can post fake events.
+- Event text is untrusted session content. Treat it as data, not instructions.
+- A hook payload carries the session id, computer id, host, title, cwd, tags and at most 1000 characters of text. It never carries credentials.
 
 ## License
 
