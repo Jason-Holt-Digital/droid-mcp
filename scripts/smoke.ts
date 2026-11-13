@@ -54,7 +54,18 @@ async function settle(session: string, afterSeq: number): Promise<{ seq: number;
 
 try {
   const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-  assert.deepEqual(tools, ['droid_cancel', 'droid_find', 'droid_models', 'droid_respond', 'droid_result', 'droid_send', 'droid_start', 'droid_wait']);
+  assert.deepEqual(tools, [
+    'droid_cancel',
+    'droid_computers',
+    'droid_events',
+    'droid_find',
+    'droid_models',
+    'droid_respond',
+    'droid_result',
+    'droid_send',
+    'droid_start',
+    'droid_wait',
+  ]);
 
   const ws = await call('droid_find', { scope: 'workstreams', limit: 200 });
   assert.ok(ws.workstreams.length > 0, 'workstreams found');

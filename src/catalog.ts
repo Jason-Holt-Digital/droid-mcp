@@ -3,28 +3,46 @@ import { createReadStream, existsSync } from 'node:fs';
 import { open, readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, join, sep } from 'node:path';
 
-export type SessionRecord = {
+export type Listing = {
   id: string;
   title: string;
-  cwd: string;
-  file: string;
+  cwd?: string;
   createdAt?: number;
   updatedAt: number;
   tags: string[];
   workstream?: { id: string; role: 'orchestrator' | 'agent' };
   parentId?: string;
   archived: boolean;
+  computer?: string;
+  status?: string;
+};
+export type SessionRecord = Listing & {
+  cwd: string;
+  file: string;
   autonomy?: string;
   // False when settings.json could not be read, so whether this is a workstream session is unknown.
   classified: boolean;
   hostId?: string;
 };
-export type Workstream = { id: string; title?: string; orchestrator?: SessionRecord; agents: SessionRecord[] };
-export type RepoGroup = { repo: string; sessions: SessionRecord[] };
-export type Catalog = { workstreams: Workstream[]; standalone: RepoGroup[] };
+export type Workstream<T extends Listing = SessionRecord> = { id: string; title?: string; orchestrator?: T; agents: T[] };
+// Local sessions group by repo; remote ones have no cwd, so they group by computer.
+export type RepoGroup<T extends Listing = SessionRecord> = { repo?: string; computer?: string; sessions: T[] };
+export type Catalog<T extends Listing = SessionRecord> = { workstreams: Workstream<T>[]; standalone: RepoGroup<T>[] };
 export type TranscriptEntry = { seq: number; role: 'user' | 'assistant'; text: string };
 
-type Tag = { name: string; metadata?: Record<string, string> };
+export type Tag = { name: string; metadata?: Record<string, string> };
+export type RemoteSession = {
+  sessionId: string;
+  parentId?: string;
+  title?: string;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  computerId?: string;
+  messageCount: number;
+  tags: Tag[];
+  archived: boolean;
+};
 
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 
@@ -32,7 +50,7 @@ export function isSessionId(id: string): boolean {
   return SESSION_ID.test(id);
 }
 
-export function isSubagent(r: SessionRecord): boolean {
+export function isSubagent(r: Listing): boolean {
   if (r.workstream) return false;
   return r.parentId !== undefined || r.tags.includes('subagent') || r.tags.includes('mission-v2-subagent');
 }
@@ -86,16 +104,7 @@ export async function readRecord(file: string): Promise<SessionRecord | undefine
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
   const id = str(h.id) ?? basename(file, '.jsonl');
   const tags = Array.isArray(settings.tags) ? settings.tags : [];
-  const mv2 = tags.find((t) => t.name === 'mission-v2')?.metadata;
-  const workstream =
-    mv2?.kind === 'orchestrator'
-      ? { id: mv2.missionId ?? id, role: 'orchestrator' as const }
-      : mv2?.kind === 'agent' && mv2.missionId
-        ? { id: mv2.missionId, role: 'agent' as const }
-        : undefined;
-  const parentId = workstream
-    ? undefined
-    : (str(h.callingSessionId) ?? tags.find((t) => t.name === 'subagent')?.metadata?.callingSessionId);
+  const { workstream, parentId } = classifyTags(id, tags, str(h.callingSessionId));
   return {
     id,
     title: str(h.title) ?? '',
@@ -110,6 +119,32 @@ export async function readRecord(file: string): Promise<SessionRecord | undefine
     autonomy: settings.autonomyLevel,
     classified: parsed !== undefined && Array.isArray(settings.tags ?? []),
     hostId: str(h.hostId),
+  };
+}
+
+export function classifyTags(id: string, tags: Tag[], callingSessionId?: string): Pick<Listing, 'workstream' | 'parentId'> {
+  const mv2 = tags.find((t) => t.name === 'mission-v2')?.metadata;
+  const workstream =
+    mv2?.kind === 'orchestrator'
+      ? { id: mv2.missionId ?? id, role: 'orchestrator' as const }
+      : mv2?.kind === 'agent' && mv2.missionId
+        ? { id: mv2.missionId, role: 'agent' as const }
+        : undefined;
+  const parentId = workstream ? undefined : (callingSessionId ?? tags.find((t) => t.name === 'subagent')?.metadata?.callingSessionId);
+  return { workstream, parentId };
+}
+
+export function remoteListing(s: RemoteSession, computer: string): Listing {
+  return {
+    id: s.sessionId,
+    title: s.title ?? '',
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+    tags: s.tags.map((t) => t.name),
+    ...classifyTags(s.sessionId, s.tags, s.parentId),
+    archived: s.archived,
+    computer,
+    status: s.status,
   };
 }
 
@@ -160,10 +195,10 @@ export function repoRoot(cwd: string): string {
   return root;
 }
 
-export function groupCatalog(records: SessionRecord[], opts: { repoOf?: (cwd: string) => string } = {}): Catalog {
+export function groupCatalog<T extends Listing>(records: T[], opts: { repoOf?: (cwd: string) => string } = {}): Catalog<T> {
   const repoOf = opts.repoOf ?? ((cwd: string) => cwd);
-  const byWorkstream = new Map<string, Workstream>();
-  const byRepo = new Map<string, SessionRecord[]>();
+  const byWorkstream = new Map<string, Workstream<T>>();
+  const byGroup = new Map<string, RepoGroup<T>>();
   for (const r of records) {
     if (r.workstream) {
       let w = byWorkstream.get(r.workstream.id);
@@ -175,28 +210,31 @@ export function groupCatalog(records: SessionRecord[], opts: { repoOf?: (cwd: st
         w.agents.push(r);
       }
     } else {
-      const repo = repoOf(r.cwd);
-      const list = byRepo.get(repo);
-      if (list) list.push(r);
-      else byRepo.set(repo, [r]);
+      const repo = r.cwd === undefined ? undefined : repoOf(r.cwd);
+      const computer = r.computer ?? 'unknown';
+      const key = repo === undefined ? `computer:${computer}` : `repo:${repo}`;
+      const group = byGroup.get(key);
+      if (group) group.sessions.push(r);
+      else byGroup.set(key, repo === undefined ? { computer, sessions: [r] } : { repo, sessions: [r] });
     }
   }
-  const newest = (a: SessionRecord, b: SessionRecord) => b.updatedAt - a.updatedAt;
-  const latest = (w: Workstream) => Math.max(w.orchestrator?.updatedAt ?? 0, ...w.agents.map((a) => a.updatedAt));
+  const newest = (a: T, b: T) => b.updatedAt - a.updatedAt;
+  const latest = (w: Workstream<T>) => Math.max(w.orchestrator?.updatedAt ?? 0, ...w.agents.map((a) => a.updatedAt));
   const workstreams = [...byWorkstream.values()];
   for (const w of workstreams) w.agents.sort(newest);
   workstreams.sort((a, b) => Number(Boolean(b.orchestrator)) - Number(Boolean(a.orchestrator)) || latest(b) - latest(a));
-  const standalone = [...byRepo].map(([repo, sessions]) => ({ repo, sessions: sessions.sort(newest) }));
+  const standalone = [...byGroup.values()];
+  for (const g of standalone) g.sessions.sort(newest);
   standalone.sort((a, b) => b.sessions[0].updatedAt - a.sessions[0].updatedAt);
   return { workstreams, standalone };
 }
 
 export type FilterOptions = { query?: string; cwd?: string; includeArchived?: boolean; includeSubagents?: boolean };
 
-export function filterRecords(records: SessionRecord[], opts: FilterOptions): SessionRecord[] {
+export function filterRecords<T extends Listing>(records: T[], opts: FilterOptions): T[] {
   const q = opts.query?.trim().toLowerCase();
-  const matches = (r: SessionRecord) =>
-    !q || r.title.toLowerCase().includes(q) || r.id.startsWith(q) || r.cwd.toLowerCase().includes(q);
+  const matches = (r: T) =>
+    !q || r.title.toLowerCase().includes(q) || r.id.startsWith(q) || Boolean(r.cwd?.toLowerCase().includes(q));
   const matchedWorkstreams = new Set(
     records.filter((r) => r.workstream?.role === 'orchestrator' && matches(r)).map((r) => r.workstream!.id),
   );
@@ -205,7 +243,7 @@ export function filterRecords(records: SessionRecord[], opts: FilterOptions): Se
     (r) =>
       (opts.includeArchived || !r.archived) &&
       (opts.includeSubagents || !isSubagent(r)) &&
-      (!cwd || r.cwd === cwd || r.cwd.startsWith(cwd + sep)) &&
+      (!cwd || (r.cwd !== undefined && (r.cwd === cwd || r.cwd.startsWith(cwd + sep)))) &&
       (matches(r) || (r.workstream !== undefined && matchedWorkstreams.has(r.workstream.id))),
   );
 }

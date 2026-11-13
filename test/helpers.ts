@@ -45,6 +45,25 @@ export async function fixtureRecords(): Promise<SessionRecord[]> {
   return records.map((r) => ({ ...r, updatedAt: UPDATED[r.id] ?? r.updatedAt }));
 }
 
+export type ApiCall = { method: string; path: string; query: URLSearchParams; body: any; signal: AbortSignal };
+
+// Routes Factory API requests to a handler; a returned plain value becomes a JSON 200, undefined a 404.
+export function fakeApi(route: (call: ApiCall) => unknown) {
+  const calls: ApiCall[] = [];
+  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init);
+    const url = new URL(req.url);
+    const text = await req.text();
+    const call = { method: req.method, path: url.pathname, query: url.searchParams, body: text ? JSON.parse(text) : undefined, signal: req.signal };
+    calls.push(call);
+    const out = await route(call);
+    if (out instanceof Response) return out;
+    if (out === undefined) return Response.json({ status: 404, title: 'Not Found' }, { status: 404 });
+    return Response.json(out);
+  }) as typeof globalThis.fetch;
+  return { fetch, calls };
+}
+
 export const HELP = readFileSync(new URL('./fixtures/exec-help.txt', import.meta.url), 'utf8');
 export const SECRET = 'sk-test-must-not-leak';
 export const SETTINGS = {
