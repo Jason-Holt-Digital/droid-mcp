@@ -81,16 +81,11 @@ async function handleEvent(ctx: Ctx, req: IncomingMessage, res: ServerResponse, 
 export function createHandler(ctx: Ctx, opts: { token: string; eventsToken?: string }) {
   const mcpAuthorized = bearer(opts.token);
   const eventsAuthorized = opts.eventsToken ? bearer(opts.eventsToken) : undefined;
-  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+  const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.headers.origin !== undefined) return deny(res, 403, 'requests with an Origin header are not allowed');
+    if (!URL.canParse(req.url ?? '/', 'http://localhost')) return json(res, 400, { error: 'bad request' });
     if (req.method === 'POST' && new URL(req.url ?? '/', 'http://localhost').pathname === '/events') {
-      try {
-        return await handleEvent(ctx, req, res, eventsAuthorized);
-      } catch (err) {
-        console.error('droid-mcp: event failed:', err instanceof Error ? err.message : err);
-        if (!res.headersSent) return json(res, 500, { error: 'internal error' });
-        return;
-      }
+      return handleEvent(ctx, req, res, eventsAuthorized);
     }
     if (!mcpAuthorized(req.headers.authorization)) return deny(res, 401, 'unauthorized');
     const server = newServer(ctx);
@@ -99,9 +94,13 @@ export function createHandler(ctx: Ctx, opts: { token: string; eventsToken?: str
       void transport.close();
       void server.close();
     });
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+  };
+  // The http server does not await this listener, so a rejection would be unhandled and end the process.
+  return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res);
+      await handle(req, res);
     } catch (err) {
       console.error('droid-mcp: request failed:', err instanceof Error ? err.message : err);
       if (!res.headersSent) deny(res, 500, 'internal error');

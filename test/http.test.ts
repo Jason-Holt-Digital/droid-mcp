@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import type { AddressInfo } from 'node:net';
+import { connect, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
@@ -97,6 +97,29 @@ test('POST /events rejects bad JSON, bad shapes and oversized bodies', async () 
   assert.equal((await post(`${base}/events`, EVENTS_TOKEN, { sessionId: '../x', kind: 'finished' })).status, 400);
   assert.equal((await post(`${base}/events`, EVENTS_TOKEN, { sessionId: SID, kind: 'finished', title: 'x'.repeat(300) })).status, 400);
   assert.equal((await post(`${base}/events`, EVENTS_TOKEN, { sessionId: SID, kind: 'finished', pad: 'x'.repeat(17 * 1024) })).status, 413);
+});
+
+test('an unparseable request path gets a 400 and the server keeps answering', async () => {
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  process.on('unhandledRejection', onRejection);
+  try {
+    const base = await serve();
+    const { port } = new URL(base);
+    const socket = connect(Number(port), '127.0.0.1');
+    let raw = '';
+    socket.setEncoding('utf8').on('data', (d) => (raw += d));
+    socket.end('POST // HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+    await new Promise((r) => socket.on('close', r));
+    assert.match(raw, /^HTTP\/1\.1 400 /);
+    assert.ok(raw.includes(JSON.stringify({ error: 'bad request' })), raw);
+
+    assert.equal((await post(`${base}/events`, 'wrong', { sessionId: SID, kind: 'finished' })).status, 401);
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(rejections, []);
+  } finally {
+    process.off('unhandledRejection', onRejection);
+  }
 });
 
 test('the events token does not open MCP, the MCP bearer still does, and /events is 404 without a token', async () => {
