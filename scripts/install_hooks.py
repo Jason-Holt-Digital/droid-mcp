@@ -134,7 +134,8 @@ def install(args, dest, hooks_path):
     shutil.copyfile(SOURCE, script)
     os.chmod(script, 0o700)
     write_atomic(os.path.join(dest, "hook.json"), json.dumps({"url": args.url, "token": token}) + "\n", 0o600)
-    python = os.path.abspath(sys.executable)
+    # A versioned interpreter path breaks on the next Python upgrade, so prefer the stable python3 on PATH.
+    python = shutil.which("python3") or os.path.abspath(sys.executable)
     command = shlex.quote(python) + " " + shlex.quote(script)
     after = without_ours(before or {}, drop_emptied=False)
     for event in EVENTS:
