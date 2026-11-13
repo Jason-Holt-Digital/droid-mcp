@@ -181,7 +181,9 @@ function entry(r: Listing, runs: Runs) {
 type Where = { computerId?: string; remote: boolean };
 
 // Fails fast on an offline computer, whether it was named or remembered from droid_find.
+// Runs this server owns are SDK processes on this machine, whatever computer is named or remembered.
 async function locate(ctx: Ctx, session: string, computer?: string): Promise<Where> {
+  if (ctx.runs.get(session)) return { remote: false };
   if (computer !== undefined) {
     const c = await ctx.computers.require(computer);
     return c.thisMachine ? { remote: false } : { computerId: c.id, remote: true };

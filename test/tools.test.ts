@@ -379,7 +379,7 @@ const remoteSession = (sessionId: string, title: string, updatedAt: number, tags
   tags,
 });
 
-async function fleet(opts: { clock?: { now: number } } = {}) {
+async function fleet(opts: { clock?: { now: number }; ctx?: Partial<Ctx> } = {}) {
   const clock = opts.clock ?? { now: NOW };
   const computerFile = join(dir, 'computer.json');
   await writeFile(computerFile, JSON.stringify({ computerId: FLEET.self.id, registeredAt: 1 }));
@@ -420,7 +420,7 @@ async function fleet(opts: { clock?: { now: number } } = {}) {
   });
   const rest = createRest({ apiKey: 'k', fetch: api.fetch });
   const computers = new Computers({ rest, file: computerFile, now: () => clock.now, hostname: 'test-host' });
-  const c = await connect({ rest, computers, fanoutTimeoutMs: 200 });
+  const c = await connect({ rest, computers, fanoutTimeoutMs: 200, ...opts.ctx });
   return { c, api, clock };
 }
 
@@ -520,6 +520,48 @@ test('send and wait pass computerId for a named or remembered computer, and a re
     const stale = await c.call('droid_send', { session: REMOTE.laptopStandalone, prompt: 'hi', idempotencyKey: 'c2' });
     assert.match(stale.text, /computer laptop is offline/);
     assert.ok(api.calls.slice(before).every((x) => x.path === '/api/v0/computers'));
+  } finally {
+    await c.close();
+  }
+});
+
+test('a run this server owns is read and closed locally even when its session is remembered on an offline computer', async () => {
+  let closed = false;
+  const run = {
+    id: REMOTE.laptopStandalone,
+    cwd: project,
+    repo: project,
+    state: 'idle',
+    events: [{ seq: 1, at: NOW, kind: 'assistant', text: 'done here' }],
+    nextSeq: 2,
+    pending: new Map(),
+    lastResult: 'the owned result',
+    lock: Promise.resolve(),
+    waiters: new Set(),
+    close: async () => {
+      closed = true;
+    },
+  } as unknown as OwnRun;
+  class OwnedRuns extends Runs {
+    get(id: string) {
+      return id === run.id ? run : undefined;
+    }
+  }
+  const { c, api } = await fleet({
+    ctx: { runs: new OwnedRuns({ repoOf: (cwd) => cwd }), sessionComputers: new Map([[run.id, FLEET.desk.id]]) },
+  });
+  try {
+    const wait = await c.call('droid_wait', { session: run.id, afterSeq: 0, waitMs: 0 });
+    assert.equal(wait.isError, false, wait.text);
+    assert.deepEqual(wait.json.events.map((e: { text: string }) => e.text), ['done here']);
+    const result = await c.call('droid_result', { session: run.id });
+    assert.equal(result.json.content, 'the owned result', result.text);
+    const named = await c.call('droid_result', { session: run.id, computer: 'old-desk' });
+    assert.equal(named.json.content, 'the owned result', named.text);
+    const cancel = await c.call('droid_cancel', { session: run.id, scope: 'session' });
+    assert.equal(cancel.json.state, 'closed', cancel.text);
+    assert.equal(closed, true);
+    assert.deepEqual(api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')), []);
   } finally {
     await c.close();
   }
