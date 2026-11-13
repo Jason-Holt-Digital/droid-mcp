@@ -250,7 +250,7 @@ All results are JSON text, trimmed to about 8 KB; event text is clipped at 4000 
 
 ```sh
 npm run typecheck   # tsc --noEmit
-npm test            # node --test test/
+npm test            # node --test "test/*.test.ts"
 node scripts/smoke.ts [scratchDir] [idleSessionIdToResume]
 ```
 

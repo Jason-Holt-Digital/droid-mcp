@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "start": "node src/main.ts",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "type": "module",
