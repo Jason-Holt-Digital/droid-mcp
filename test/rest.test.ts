@@ -115,3 +115,55 @@ test('messages returns text content and the next cursor', async () => {
   assert.match(calls[0].query, /role=assistant/);
   assert.match(calls[0].query, /limit=5/);
 });
+
+test('computers and sessions map the listings and pass computerId, limit and the abort signal', async () => {
+  const { fetch, calls } = mockFetch({
+    'GET /api/v0/computers': {
+      body: {
+        computers: [
+          { id: 'c1', name: 'desk', providerType: 'byom', status: 'active', providerStatus: null, lastSeenAt: 5, createdAt: 1 },
+          { id: 'c2', name: 'cloud', providerType: 'e2b', status: 'active', providerStatus: 'paused', createdAt: 1 },
+        ],
+      },
+    },
+    'GET /api/v0/sessions': {
+      body: {
+        sessions: [
+          { sessionId: 's1', parent_session_id: 'p1', title: 'T', status: 'idle', createdAt: 1, updatedAt: 2, messageCount: 3, tags: [{ name: 'cto' }] },
+          { sessionId: 's2', status: 'running', createdAt: 1, updatedAt: 4, messageCount: 0, computerId: 'c9', sessionSettings: { archivedAt: '2026-01-01', tags: [{ name: 'x' }] } },
+        ],
+        pagination: { hasMore: true, nextCursor: 'n2' },
+      },
+    },
+  });
+  const rest = createRest({ apiKey: KEY, fetch });
+  assert.deepEqual(await rest.computers(), [
+    { id: 'c1', name: 'desk', providerType: 'byom', status: 'active', providerStatus: undefined, lastSeenAt: 5 },
+    { id: 'c2', name: 'cloud', providerType: 'e2b', status: 'active', providerStatus: 'paused', lastSeenAt: undefined },
+  ]);
+  const page = await rest.sessions('c1', { limit: 100, signal: AbortSignal.timeout(5000) });
+  assert.match(calls[1].query, /computerId=c1/);
+  assert.match(calls[1].query, /limit=100/);
+  assert.equal(page.nextCursor, 'n2');
+  assert.deepEqual(page.sessions, [
+    { sessionId: 's1', parentId: 'p1', title: 'T', status: 'idle', createdAt: 1, updatedAt: 2, computerId: 'c1', messageCount: 3, tags: [{ name: 'cto' }], archived: false },
+    { sessionId: 's2', parentId: undefined, title: undefined, status: 'running', createdAt: 1, updatedAt: 4, computerId: 'c9', messageCount: 0, tags: [{ name: 'x' }], archived: true },
+  ]);
+});
+
+test('status, messages and send route to a computer when given one', async () => {
+  const { fetch, calls } = mockFetch({
+    'GET /api/v0/sessions/abc': { body: { sessionId: 'abc', status: 'idle', messageCount: 0, createdAt: 1, updatedAt: 2 } },
+    'GET /api/v0/sessions/abc/elicitations': { body: { elicitations: [] } },
+    'GET /api/v0/sessions/abc/messages': { body: { messages: [] } },
+    'POST /api/v0/sessions/abc/messages': { body: { messageId: 'm1', status: 'running' } },
+  });
+  const rest = createRest({ apiKey: KEY, fetch });
+  await rest.status('abc', 'c1');
+  await rest.messages('abc', { computerId: 'c1' });
+  await rest.send('abc', 'hi', 'c1');
+  const get = calls.find((c) => c.path === '/api/v0/sessions/abc');
+  assert.match(get!.query, /computerId=c1/);
+  assert.match(calls.find((c) => c.method === 'GET' && c.path.endsWith('/messages'))!.query, /computerId=c1/);
+  assert.deepEqual(calls.find((c) => c.method === 'POST')!.body, { text: 'hi', computerId: 'c1' });
+});

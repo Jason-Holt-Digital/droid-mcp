@@ -53,11 +53,16 @@ export function resolveAutonomy(requested: Autonomy | undefined, env: NodeJS.Pro
   return level;
 }
 
-export async function lookupApiKey(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
-  if (env.FACTORY_API_KEY) return env.FACTORY_API_KEY;
+export function lookupApiKey(env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  return lookupSecret('FACTORY_API_KEY', 'FACTORY_API_KEY', env);
+}
+
+// The environment wins; on macOS the Keychain service 'droid-mcp' is the fallback.
+export async function lookupSecret(envName: string, account: string, env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
+  if (env[envName]) return env[envName];
   if (process.platform !== 'darwin') return undefined;
   try {
-    const { stdout } = await promisify(execFile)('security', ['find-generic-password', '-s', 'droid-mcp', '-a', 'FACTORY_API_KEY', '-w']);
+    const { stdout } = await promisify(execFile)('security', ['find-generic-password', '-s', 'droid-mcp', '-a', account, '-w']);
     return stdout.trim() || undefined;
   } catch {
     return undefined;

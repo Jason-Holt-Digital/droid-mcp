@@ -5,11 +5,15 @@ import {
   getSession,
   interruptSession,
   listChildSessions,
+  listComputers,
   listSessionElicitations,
+  listSessions,
   postMessage,
   updateSession,
   type AnswerSessionElicitationRequestBody,
 } from '@factory/droid-sdk/api';
+import type { RemoteSession } from './catalog.ts';
+import type { RawComputer } from './computers.ts';
 import type { RestSessionSettings } from './settings.ts';
 
 type ApiResult<T> = { data?: T; error?: unknown; response?: Response };
@@ -63,8 +67,45 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
   }
 
   return {
-    async send(sessionId: string, text: string) {
-      const data = unwrap(await postMessage({ client, path: { sessionId }, body: { text } }), 'postMessage');
+    async computers(opts: { signal?: AbortSignal } = {}): Promise<RawComputer[]> {
+      const data = unwrap(await listComputers({ client, signal: opts.signal }), 'listComputers');
+      return data.computers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        providerType: c.providerType,
+        status: c.status,
+        providerStatus: c.providerStatus ?? undefined,
+        lastSeenAt: c.lastSeenAt,
+      }));
+    },
+
+    async sessions(
+      computerId: string,
+      opts: { limit?: number; cursor?: string; signal?: AbortSignal } = {},
+    ): Promise<{ sessions: RemoteSession[]; nextCursor?: string }> {
+      const data = unwrap(
+        await listSessions({ client, query: { limit: opts.limit ?? 100, cursor: opts.cursor, computerId }, signal: opts.signal }),
+        'listSessions',
+      );
+      return {
+        sessions: data.sessions.map((s) => ({
+          sessionId: s.sessionId,
+          parentId: s.parent_session_id,
+          title: s.title,
+          status: s.status,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+          computerId: s.computerId ?? computerId,
+          messageCount: s.messageCount,
+          tags: s.tags ?? s.sessionSettings?.tags ?? [],
+          archived: Boolean(s.sessionSettings?.archivedAt),
+        })),
+        nextCursor: data.pagination?.nextCursor ?? undefined,
+      };
+    },
+
+    async send(sessionId: string, text: string, computerId?: string) {
+      const data = unwrap(await postMessage({ client, path: { sessionId }, body: { text, computerId } }), 'postMessage');
       return { messageId: data.messageId, status: data.status };
     },
 
@@ -72,9 +113,9 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
       unwrap(await updateSession({ client, path: { sessionId }, body: { sessionSettings } }), 'updateSession');
     },
 
-    async status(sessionId: string) {
+    async status(sessionId: string, computerId?: string) {
       const [s, pending] = await Promise.all([
-        getSession({ client, path: { sessionId } }).then((r) => unwrap(r, 'getSession')),
+        getSession({ client, path: { sessionId }, query: computerId ? { computerId } : undefined }).then((r) => unwrap(r, 'getSession')),
         elicitations(sessionId),
       ]);
       return {
@@ -89,7 +130,10 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
       };
     },
 
-    async messages(sessionId: string, query: { limit?: number; cursor?: string; role?: 'user' | 'assistant' | 'tool' } = {}) {
+    async messages(
+      sessionId: string,
+      query: { limit?: number; cursor?: string; role?: 'user' | 'assistant' | 'tool'; computerId?: string } = {},
+    ) {
       const data = unwrap(await getMessages({ client, path: { sessionId }, query }), 'getMessages');
       return {
         messages: data.messages.map((m) => ({
