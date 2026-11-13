@@ -50,16 +50,18 @@ The key is read once at startup; restart the server after changing it.
 
 ### 4. Connect a client over stdio
 
+`DROID_MCP_ROOTS` lists the directories sessions may start in (colon-separated, default `~/repos`). Set it to where your projects live, or `droid_start` refuses them.
+
 Droid:
 
 ```sh
-droid mcp add droid-mcp node /path/to/droid-mcp/src/main.ts --env PATH=/path/to/bin:/usr/bin:/bin
+droid mcp add droid-mcp node /path/to/droid-mcp/src/main.ts --env PATH=/path/to/bin:/usr/bin:/bin --env DROID_MCP_ROOTS=/path/to/projects
 ```
 
 Claude Code:
 
 ```sh
-claude mcp add droid-mcp -e PATH=/path/to/bin:/usr/bin:/bin -- node /path/to/droid-mcp/src/main.ts
+claude mcp add droid-mcp -e PATH=/path/to/bin:/usr/bin:/bin -e DROID_MCP_ROOTS=/path/to/projects -- node /path/to/droid-mcp/src/main.ts
 ```
 
 Cursor (`~/.cursor/mcp.json`):
@@ -70,7 +72,7 @@ Cursor (`~/.cursor/mcp.json`):
     "droid-mcp": {
       "command": "node",
       "args": ["/path/to/droid-mcp/src/main.ts"],
-      "env": { "PATH": "/path/to/bin:/usr/bin:/bin" }
+      "env": { "PATH": "/path/to/bin:/usr/bin:/bin", "DROID_MCP_ROOTS": "/path/to/projects" }
     }
   }
 }
@@ -148,7 +150,14 @@ launchctl kickstart -k gui/$(id -u)/com.example.droid-mcp
 
 #### Run it as a service on Linux (systemd, untested)
 
-Linux is untested, so treat this as a starting point. Create the directory with `mkdir -p -m 700 ~/.droid-mcp`, then put the environment in `~/.droid-mcp/env`. Outside macOS, the API key can only come from the environment, so it goes here too; leave out the last line if you do not use a key:
+Linux is untested, so treat this as a starting point. Create the directory and make sure only you can read it, even if it already existed:
+
+```sh
+mkdir -p ~/.droid-mcp && chmod 700 ~/.droid-mcp
+umask 077
+```
+
+Then put the environment in `~/.droid-mcp/env`. Outside macOS, the API key can only come from the environment, so it goes here too; leave out the last line if you do not use a key:
 
 ```sh
 PATH=/path/to/bin:/usr/bin:/bin
@@ -160,7 +169,11 @@ FACTORY_API_KEY=<key>
 chmod 600 ~/.droid-mcp/env
 ```
 
-Create `~/.config/systemd/user/droid-mcp.service`:
+Create the unit directory, then `~/.config/systemd/user/droid-mcp.service`:
+
+```sh
+mkdir -p ~/.config/systemd/user
+```
 
 ```ini
 [Unit]
