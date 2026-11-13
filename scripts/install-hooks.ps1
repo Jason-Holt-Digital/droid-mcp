@@ -74,7 +74,8 @@ function To-Json($Config) {
     return (ConvertTo-Json -InputObject $Config -Depth 64) + "`n"
 }
 
-function Save-Hooks([string]$Path, [string]$Before, $After) {
+# $Before stays untyped: [string] would turn $null (no hooks.json yet) into '' and back up a missing file.
+function Save-Hooks([string]$Path, $Before, $After) {
     # Returns the backup path, '' when the file is new, $null when unchanged.
     $text = To-Json $After
     if ($null -ne $Before -and $Before -eq $text) { return $null }

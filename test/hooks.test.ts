@@ -200,6 +200,15 @@ test('the PowerShell installer keeps a user command sharing a group with ours', 
     ),
   ));
 
+test('the PowerShell installer creates hooks.json on a first install', { skip: pwshSkip }, () =>
+  withHome(async (home) => {
+    const r = await run('pwsh', ['-NoProfile', '-NonInteractive', '-File', PS_INSTALLER, '-HomeDir', home, '-Url', 'http://127.0.0.1:9/events'], { env: env(home) });
+    assert.equal(r.code, 0, r.stderr);
+    const hooks = JSON.parse(await readFile(join(home, '.factory', 'hooks.json'), 'utf8'));
+    assert.deepEqual(Object.keys(hooks), ['Stop', 'Notification', 'SessionEnd']);
+    assert.deepEqual((await readdir(join(home, '.factory'))).filter((n) => n.includes('.bak-')), [], 'nothing to back up');
+  }));
+
 test('install creates hooks.json when missing; token can come from stdin and is never printed', { skip }, () =>
   withHome(async (home) => {
     const e = env(home);
