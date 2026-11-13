@@ -4,6 +4,217 @@ An MCP server that lets any MCP client (Droid, Claude Code, Cursor, other agents
 
 Status: early (0.1.0). Tested on macOS with droid CLI 1.10.0, `@factory/droid-sdk` 0.11.0 and Node 26 (`engines` requires Node >= 24). The only platform-specific code is the Keychain lookup for `FACTORY_API_KEY`, which runs only on `darwin`; elsewhere the key must come from the environment. Linux is untested.
 
+## Install & set up
+
+### 1. Check the prerequisites
+
+You need Node >= 24, the `droid` CLI installed and logged in, and `git` and `rg` on your `PATH`.
+
+```sh
+node --version    # v24 or later
+droid --version
+git --version
+rg --version
+```
+
+To install `droid`, follow the [Factory CLI quickstart](https://docs.factory.com/droid-cli/quickstart). Log in by running `droid` once.
+
+Many MCP clients start servers with a minimal `PATH`. If the server cannot find `droid` or `rg`, pass a `PATH` that contains them when you connect the client (step 4).
+
+### 2. Clone and install
+
+```sh
+git clone https://github.com/Jason-Holt-Digital/droid-mcp.git
+cd droid-mcp
+npm ci
+npm run typecheck
+npm test
+```
+
+### 3. Optional: add a `FACTORY_API_KEY`
+
+Without a key, the server works with local session files and the sessions it starts itself, using your droid CLI login. A key enables the REST backend, which reaches sessions on other machines, sessions held by the desktop app, and workstream sessions. When a key is found, spawned sessions also use it instead of the CLI login.
+
+Create a key on the [API Keys page](https://app.factory.ai/settings/api-keys) in Factory settings. Then give it to the server in one of two ways:
+
+- Set `FACTORY_API_KEY=<key>` in the server's environment, for example next to `PATH` in the client's `env` settings. This is the only option outside macOS.
+- On macOS, store it in the Keychain. The server looks there when `FACTORY_API_KEY` is not set:
+
+  ```sh
+  security add-generic-password -s droid-mcp -a FACTORY_API_KEY -w   # prompts for the key
+  ```
+
+The key is read once at startup; restart the server after changing it.
+
+### 4. Connect a client over stdio
+
+Droid:
+
+```sh
+droid mcp add droid-mcp node /path/to/droid-mcp/src/main.ts --env PATH=/path/to/bin:/usr/bin:/bin
+```
+
+Claude Code:
+
+```sh
+claude mcp add droid-mcp -e PATH=/path/to/bin:/usr/bin:/bin -- node /path/to/droid-mcp/src/main.ts
+```
+
+Cursor (`~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "droid-mcp": {
+      "command": "node",
+      "args": ["/path/to/droid-mcp/src/main.ts"],
+      "env": { "PATH": "/path/to/bin:/usr/bin:/bin" }
+    }
+  }
+}
+```
+
+### 5. Optional: run over HTTP
+
+Generate a token and start the server:
+
+```sh
+openssl rand -hex 32
+DROID_MCP_TOKEN=<token> node src/main.ts --http 127.0.0.1:37999
+```
+
+Use `http://127.0.0.1:37999/mcp` as the endpoint (the server answers on any path) with the header `Authorization: Bearer <token>`:
+
+```sh
+droid mcp add droid-mcp http://127.0.0.1:37999/mcp --type http --header "Authorization: Bearer <token>"
+claude mcp add --transport http droid-mcp http://127.0.0.1:37999/mcp -H "Authorization: Bearer <token>"
+```
+
+#### Run it as a service on macOS (launchd)
+
+Create the directory, readable only by you:
+
+```sh
+mkdir -p -m 700 ~/.droid-mcp
+```
+
+Create a wrapper script at `~/.droid-mcp/run.sh` that sets the environment and starts the server:
+
+```sh
+#!/bin/sh
+export PATH=/path/to/bin:/usr/bin:/bin
+export DROID_MCP_TOKEN=<token>
+cd /path/to/droid-mcp
+exec node src/main.ts --http 127.0.0.1:37999
+```
+
+Make the script executable and private, so the token is not world-readable:
+
+```sh
+chmod 700 ~/.droid-mcp/run.sh
+```
+
+Create `~/Library/LaunchAgents/com.example.droid-mcp.plist`. launchd does not expand `~`, so use full paths:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.droid-mcp</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/<you>/.droid-mcp/run.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>/Users/<you>/.droid-mcp/server.log</string>
+</dict>
+</plist>
+```
+
+Load it, and restart it after changes:
+
+```sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.droid-mcp.plist
+launchctl kickstart -k gui/$(id -u)/com.example.droid-mcp
+```
+
+#### Run it as a service on Linux (systemd, untested)
+
+Linux is untested, so treat this as a starting point. Create the directory with `mkdir -p -m 700 ~/.droid-mcp`, then put the environment in `~/.droid-mcp/env`. Outside macOS, the API key can only come from the environment, so it goes here too; leave out the last line if you do not use a key:
+
+```sh
+PATH=/path/to/bin:/usr/bin:/bin
+DROID_MCP_TOKEN=<token>
+FACTORY_API_KEY=<key>
+```
+
+```sh
+chmod 600 ~/.droid-mcp/env
+```
+
+Create `~/.config/systemd/user/droid-mcp.service`:
+
+```ini
+[Unit]
+Description=droid-mcp
+
+[Service]
+EnvironmentFile=%h/.droid-mcp/env
+WorkingDirectory=/path/to/droid-mcp
+ExecStart=/path/to/node /path/to/droid-mcp/src/main.ts --http 127.0.0.1:37999
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now droid-mcp
+```
+
+#### Reach it from other machines on a tailnet
+
+Put it behind `tailscale serve`:
+
+```sh
+tailscale serve --bg --https=8443 http://127.0.0.1:37999
+```
+
+The endpoint is then `https://<your-host>.<tailnet>.ts.net:8443/mcp`. The bearer token is still required.
+
+### 6. Verify it works
+
+From the repo directory, use the MCP Inspector CLI. List the tools:
+
+```sh
+npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/list
+```
+
+Expect 8 tools: `droid_find`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
+
+Call two read-only tools:
+
+```sh
+npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_models --tool-arg filter=opus
+npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_find --tool-arg limit=5
+```
+
+Then, from a connected client, ask it to call `droid_models` and `droid_find`. Both are read-only and spend no model tokens.
+
+## Configuration
+
+- `FACTORY_API_KEY` (default unset): enables the REST backend, and is used for spawned sessions instead of the CLI login. On macOS, the server falls back to the Keychain (step 3).
+- `DROID_MCP_ROOTS` (default `~/repos`): colon-separated directories a session cwd must resolve inside.
+- `DROID_MCP_MAX_AUTONOMY` (default `high`): autonomy cap, one of `off`, `low`, `medium`, `high`; any other value means `off`.
+- `DROID_MCP_TOKEN` (default unset): bearer token; required with `--http`.
+
 ## How the tools fit together
 
 ```text
@@ -23,39 +234,142 @@ Terms used below:
 
 ## Access at a glance
 
-Three backends, and the credential each needs:
+The server uses three backends. Each edge into a backend is labeled with the credential it needs.
 
-| Backend | What it is | Credential |
-| --- | --- | --- |
-| Local files | `~/.factory/sessions` (transcripts and settings), `~/.factory/settings.json`, read directly | None |
-| `droid exec` child process | A droid session the server spawns through `@factory/droid-sdk` | `FACTORY_API_KEY` if one is found, otherwise the droid CLI login |
-| Factory REST API | `https://api.factory.ai`, reaches sessions held by the desktop app, other machines and the cloud | `FACTORY_API_KEY` |
+```mermaid
+flowchart LR
+  client["MCP client"] -->|"stdio or HTTP"| server["droid-mcp"]
+  server -->|"read-only<br/>no credential"| files[("Local session files<br/>~/.factory/sessions<br/>~/.factory/settings.json")]
+  server -->|"@factory/droid-sdk<br/>FACTORY_API_KEY if found,<br/>else droid CLI login"| exec["droid exec child process"]
+  exec -->|"writes"| files
+  server -->|"FACTORY_API_KEY"| rest["Factory REST API<br/>https://api.factory.ai"]
+  rest --> daemons["Desktop app, other machines<br/>and the cloud,<br/>holding the session"]
+  server --> helpers["Helpers: git diff HEAD (diffs),<br/>rg (transcript search),<br/>droid exec --help (model list)"]
+```
 
-Helpers: `git diff HEAD` (diffs), `rg` (transcript search), `droid exec --help` (model list).
+Sessions this server starts live in memory. When the stdio client disconnects, or the process gets SIGINT or SIGTERM, the server closes all of them. After a restart they are ordinary local sessions.
 
-What each tool can do:
+### Tools
 
-| Tool | Reads | Can change | Backend | Credential | Cost/side effects |
-| --- | --- | --- | --- | --- | --- |
-| `droid_find` (read-only) | Session headers and settings; transcripts when `content: true`; child sessions of listed workstreams when a key is set | Nothing | Local files (`~/.factory/sessions`), `rg`, Factory REST API (optional) | None; `FACTORY_API_KEY` for the child-session summary | No model tokens |
-| `droid_models` (read-only) | Built-in models, aliases and wildcards; `customModels` in settings | Nothing | `droid exec --help` (cached 60 s), `~/.factory/settings.json` | None | No model tokens |
-| `droid_start` | Model list, `~/.droid-mcp/state.json`, the fork source (with `fork`) | Creates a session; the agent edits files in `cwd` up to the granted autonomy | `droid exec` child process spawned through the SDK | `FACTORY_API_KEY` if found, otherwise the droid CLI login | Spends model tokens; writes `~/.droid-mcp/state.json` |
-| `droid_send` | Target session settings, model list, `~/.droid-mcp/state.json` | Sends a prompt as the user; changes model, tools and autonomy; may resume a local session | Own child process, Factory REST API, or a new `droid exec` (local resume) | Own session's existing connection; `FACTORY_API_KEY` for REST; CLI login for local resume (only reachable without a key) | Spends model tokens; writes `~/.droid-mcp/state.json` |
-| `droid_wait` (read-only) | New events, local transcript messages (user and assistant text only), or REST messages and pending prompts | Nothing | In-memory event log, local transcript, Factory REST API | None for local; `FACTORY_API_KEY` for REST | No model tokens; polls every 1 s (local file) or 2 s (REST) |
-| `droid_respond` | Pending prompts | Answers or cancels a permission prompt or AskUser question | Own child process or Factory REST API | None for own sessions; `FACTORY_API_KEY` otherwise | Lets a paused turn continue, which spends tokens |
-| `droid_cancel` | None | Interrupts a turn; closes an own session | Own child process or Factory REST API | None for own sessions; `FACTORY_API_KEY` otherwise (`scope: "turn"` only) | Stops token spend |
-| `droid_result` (read-only) | Latest result text; `git diff HEAD` in the session's cwd | Nothing | In-memory result, local transcript, Factory REST API, `git` | None for local; `FACTORY_API_KEY` for sessions not on this machine | No model tokens |
+"Read-only" means the tool is registered with `readOnlyHint: true` (`src/tools.ts`). All results are JSON text, trimmed to about 8 KB; event text is clipped at 4000 characters with `truncated: true`.
 
-"Read-only" means the tool is registered with `readOnlyHint: true` (`src/tools.ts`).
+#### droid_find
 
-Which backend a call uses depends on the target session (`src/route.ts`, `src/tools.ts`):
+![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY optional](https://img.shields.io/badge/FACTORY__API__KEY-optional-lightgrey)
 
-| Target | `droid_send` | `droid_wait` | `droid_result` | `droid_respond`, `droid_cancel` |
-| --- | --- | --- | --- | --- |
-| Own session | Child process | In-memory events (`seq` = event number) | Last result; `git diff HEAD` | Child process; `droid_cancel` can close it |
-| Local standalone session | With a key: REST. Without: local resume (below) | Local transcript (`seq` = byte offset, no pending prompts) | Local transcript; `git diff HEAD` | REST (needs key); `droid_cancel` turn only |
-| Local workstream session | REST (needs key); never resumed locally | With a key: REST (`seq` = message number). Without: local transcript | Local transcript; `git diff HEAD` | REST (needs key); `droid_cancel` turn only |
-| Not on this machine | REST (needs key) | REST (needs key) | REST text; no diff | REST (needs key); `droid_cancel` turn only |
+- Reads: session headers and settings; transcripts when `content: true`; child sessions of listed workstreams when a key is set. Changes nothing.
+- Backend: local files (`~/.factory/sessions`), `rg`, Factory REST API (optional).
+- Credential: none; `FACTORY_API_KEY` for the child-session summary.
+- Parameters: `query`, `content`, `scope` (`workstreams`, `sessions`, `all`), `cwd`, `includeArchived`, `includeSubagents`, `limit` (1-200, default 40), `cursor`.
+- Notes:
+  - Groups workstreams (orchestrator first, then agents) and standalone sessions by repo.
+  - `query` matches title, id prefix or cwd; with `content: true` it searches transcripts with `rg -F` (40 s timeout).
+  - Hidden by default: archived sessions and subagents.
+  - With a key, each listed workstream gets a `children` summary from REST, including agents on other machines.
+
+#### droid_models
+
+![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![no credential](https://img.shields.io/badge/no%20credential-lightgrey)
+
+- Reads: built-in models, aliases and wildcards; `customModels` in settings. Changes nothing.
+- Backend: `droid exec --help` (cached 60 s), `~/.factory/settings.json`.
+- Credential: none.
+- Parameters: `filter`, `include` (`builtin`, `custom`, `aliases`).
+- Notes: returns built-in ids with supported efforts, custom models, tier aliases, version wildcards and the default model.
+
+#### droid_start
+
+![spends model tokens](https://img.shields.io/badge/spends%20model%20tokens-d73a49) ![edits files](https://img.shields.io/badge/edits%20files-dbab09) ![FACTORY_API_KEY or CLI login](https://img.shields.io/badge/FACTORY__API__KEY-or%20CLI%20login-lightgrey)
+
+- Reads: model list, `~/.droid-mcp/state.json`, the fork source (with `fork`).
+- Changes: creates a session; the agent edits files in `cwd` up to the granted autonomy. Writes `~/.droid-mcp/state.json`.
+- Backend: `droid exec` child process spawned through the SDK.
+- Credential: `FACTORY_API_KEY` if found, otherwise the droid CLI login.
+- Parameters: `cwd`, `prompt`, `idempotencyKey` (required), `autonomy`, settings (see [Models and settings](#models-and-settings)).
+- Notes: returns `sessionId` and `state`. The turn runs in the background; follow it with `droid_wait`.
+
+#### droid_send
+
+![spends model tokens](https://img.shields.io/badge/spends%20model%20tokens-d73a49) ![sends as the user](https://img.shields.io/badge/sends%20as%20the%20user-dbab09) ![FACTORY_API_KEY for REST](https://img.shields.io/badge/FACTORY__API__KEY-for%20REST-lightgrey)
+
+- Reads: target session settings, model list, `~/.droid-mcp/state.json`.
+- Changes: sends a prompt as the user; changes model, tools and autonomy; may resume a local session. Writes `~/.droid-mcp/state.json`.
+- Backend: own child process, Factory REST API, or a new `droid exec` (local resume).
+- Credential: own session's existing connection; `FACTORY_API_KEY` for REST; CLI login for local resume (only reachable without a key).
+- Parameters: `session`, `prompt`, `idempotencyKey` (required), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings.
+- Notes: returns `via` (`own`, `local-resume`, `rest`), `nextSeq` for own and resumed sessions, `messageId` for REST. `queue` is refused while a turn is running.
+
+#### droid_wait
+
+![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY for REST](https://img.shields.io/badge/FACTORY__API__KEY-for%20REST-lightgrey)
+
+- Reads: new events, local transcript messages (user and assistant text only), or REST messages and pending prompts. Changes nothing.
+- Backend: in-memory event log, local transcript, Factory REST API. Polls every 1 s (local file) or 2 s (REST).
+- Credential: none for local; `FACTORY_API_KEY` for REST.
+- Parameters: `session`, `afterSeq`, `waitMs` (default 25000, max 50000), `maxEvents` (1-200, default 50).
+- Notes:
+  - Without `afterSeq`, returns the latest events at once. With it, waits for an assistant message, prompt, error or state change.
+  - `attention` lists pending prompts with their `requestId` (`null` for local transcript reads).
+
+#### droid_respond
+
+![lets a paused turn spend tokens](https://img.shields.io/badge/lets%20a%20paused%20turn%20spend%20tokens-dbab09) ![FACTORY_API_KEY if not own](https://img.shields.io/badge/FACTORY__API__KEY-if%20not%20own-lightgrey)
+
+- Reads: pending prompts.
+- Changes: answers or cancels a permission prompt or AskUser question, which lets a paused turn continue and spend tokens.
+- Backend: own child process or Factory REST API.
+- Credential: none for own sessions; `FACTORY_API_KEY` otherwise.
+- Parameters: `session`, `requestId`, then `decision` and `comment`, or `answers` (one per question), or `cancel`.
+- Notes: `decision` must be one of the offered options.
+
+#### droid_cancel
+
+![stops token spend](https://img.shields.io/badge/stops%20token%20spend-2ea44f) ![interrupts or closes](https://img.shields.io/badge/interrupts%20or%20closes-dbab09) ![FACTORY_API_KEY if not own](https://img.shields.io/badge/FACTORY__API__KEY-if%20not%20own-lightgrey)
+
+- Reads: nothing.
+- Changes: interrupts a turn; closes an own session.
+- Backend: own child process or Factory REST API.
+- Credential: none for own sessions; `FACTORY_API_KEY` otherwise (`scope: "turn"` only).
+- Parameters: `session`, `scope` (`turn`, `session`).
+- Notes: `scope: "session"` works only for own sessions.
+
+#### droid_result
+
+![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY if not on this machine](https://img.shields.io/badge/FACTORY__API__KEY-if%20not%20on%20this%20machine-lightgrey)
+
+- Reads: latest result text; `git diff HEAD` in the session's cwd. Changes nothing.
+- Backend: in-memory result, local transcript, Factory REST API, `git`.
+- Credential: none for local; `FACTORY_API_KEY` for sessions not on this machine.
+- Parameters: `session`, `include` (`text`, `diff`), `offset`, `maxBytes` (1-32768, default 6000).
+- Notes: paged by byte offset; pass `nextOffset` back as `offset`.
+
+### Which backend a call uses
+
+It depends on the target session (`src/route.ts`, `src/tools.ts`):
+
+```mermaid
+flowchart TD
+  target["target session"] --> own{"own session?"}
+  own -->|yes| ownBox["Own child process<br/>all tools; droid_cancel can close it;<br/>droid_result: last result and diff"]
+  own -->|no| here{"on this machine?"}
+  here -->|no| keyRemote{"key set?"}
+  keyRemote -->|yes| restRemote["REST: droid_send, droid_wait,<br/>droid_respond, droid_cancel (turn only),<br/>droid_result (text, no diff)"]
+  keyRemote -->|no| refusedRemote["Refused"]
+  here -->|yes| ws{"workstream?"}
+  ws -->|yes| keyWs{"key set?"}
+  keyWs -->|yes| restWs["REST: droid_send, droid_wait,<br/>droid_respond, droid_cancel<br/>Local: droid_result"]
+  keyWs -->|no| localWs["Local transcript: droid_wait, droid_result<br/>Refused: droid_send (never resumed locally),<br/>droid_respond, droid_cancel"]
+  ws -->|no| keyStd{"key set?"}
+  keyStd -->|yes| restStd["REST: droid_send, droid_respond, droid_cancel<br/>Local transcript: droid_wait, droid_result"]
+  keyStd -->|no| localStd["droid_send: local resume (conditions below)<br/>Local transcript: droid_wait, droid_result<br/>Refused: droid_respond, droid_cancel"]
+```
+
+Per-tool differences:
+
+- `seq` in `droid_wait` is a cursor whose meaning depends on the source: an event number for own sessions, a byte offset into the transcript for other local sessions, and a message sequence number for REST sessions. Treat it as opaque and pass `nextSeq` back as `afterSeq`.
+- `droid_wait` on a local transcript returns no pending prompts.
+- `droid_result` on an own session returns the last result. For any session on this machine, it can also return `git diff HEAD`. For a session not on this machine, it returns REST text and no diff.
+- `droid_cancel` can close only an own session. For every other session it can only interrupt the turn.
 
 Local resume happens only without a key, only with `allowLocalResume: true`, and only for a standalone session that has readable settings, is not archived, is not a subagent, was not modified in the last 30 minutes, and has a recorded autonomy within the cap. The resumed session becomes an own session.
 
@@ -64,15 +378,15 @@ Local resume happens only without a key, only with `allowLocalResume: true`, and
 ### Filesystem
 
 - `droid_start`, local resume and `droid_result` diffs require a `cwd` inside `DROID_MCP_ROOTS` (colon-separated, default `~/repos`). Both the cwd and each root go through `realpath`, so symlinks are resolved before the prefix check, and a missing cwd is refused (`src/config.ts`).
-- `DROID_MCP_ROOTS` limits where the server starts or diffs work. It is not a read sandbox:
-
-  | Operation | Limited to `DROID_MCP_ROOTS`? |
-  | --- | --- |
-  | `droid_start` cwd, local resume, `droid_result` diff | Yes |
-  | `droid_start` fork source (the source's own cwd) | No |
-  | `droid_find`, `droid_wait`, `droid_result` text (any local transcript) | No |
-  | REST sends, `droid_respond`, `droid_cancel` (any session the key can reach) | No |
-
+- `DROID_MCP_ROOTS` limits where the server starts or diffs work. It is not a read sandbox.
+  - Limited to `DROID_MCP_ROOTS`:
+    - `droid_start` cwd
+    - local resume
+    - `droid_result` diff
+  - Not limited:
+    - `droid_start` fork source (the source's own cwd)
+    - `droid_find`, `droid_wait`, `droid_result` text (any local transcript)
+    - REST sends, `droid_respond`, `droid_cancel` (any session the key can reach)
 - Files read: `~/.factory/sessions/*/*.jsonl` and their `.settings.json` files (`src/catalog.ts`), `~/.factory/settings.json` (`src/models.ts`), and `~/.droid-mcp/state.json` (`src/runs.ts`).
 - The only file the server writes is `~/.droid-mcp/state.json`, through a temporary file in the same directory and a rename. The directory is created with mode `0700` and the file with `0600` (`src/runs.ts`).
 - Droid writes its own session files. The agent inside a session starts in its cwd, but autonomy, not the roots list, decides what its commands can touch.
@@ -98,15 +412,32 @@ Validation, before anything runs (`src/settings.ts`, `src/models.ts`):
 
 Where each setting is applied:
 
-| Setting | New session | Fork | Own session send / local resume | REST send |
-| --- | --- | --- | --- | --- |
-| `model`, efforts, `specModel`, `useSpec: true`, tool lists | `updateSettings` before the first prompt | Same | `updateSettings` before the prompt | `updateSession` before the prompt |
-| `mission: true`, worker and validator settings | `updateSettings` | Same | `updateSettings` | Ignored (still validated, so `mission` needs `autonomy: "high"` in the same call) |
-| `autonomy` | At session creation | `updateSettings` | `updateSettings` | `updateSession` |
-| `tags` | At creation, plus `droid-mcp` | On the fork, plus `droid-mcp` | Added to the session's tags, keeping existing tag metadata | Ignored |
-| `worktree` | `--worktree [branch]` | Same | Ignored | Ignored |
-| `appendSystemPrompt` | Appended to the `droid` preset | Refused | Ignored | Ignored |
-| `fork` | Loads the source locally and forks it. Only checks that the source is on disk and not open in this server; the local-resume guards above do not apply | n/a | Ignored | Ignored |
+- `model`, efforts, `specModel`, `useSpec: true`, tool lists:
+  - New session and fork: `updateSettings` before the first prompt.
+  - Own session send or local resume: `updateSettings` before the prompt.
+  - REST send: `updateSession` before the prompt.
+- `mission: true`, worker and validator settings:
+  - New session, fork, own session send or local resume: `updateSettings`.
+  - REST send: ignored. Still validated, so `mission` needs `autonomy: "high"` in the same call.
+- `autonomy`:
+  - New session: at session creation.
+  - Fork, own session send or local resume: `updateSettings`.
+  - REST send: `updateSession`.
+- `tags`:
+  - New session: at creation, plus `droid-mcp`.
+  - Fork: on the fork, plus `droid-mcp`.
+  - Own session send or local resume: added to the session's tags, keeping existing tag metadata.
+  - REST send: ignored.
+- `worktree`:
+  - New session and fork: `--worktree [branch]`.
+  - Own session send, local resume, REST send: ignored.
+- `appendSystemPrompt`:
+  - New session: appended to the `droid` preset.
+  - Fork: refused.
+  - Own session send, local resume, REST send: ignored.
+- `fork`:
+  - New session: loads the source locally and forks it. Only checks that the source is on disk and not open in this server; the local-resume guards above do not apply.
+  - Own session send, local resume, REST send: ignored.
 
 Ignored settings come back in the `ignored` field of the `droid_send` result; REST sends also return `applied` (`src/tools.ts`, `src/settings.ts`). `useSpec: false` and `mission: false` do nothing: neither switches a session back to normal mode.
 
@@ -140,111 +471,6 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 - Never resumes a workstream session, or one whose settings it cannot read, through `droid_send` (`src/route.ts`). `droid_start` with `fork` does load its source locally without these checks.
 - Never runs commands other than `droid exec` (through the SDK), `droid exec --help`, `git -C <cwd> diff HEAD`, `rg` and, on macOS, `security find-generic-password` (`src/models.ts`, `src/tools.ts`, `src/catalog.ts`, `src/config.ts`).
 - Has no tool that deletes sessions or files (`src/tools.ts`).
-
-## How it works
-
-```mermaid
-flowchart LR
-  client[MCP client] -->|stdio or HTTP| server[droid-mcp]
-  server -->|read-only| files[(Local session files<br/>~/.factory/sessions<br/>~/.factory/settings.json)]
-  server -->|"@factory/droid-sdk"| exec[droid exec child process]
-  exec -->|writes| files
-  server -->|FACTORY_API_KEY| rest[Factory REST API<br/>api.factory.ai]
-  rest --> daemons[Factory cloud and desktop daemons<br/>holding the session]
-  server --> helpers[git diff HEAD, rg,<br/>droid exec --help]
-```
-
-Sessions this server starts live in memory. When the stdio client disconnects, or the process gets SIGINT or SIGTERM, the server closes all of them. After a restart they are ordinary local sessions.
-
-## Setup
-
-Requirements: Node >= 24, the `droid` CLI (logged in, or `FACTORY_API_KEY`), `git` and `rg` on the `PATH` the MCP client gives the server. Many clients start servers with a minimal `PATH`; pass one explicitly if `droid` or `rg` is not found.
-
-```sh
-cd /path/to/droid-mcp
-npm install
-```
-
-Droid:
-
-```sh
-droid mcp add droid-mcp node /path/to/droid-mcp/src/main.ts --env PATH=/path/to/bin:/usr/bin:/bin
-```
-
-Claude Code:
-
-```sh
-claude mcp add droid-mcp -e PATH=/path/to/bin:/usr/bin:/bin -- node /path/to/droid-mcp/src/main.ts
-```
-
-Cursor (`~/.cursor/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "droid-mcp": {
-      "command": "node",
-      "args": ["/path/to/droid-mcp/src/main.ts"],
-      "env": { "PATH": "/path/to/bin:/usr/bin:/bin" }
-    }
-  }
-}
-```
-
-### HTTP mode
-
-```sh
-DROID_MCP_TOKEN=<token> node src/main.ts --http 127.0.0.1:37999
-```
-
-Use `http://127.0.0.1:37999/mcp` as the endpoint (the server answers on any path) with the header `Authorization: Bearer <token>`:
-
-```sh
-droid mcp add droid-mcp http://127.0.0.1:37999/mcp --type http --header "Authorization: Bearer <token>"
-claude mcp add --transport http droid-mcp http://127.0.0.1:37999/mcp -H "Authorization: Bearer <token>"
-```
-
-To reach it from other machines on a tailnet, put it behind `tailscale serve`:
-
-```sh
-tailscale serve --bg --https=8443 http://127.0.0.1:37999
-```
-
-The endpoint is then `https://<your-host>.<tailnet>.ts.net:8443/mcp`. The bearer token is still required.
-
-## Configuration
-
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `FACTORY_API_KEY` | unset | Enables the REST backend, and is used for spawned sessions instead of the CLI login |
-| `DROID_MCP_ROOTS` | `~/repos` | Colon-separated directories a session cwd must resolve inside |
-| `DROID_MCP_MAX_AUTONOMY` | `high` | Autonomy cap: `off`, `low`, `medium`, `high`; any other value means `off` |
-| `DROID_MCP_TOKEN` | unset | Bearer token; required with `--http` |
-
-On macOS, when `FACTORY_API_KEY` is not set, the server looks for it in the Keychain:
-
-```sh
-security add-generic-password -s droid-mcp -a FACTORY_API_KEY -w   # prompts for the key
-```
-
-The key is read once at startup; restart the server after changing it.
-
-## Tool reference
-
-All results are JSON text, trimmed to about 8 KB; event text is clipped at 4000 characters with `truncated: true`.
-
-| Tool | Key parameters | Notes |
-| --- | --- | --- |
-| `droid_find` | `query`, `content`, `scope` (`workstreams`, `sessions`, `all`), `cwd`, `includeArchived`, `includeSubagents`, `limit` (1-200, default 40), `cursor` | Groups workstreams (orchestrator first, then agents) and standalone sessions by repo. `query` matches title, id prefix or cwd; with `content: true` it searches transcripts with `rg -F` (40 s timeout). Hidden by default: archived sessions and subagents. With a key, each listed workstream gets a `children` summary from REST, including agents on other machines. |
-| `droid_models` | `filter`, `include` (`builtin`, `custom`, `aliases`) | Built-in ids with supported efforts, custom models, tier aliases, version wildcards and the default model. |
-| `droid_start` | `cwd`, `prompt`, `idempotencyKey` (required), `autonomy`, settings | Returns `sessionId` and `state`. The turn runs in the background; follow it with `droid_wait`. |
-| `droid_send` | `session`, `prompt`, `idempotencyKey` (required), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings | Returns `via` (`own`, `local-resume`, `rest`), `nextSeq` for own and resumed sessions, `messageId` for REST. `queue` is refused while a turn is running. |
-| `droid_wait` | `session`, `afterSeq`, `waitMs` (default 25000, max 50000), `maxEvents` (1-200, default 50) | Without `afterSeq`, returns the latest events at once. With it, waits for an assistant message, prompt, error or state change. `attention` lists pending prompts with their `requestId` (`null` for local transcript reads). |
-| `droid_respond` | `session`, `requestId`, `decision` and `comment`, or `answers` (one per question), or `cancel` | `decision` must be one of the offered options. |
-| `droid_cancel` | `session`, `scope` (`turn`, `session`) | `session` only for own sessions. |
-| `droid_result` | `session`, `include` (`text`, `diff`), `offset`, `maxBytes` (1-32768, default 6000) | Paged by byte offset; pass `nextOffset` back as `offset`. |
-
-`seq` is a cursor whose meaning depends on the source: an event number for sessions this server runs, a byte offset into the transcript for other local sessions, and a message sequence number for REST sessions. Treat it as opaque and pass `nextSeq` back as `afterSeq`.
 
 ## Development
 
