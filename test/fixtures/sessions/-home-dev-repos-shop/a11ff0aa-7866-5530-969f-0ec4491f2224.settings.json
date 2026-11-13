@@ -1,0 +1,17 @@
+{
+  "tags": [
+    {
+      "name": "mission-v2",
+      "metadata": {
+        "kind": "orchestrator",
+        "missionId": "a11ff0aa-7866-5530-969f-0ec4491f2224",
+        "symbol": "activity",
+        "cloudSync": "on",
+        "spaceId": "8e48fdaa-b558-5255-9ce4-89fefcd3e612"
+      }
+    }
+  ],
+  "archivedAt": "2026-11-06T12:49:09.894Z",
+  "model": "custom:my-proxy:opus-5-5",
+  "autonomyLevel": "high"
+}

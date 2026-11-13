@@ -1,0 +1,13 @@
+{
+  "tags": [
+    {
+      "name": "subagent",
+      "metadata": {
+        "callingSessionId": "900cb9e9-c0e2-5b47-983c-21e67cf0b317",
+        "callingToolUseId": "tool_example2"
+      }
+    }
+  ],
+  "model": "custom:example-model-0",
+  "autonomyLevel": "high"
+}

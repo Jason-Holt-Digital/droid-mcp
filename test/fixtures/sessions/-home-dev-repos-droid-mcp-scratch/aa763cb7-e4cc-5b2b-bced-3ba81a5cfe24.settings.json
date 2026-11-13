@@ -1,0 +1,16 @@
+{
+  "tags": [
+    {
+      "name": "droid-mcp"
+    },
+    {
+      "name": "sdk",
+      "metadata": {
+        "language": "typescript",
+        "version": "0.11.0"
+      }
+    }
+  ],
+  "model": "custom:my-proxy:opus-5-5",
+  "autonomyLevel": "high"
+}

@@ -1,0 +1,16 @@
+{
+  "tags": [
+    {
+      "name": "mission-v2",
+      "metadata": {
+        "kind": "orchestrator",
+        "missionId": "8ddbc264-6932-58f2-a1e8-323e4207e00d",
+        "symbol": "git-pull-request",
+        "cloudSync": "on",
+        "spaceId": "1de01efe-a93b-52ba-af61-8151166fc383"
+      }
+    }
+  ],
+  "model": "custom:my-proxy:opus-5-5",
+  "autonomyLevel": "high"
+}

@@ -1,0 +1,44 @@
+{
+  "name": "droid-mcp",
+  "version": "0.1.0",
+  "description": "MCP server to find, start, steer and read Factory Droid sessions",
+  "license": "MIT",
+  "author": "Jason Holt",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jason-Holt-Digital/droid-mcp.git"
+  },
+  "homepage": "https://github.com/Jason-Holt-Digital/droid-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Jason-Holt-Digital/droid-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "factory",
+    "droid",
+    "ai-agents"
+  ],
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test test/",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "dependencies": {
+    "@factory/droid-sdk": "0.11.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  },
+  "private": true,
+  "bin": {
+    "droid-mcp": "src/main.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tags": [
+    {
+      "name": "read-only"
+    },
+    {
+      "name": "mission-v2-subagent"
+    },
+    {
+      "name": "subagent",
+      "metadata": {
+        "callingSessionId": "cfae8e58-e73e-570e-96b7-dc4058b66861",
+        "callingToolUseId": "toolu_example1"
+      }
+    }
+  ],
+  "model": "custom:my-proxy:opus-5-5",
+  "autonomyLevel": "low"
+}

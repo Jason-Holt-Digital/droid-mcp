@@ -1,0 +1,132 @@
+import {
+  answerSessionElicitation,
+  createFactoryClient,
+  getMessages,
+  getSession,
+  interruptSession,
+  listChildSessions,
+  listSessionElicitations,
+  postMessage,
+  updateSession,
+  type AnswerSessionElicitationRequestBody,
+} from '@factory/droid-sdk/api';
+import type { RestSessionSettings } from './settings.ts';
+
+type ApiResult<T> = { data?: T; error?: unknown; response?: Response };
+
+function unwrap<T>(r: ApiResult<T>, op: string): T {
+  if (r.error !== undefined || r.data === undefined) {
+    const e = (r.error ?? {}) as { status?: number; title?: string; detail?: string };
+    const status = e.status ?? r.response?.status ?? 'error';
+    const title = e.title ?? r.response?.statusText ?? 'request failed';
+    throw new Error(`Factory API ${op} ${status} ${title}${e.detail ? `: ${e.detail}` : ''}`);
+  }
+  return r.data;
+}
+
+function textOf(content: Array<{ type: string; text?: string }>): string {
+  return content
+    .filter((b) => b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join('\n');
+}
+
+export type Elicitation = {
+  requestId: string;
+  type: 'permission' | 'ask-user' | string;
+  options?: string[];
+  questions?: Array<{ index: number; question: string; options: string[] }>;
+  summary?: string;
+};
+
+export type Rest = ReturnType<typeof createRest>;
+
+export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl?: string }) {
+  const client = createFactoryClient({ apiKey: opts.apiKey, fetch: opts.fetch, baseUrl: opts.baseUrl });
+
+  async function elicitations(sessionId: string): Promise<Elicitation[]> {
+    const data = unwrap(await listSessionElicitations({ client, path: { sessionId } }), 'elicitations');
+    return data.elicitations.map((e) =>
+      e.type === 'permission'
+        ? {
+            requestId: e.requestId,
+            type: e.type,
+            options: e.options.map((o) => o.value),
+            summary: e.toolUses.map((t) => `${t.toolUse.name} ${JSON.stringify(t.toolUse.input)}`).join('; ').slice(0, 400),
+          }
+        : {
+            requestId: e.requestId,
+            type: e.type,
+            questions: e.questions.map(({ index, question, options }) => ({ index, question, options })),
+          },
+    );
+  }
+
+  return {
+    async send(sessionId: string, text: string) {
+      const data = unwrap(await postMessage({ client, path: { sessionId }, body: { text } }), 'postMessage');
+      return { messageId: data.messageId, status: data.status };
+    },
+
+    async update(sessionId: string, sessionSettings: RestSessionSettings) {
+      unwrap(await updateSession({ client, path: { sessionId }, body: { sessionSettings } }), 'updateSession');
+    },
+
+    async status(sessionId: string) {
+      const [s, pending] = await Promise.all([
+        getSession({ client, path: { sessionId } }).then((r) => unwrap(r, 'getSession')),
+        elicitations(sessionId),
+      ]);
+      return {
+        sessionId: s.sessionId,
+        title: s.title,
+        status: s.status,
+        messageCount: s.messageCount,
+        updatedAt: s.updatedAt,
+        computerId: s.computerId,
+        tags: (s.tags ?? s.sessionSettings?.tags ?? []).map((t) => t.name),
+        elicitations: pending,
+      };
+    },
+
+    async messages(sessionId: string, query: { limit?: number; cursor?: string; role?: 'user' | 'assistant' | 'tool' } = {}) {
+      const data = unwrap(await getMessages({ client, path: { sessionId }, query }), 'getMessages');
+      return {
+        messages: data.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          text: textOf(m.content as Array<{ type: string; text?: string }>),
+          createdAt: m.createdAt,
+          seq: m.seq,
+        })),
+        nextCursor: data.pagination?.nextCursor ?? undefined,
+      };
+    },
+
+    elicitations,
+
+    async answer(sessionId: string, requestId: string, body: AnswerSessionElicitationRequestBody) {
+      unwrap(await answerSessionElicitation({ client, path: { sessionId, requestId }, body }), 'answerElicitation');
+    },
+
+    async interrupt(sessionId: string) {
+      unwrap(await interruptSession({ client, path: { sessionId } }), 'interrupt');
+    },
+
+    async children(sessionId: string) {
+      const data = unwrap(
+        await listChildSessions({ client, path: { sessionId }, query: { includeAttention: true } }),
+        'children',
+      );
+      return data.sessions.map((c) => ({
+        sessionId: c.sessionId,
+        title: c.title,
+        status: c.status,
+        updatedAt: c.updatedAt,
+        tags: (c.tags ?? []).map((t) => t.name),
+        attention: c.attention ?? null,
+        computer: c.computer?.name ?? c.computerId ?? null,
+      }));
+    },
+  };
+}

@@ -1,0 +1,16 @@
+{
+  "tags": [
+    {
+      "name": "mission-v2",
+      "metadata": {
+        "kind": "agent",
+        "missionId": "0b691f38-3cb1-510d-ba50-881858f88438",
+        "orchestratorComputerId": "016972b4-c940-52aa-b3b5-1d440311da9c",
+        "spaceId": "0acce9b2-bde4-5d2a-a112-3f1cf004776e"
+      }
+    }
+  ],
+  "archivedAt": "2026-10-31T18:06:54.699Z",
+  "model": "kimi-k3",
+  "autonomyLevel": "high"
+}

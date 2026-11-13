@@ -1,0 +1,17 @@
+{
+  "tags": [
+    {
+      "name": "mission-v2",
+      "metadata": {
+        "kind": "agent",
+        "missionId": "a11ff0aa-7866-5530-969f-0ec4491f2224",
+        "orchestratorComputerId": "42cce5b5-3df2-5c34-8a1c-d88cd9a5b0e6",
+        "spaceId": "8e48fdaa-b558-5255-9ce4-89fefcd3e612",
+        "cloudSync": "on"
+      }
+    }
+  ],
+  "archivedAt": "2026-11-06T12:48:50.207Z",
+  "model": "custom:my-proxy:opus-5-5",
+  "autonomyLevel": "high"
+}
