@@ -91,6 +91,22 @@ test('POST /events needs the events token, and the MCP bearer is not accepted th
   assert.equal(ctx.events.since(own.seq - 1, 1).events[0].computer, 'unknown');
 });
 
+test('an event from an unknown computerId is recorded but does not set the session computer', async () => {
+  const base = await serve();
+  const homes = new Map<string, string>();
+  ctx.sessionComputers = homes;
+  try {
+    const ok = await post(`${base}/events`, EVENTS_TOKEN, { sessionId: SID, kind: 'finished', computerId: 'c-gone', host: 'ghost' });
+    assert.equal(ok.status, 202);
+    const { seq } = await ok.json();
+    assert.equal(ctx.events.since(seq - 1, 1).events[0].computer, 'ghost');
+    assert.equal(homes.has(SID), false);
+    await post(`${base}/events`, EVENTS_TOKEN, { sessionId: SID, kind: 'finished', computerId: 'c-lap' });
+    assert.equal(homes.get(SID), 'c-lap');
+  } finally {
+    ctx.sessionComputers = undefined;
+  }
+});
 test('POST /events rejects bad JSON, bad shapes and oversized bodies', async () => {
   const base = await serve();
   assert.equal((await post(`${base}/events`, EVENTS_TOKEN, '{nope')).status, 400);

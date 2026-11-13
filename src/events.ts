@@ -161,6 +161,7 @@ export class Forwarder {
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${this.#key}`, 'X-Automation-Key': this.#key },
         body: JSON.stringify(forwardBody(e)),
         signal: AbortSignal.timeout(this.#timeoutMs),
+        redirect: 'error',
       });
       if (res.ok) return true;
       this.#log(`droid-mcp: forwarding event ${e.seq} to ${this.#where()} failed: HTTP ${res.status}`);

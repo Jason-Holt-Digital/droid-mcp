@@ -126,7 +126,8 @@ def read_tags(transcript):
     if not isinstance(tags, list):
         return []
     names = [t.get("name") for t in tags if isinstance(t, dict)]
-    return [n for n in names if isinstance(n, str) and n][:20]
+    # The server rejects a tag over 100 UTF-16 units, which would drop the whole event.
+    return [n for n in names if isinstance(n, str) and n and len(n.encode("utf-16-le")) // 2 <= 100][:20]
 
 
 def build_payload(event, kind, text, home):

@@ -95,6 +95,15 @@ test('Forwarder posts the compact event with both auth headers', async () => {
   });
 });
 
+test('Forwarder refuses redirects so the key never follows one to another origin', async () => {
+  let redirect: RequestRedirect | undefined;
+  const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    redirect = init?.redirect;
+    return new Response(null, { status: 204 });
+  }) as typeof globalThis.fetch;
+  assert.equal(await new Forwarder({ url: 'https://hooks.example.test/wake', key: 'wh-key', fetch }).send(event), true);
+  assert.equal(redirect, 'error');
+});
 test('Forwarder never throws, logs without the key or URL query, and is off without both values', async () => {
   const logs: string[] = [];
   const failing = (async () => {

@@ -58,8 +58,12 @@ async function server(delayMs = 0) {
   const next = (ms = 5000) =>
     new Promise<Received | undefined>((resolve) => {
       if (received.length) return resolve(received.shift());
-      const timer = setTimeout(() => resolve(undefined), ms);
+      const timer = setTimeout(() => {
+        notify = () => {};
+        resolve(undefined);
+      }, ms);
       notify = () => {
+        notify = () => {};
         clearTimeout(timer);
         resolve(received.shift());
       };
@@ -360,3 +364,32 @@ test('an unreachable url or missing config still exits 0 quickly with no output'
       assert.ok(r.ms < 5000, `hook took ${r.ms.toFixed(0)} ms`);
     }
   }));
+
+const LONG_TAGS = [...Array.from({ length: 19 }, (_, i) => ({ name: `${i}`.padEnd(101, 'x') })), { name: '😀'.repeat(51) }, { name: 'cto' }];
+
+async function overlongTagsDropped(home: string, hook: (transcript: string) => ReturnType<typeof run>) {
+  const srv = await server();
+  try {
+    const transcript = await fakeSession(home, 'done');
+    await writeFile(transcript.replace(/\.jsonl$/, '.settings.json'), JSON.stringify({ tags: LONG_TAGS }));
+    await configure(home, srv.url);
+    const r = await hook(transcript);
+    assert.equal(r.code, 0);
+    const got = await srv.next();
+    assert.ok(got, 'no event received');
+    assert.deepEqual(got.body.tags, ['cto']);
+    assert.deepEqual(parseEventBody(got.body).tags, ['cto']);
+  } finally {
+    await srv.close();
+  }
+}
+
+test('tags over 100 UTF-16 units are left out before the first 20 are taken', { skip }, () =>
+  withHome((home) => overlongTagsDropped(home, (transcript) => run('python3', [HOOK], { env: env(home), input: stopInput(transcript) }))));
+
+test('the PowerShell hook leaves out tags over 100 UTF-16 units', { skip: pwshSkip }, () =>
+  withHome((home) =>
+    overlongTagsDropped(home, (transcript) =>
+      run('pwsh', ['-NoProfile', '-NonInteractive', '-File', join(ROOT, 'hooks', 'droid-mcp-hook.ps1')], { env: env(home), input: stopInput(transcript) }),
+    ),
+  ));

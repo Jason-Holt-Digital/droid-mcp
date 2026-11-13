@@ -52,7 +52,7 @@ export async function recordEvent(ctx: Ctx, input: EventInput): Promise<DroidEve
       computer = undefined;
     }
   }
-  if (input.computerId) ctx.sessionComputers?.set(input.sessionId, input.computerId);
+  if (input.computerId && computer !== undefined) ctx.sessionComputers?.set(input.sessionId, input.computerId);
   const event = ctx.events.add(input, {
     computer: computer ?? input.host ?? 'unknown',
     watched: isWatched(input.tags, ctx.runs.get(input.sessionId) !== undefined),

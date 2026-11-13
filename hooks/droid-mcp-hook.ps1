@@ -97,7 +97,7 @@ function Read-Tags([string]$Transcript) {
     if ($null -eq $settings -or $null -eq $settings.tags) { return @() }
     $names = @()
     foreach ($t in @($settings.tags)) {
-        if ($null -ne $t -and $t.name -is [string] -and $t.name) { $names += $t.name }
+        if ($null -ne $t -and $t.name -is [string] -and $t.name -and $t.name.Length -le 100) { $names += $t.name }
     }
     if ($names.Length -gt 20) { $names = $names[0..19] }
     return $names

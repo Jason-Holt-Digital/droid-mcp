@@ -182,10 +182,14 @@ type Where = { computerId?: string; remote: boolean };
 
 // Fails fast on an offline computer, whether it was named or remembered from droid_find.
 // Runs this server owns are SDK processes on this machine, whatever computer is named or remembered.
-async function locate(ctx: Ctx, session: string, computer?: string): Promise<Where> {
-  if (ctx.runs.get(session)) return { remote: false };
+async function locate(ctx: Ctx, session: string, computer?: string, sending = false): Promise<Where> {
+  const run = ctx.runs.get(session);
+  if (run && !(sending && run.state === 'closed')) return { remote: false };
   if (computer !== undefined) {
-    const c = await ctx.computers.require(computer);
+    // A failed computer list is Refused so droid_send's idempotency key is not left pending.
+    const c = await ctx.computers.require(computer).catch((err) => {
+      throw err instanceof Refused ? err : new Refused(`could not list computers: ${err instanceof Error ? err.message : String(err)}`);
+    });
     return c.thisMachine ? { remote: false } : { computerId: c.id, remote: true };
   }
   const remembered = ctx.sessionComputers?.get(session);
@@ -566,7 +570,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     handle(async (a) => {
       const mode = a.mode ?? 'queue';
       return ctx.keys.once(`send:${a.session}:${a.idempotencyKey}`, async () => {
-        const where = await locate(ctx, a.session, a.computer);
+        const where = await locate(ctx, a.session, a.computer, true);
         const target = await resolveTarget(ctx, a.session, { sending: true, where });
         const route = routeSend(target, {
           restEnabled: Boolean(ctx.rest),

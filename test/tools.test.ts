@@ -538,6 +538,50 @@ test('send and wait pass computerId for a named or remembered computer, and a re
   }
 });
 
+test('droid_send on a closed owned run follows the named computer instead of treating it as owned', async () => {
+  const run = { id: '8c1d2e3f-4a5b-5c6d-9e7f-0a1b2c3d4e5f', state: 'closed', events: [], waiters: new Set() } as unknown as OwnRun;
+  class OwnedRuns extends Runs {
+    get(id: string) {
+      return id === run.id ? run : undefined;
+    }
+  }
+  const { c, api } = await fleet({ ctx: { runs: new OwnedRuns({ repoOf: (cwd) => cwd }) } });
+  try {
+    const sent = await c.call('droid_send', { session: run.id, computer: 'cloud-a', prompt: 'go', idempotencyKey: 'closed1' });
+    assert.equal(sent.json?.via, 'rest', sent.text);
+    const post = api.calls.find((x) => x.method === 'POST' && x.path === `/api/v0/sessions/${run.id}/messages`);
+    assert.deepEqual(post?.body, { text: 'go', computerId: FLEET.cloudA.id });
+    const offline = await c.call('droid_send', { session: run.id, computer: 'old-desk', prompt: 'go', idempotencyKey: 'closed2' });
+    assert.match(offline.text, /computer old-desk is offline/);
+  } finally {
+    await c.close();
+  }
+});
+
+test('a failed computer lookup in droid_send leaves the idempotencyKey free for a retry', async () => {
+  let computerCalls = 0;
+  const api = fakeApi((call) => {
+    if (call.method === 'GET' && call.path === '/api/v0/computers') {
+      if (computerCalls++ === 0) return Response.json({ status: 503, title: 'Unavailable' }, { status: 503 });
+      return { computers: [{ ...FLEET.cloudA, lastSeenAt: Date.now() }] };
+    }
+    if (call.method === 'POST' && call.path.endsWith('/messages')) return { messageId: 'm1', status: 'running' };
+    return undefined;
+  });
+  const rest = createRest({ apiKey: 'k', fetch: api.fetch });
+  const c = await connect({ rest, keys: new KeyStore(join(dir, 'lookup-retry.json')) });
+  try {
+    const args = { session: REMOTE.cloudStandalone, computer: 'cloud-a', prompt: 'go', idempotencyKey: 'lookup-retry' };
+    const first = await c.call('droid_send', args);
+    assert.equal(first.isError, true);
+    assert.match(first.text, /503/);
+    const retry = await c.call('droid_send', args);
+    assert.equal(retry.isError, false, retry.text);
+    assert.equal(retry.json.messageId, 'm1');
+  } finally {
+    await c.close();
+  }
+});
 test('a run this server owns is read and closed locally even when its session is remembered on an offline computer', async () => {
   let closed = false;
   const run = {
