@@ -479,6 +479,19 @@ test('droid_find merges this machine with online computers, dedupes, labels comp
   }
 });
 
+test('an unfiltered droid_find forgets a remembered remote computer for a session found locally', async () => {
+  const sessionComputers = new Map([[IDS.liveStandalone, FLEET.laptop.id]]);
+  const { c } = await fleet({ ctx: { sessionComputers } });
+  try {
+    const res = await c.call('droid_find', { limit: 200 });
+    assert.equal(res.isError, false, res.text);
+    assert.equal(sessionComputers.has(IDS.liveStandalone), false);
+    assert.equal(sessionComputers.get(REMOTE.laptopStandalone), FLEET.laptop.id);
+  } finally {
+    await c.close();
+  }
+});
+
 test('a session tool naming an offline computer refuses before calling the session API', async () => {
   const { c, api } = await fleet();
   try {

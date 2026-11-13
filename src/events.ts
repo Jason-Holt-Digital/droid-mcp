@@ -93,6 +93,9 @@ export class EventLog {
     if (after === undefined) {
       return { events: this.#events.filter(want).slice(-limit), nextAfter: newest, missed: false };
     }
+    // seq restarts at 1 with the server, so a cursor ahead of the log predates a restart.
+    const stale = after > newest;
+    if (stale) after = 0;
     const oldest = this.#events[0]?.seq ?? this.#next;
     const events: DroidEvent[] = [];
     for (const e of this.#events) {
@@ -103,7 +106,7 @@ export class EventLog {
     return {
       events,
       nextAfter: events.length === limit ? events[events.length - 1].seq : Math.max(after, newest),
-      missed: after < oldest - 1,
+      missed: stale || after < oldest - 1,
     };
   }
 }

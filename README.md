@@ -371,7 +371,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 - Notes:
   - Without `after`, returns the latest events. With it, returns events after that `seq`, oldest first. It does not wait; pass `nextAfter` back as `after`.
   - Each event has `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text`, `cwd`, `tags` and `forwarded`.
-  - `missed: true` means events after `after` already dropped out of the ring. `forwarding` says whether a webhook is configured.
+  - `missed: true` means events after `after` already dropped out of the ring; an `after` ahead of the log (after a server restart) restarts from the oldest kept event and sets `missed`. `forwarding` says whether a webhook is configured.
   - Event text is untrusted session content. See [Callbacks](#callbacks).
 
 #### droid_models

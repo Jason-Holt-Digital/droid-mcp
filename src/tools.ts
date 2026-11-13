@@ -350,6 +350,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           query = undefined;
         }
         records = local.map((r) => ({ ...r, computer: thisName }));
+        for (const r of records) homes.delete(r.id);
       }
       const seen = new Set(records.map((r) => r.id));
       for (const r of await remotePending) {

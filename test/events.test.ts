@@ -20,6 +20,15 @@ test('EventLog keeps the newest events, numbers them from 1 and reports a missed
   assert.equal(new EventLog().since(0, 5).missed, false);
 });
 
+test('EventLog treats a cursor ahead of the log as stale from before a restart', () => {
+  const log = new EventLog();
+  for (let i = 0; i < 2; i++) log.add({ sessionId: SID, kind: 'finished' }, { computer: 'box', watched: false, now: i });
+  const res = log.since(100, 50);
+  assert.deepEqual(res.events.map((e) => e.seq), [1, 2]);
+  assert.equal(res.nextAfter, 2);
+  assert.equal(res.missed, true);
+});
+
 test('questions and permission prompts always forward, others only when watched, never twice in 30 s', () => {
   const log = new EventLog();
   const add = (kind: DroidEvent['kind'], now: number, watched = false, sessionId = SID) =>
