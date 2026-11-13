@@ -32,6 +32,16 @@ def string(value):
     return value if isinstance(value, str) else ""
 
 
+def clip(s, n):
+    """Clip s to n UTF-16 code units, the unit the server's length limits count."""
+    units = 0
+    for i, ch in enumerate(s):
+        units += 2 if ord(ch) > 0xFFFF else 1
+        if units > n:
+            return s[:i]
+    return s
+
+
 def load_config(home):
     cfg = read_json(os.path.join(home, ".factory", "droid-mcp", "hook.json"))
     if not isinstance(cfg, dict):
@@ -133,9 +143,9 @@ def build_payload(event, kind, text, home):
         host=socket.gethostname(),
         sessionId=string(event.get("session_id")),
         kind=kind,
-        title=string(header.get("title"))[:200],
-        text=text[:1000],
-        cwd=(string(event.get("cwd")) or string(header.get("cwd")))[:500],
+        title=clip(string(header.get("title")), 200),
+        text=clip(text, 1000),
+        cwd=clip(string(event.get("cwd")) or string(header.get("cwd")), 500),
         tags=read_tags(transcript) if transcript else [],
     )
     return payload

@@ -8,11 +8,14 @@ import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parseEventBody } from '../src/events.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const HOOK = join(ROOT, 'hooks', 'droid_mcp_hook.py');
 const INSTALLER = join(ROOT, 'scripts', 'install_hooks.py');
+const PS_INSTALLER = join(ROOT, 'scripts', 'install-hooks.ps1');
 const skip = spawnSync('python3', ['--version']).error ? 'python3 not found' : false;
+const pwshSkip = spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).error ? 'pwsh not found' : false;
 const TOKEN = 'fake-events-token';
 const SESSION = '11111111-2222-3333-4444-555555555555';
 
@@ -161,6 +164,42 @@ test('install keeps unrelated hooks, backs up, is idempotent, and uninstall rest
     assert.equal(after.length, 2, 'uninstall keeps its own backup without overwriting the first');
   }));
 
+const USER_HOOK = { type: 'command', command: '/usr/bin/true user-shared', timeout: 3 };
+
+async function sharedGroupSurvives(home: string, ourCommand: string, installer: (...extra: string[]) => ReturnType<typeof run>) {
+  const hooksPath = join(home, '.factory', 'hooks.json');
+  await mkdir(join(home, '.factory'), { recursive: true });
+  const shared = { matcher: '*', hooks: [USER_HOOK, { type: 'command', command: ourCommand, timeout: 5 }] };
+  await writeFile(hooksPath, JSON.stringify({ Stop: [shared] }, null, 2));
+
+  for (const _ of [1, 2]) {
+    const r = await installer();
+    assert.equal(r.code, 0, r.stderr);
+    const installed = JSON.parse(await readFile(hooksPath, 'utf8'));
+    assert.deepEqual(installed.Stop[0], { matcher: '*', hooks: [USER_HOOK] });
+    assert.equal(installed.Stop.length, 2);
+    assert.equal(installed.Stop[1].hooks.length, 1);
+  }
+
+  const removed = await installer('--uninstall');
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.deepEqual(JSON.parse(await readFile(hooksPath, 'utf8')), { Stop: [{ matcher: '*', hooks: [USER_HOOK] }] });
+}
+
+test('a user command sharing a group with ours keeps the group and its matcher through install and uninstall', { skip }, () =>
+  withHome((home) => sharedGroupSurvives(home, `python3 ${join(home, '.factory', 'droid-mcp', 'droid_mcp_hook.py')}`, (...extra) => install(home, ...extra))));
+
+test('the PowerShell installer keeps a user command sharing a group with ours', { skip: pwshSkip }, () =>
+  withHome((home) =>
+    sharedGroupSurvives(home, `pwsh -File "${join(home, '.factory', 'droid-mcp', 'droid-mcp-hook.ps1')}"`, (...extra) =>
+      run(
+        'pwsh',
+        ['-NoProfile', '-NonInteractive', '-File', PS_INSTALLER, '-HomeDir', home, '-Url', 'http://127.0.0.1:9/events', ...(extra.length ? ['-Uninstall'] : [])],
+        { env: env(home) },
+      ),
+    ),
+  ));
+
 test('install creates hooks.json when missing; token can come from stdin and is never printed', { skip }, () =>
   withHome(async (home) => {
     const e = env(home);
@@ -218,6 +257,25 @@ test('Stop without a QUESTION line posts finished with the last 300 characters',
       const got = await srv.next();
       assert.equal(got?.body.kind, 'finished');
       assert.equal(got?.body.text, long.slice(-300));
+    } finally {
+      await srv.close();
+    }
+  }));
+
+test('text is clipped to 1000 UTF-16 code units without splitting an emoji, so the server accepts it', { skip }, () =>
+  withHome(async (home) => {
+    const srv = await server();
+    try {
+      const kept = 'QUESTION: ' + 'a'.repeat(989);
+      const transcript = await fakeSession(home, kept + '😀 and more text after the limit');
+      await configure(home, srv.url);
+      const hook = await run('python3', [HOOK], { env: env(home), input: stopInput(transcript) });
+      assert.equal(hook.code, 0);
+      const got = await srv.next();
+      assert.ok(got, 'no event received');
+      assert.ok((got.body.text as string).length <= 1000);
+      assert.equal(got.body.text, kept);
+      assert.equal(parseEventBody(got.body).text, kept);
     } finally {
       await srv.close();
     }

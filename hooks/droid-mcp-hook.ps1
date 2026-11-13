@@ -27,8 +27,9 @@ function Get-Str($Value) {
 }
 
 function Clip([string]$Text, [int]$Max) {
-    if ($Text.Length -gt $Max) { return $Text.Substring(0, $Max) }
-    return $Text
+    if ($Text.Length -le $Max) { return $Text }
+    if ([char]::IsHighSurrogate($Text[$Max - 1])) { $Max-- }
+    return $Text.Substring(0, $Max)
 }
 
 function Get-TextOf($Content) {

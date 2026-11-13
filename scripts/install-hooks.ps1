@@ -29,22 +29,28 @@ function Fail([string]$Message) {
     exit 2
 }
 
-function Test-Ours($Group) {
-    if ($null -eq $Group -or $null -eq $Group.hooks) { return $false }
-    foreach ($h in @($Group.hooks)) {
-        if ($null -ne $h -and $h.command -is [string]) {
-            foreach ($m in $Markers) { if ($h.command.Contains($m)) { return $true } }
-        }
-    }
+function Test-Ours($Hook) {
+    if ($null -eq $Hook -or $Hook.command -isnot [string]) { return $false }
+    foreach ($m in $Markers) { if ($Hook.command.Contains($m)) { return $true } }
     return $false
 }
 
 function Remove-Ours($Config, [bool]$DropEmptied) {
     foreach ($p in @($Config.PSObject.Properties)) {
         if ($p.Value -isnot [array]) { continue }
-        $groups = @($p.Value)
-        $kept = @($groups | Where-Object { -not (Test-Ours $_) })
-        if ($kept.Length -eq $groups.Length) { continue }
+        $kept = @()
+        $changed = $false
+        foreach ($g in @($p.Value)) {
+            if ($null -eq $g -or $g.hooks -isnot [array]) { $kept += , $g; continue }
+            $hooks = @($g.hooks | Where-Object { -not (Test-Ours $_) })
+            if ($hooks.Length -eq @($g.hooks).Length) { $kept += , $g; continue }
+            $changed = $true
+            if ($hooks.Length -gt 0) {
+                $g.hooks = [object[]]$hooks
+                $kept += , $g
+            }
+        }
+        if (-not $changed) { continue }
         if ($kept.Length -eq 0 -and $DropEmptied) {
             $Config.PSObject.Properties.Remove($p.Name)
         } else {

@@ -29,14 +29,19 @@ def fail(message):
     sys.exit(2)
 
 
-def is_ours(group):
+def is_ours(hook):
+    return isinstance(hook, dict) and isinstance(hook.get("command"), str) and any(m in hook["command"] for m in MARKERS)
+
+
+def group_without_ours(group):
+    """Return the group without our commands, or None when only ours were in it."""
     hooks = group.get("hooks") if isinstance(group, dict) else None
     if not isinstance(hooks, list):
-        return False
-    return any(
-        isinstance(h, dict) and isinstance(h.get("command"), str) and any(m in h["command"] for m in MARKERS)
-        for h in hooks
-    )
+        return group
+    kept = [h for h in hooks if not is_ours(h)]
+    if len(kept) == len(hooks):
+        return group
+    return dict(group, hooks=kept) if kept else None
 
 
 def without_ours(config, drop_emptied=True):
@@ -45,7 +50,7 @@ def without_ours(config, drop_emptied=True):
         if not isinstance(groups, list):
             out[event] = groups
             continue
-        kept = [g for g in groups if not is_ours(g)]
+        kept = [g for g in map(group_without_ours, groups) if g is not None]
         if kept or not drop_emptied or len(kept) == len(groups):
             out[event] = kept
     return out
