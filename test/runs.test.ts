@@ -165,6 +165,26 @@ test('a started run that auto-closed and is resumed keeps auto-closing', async (
   assert.equal(again.autoClose, true);
 });
 
+test('resuming a run that is still shutting down waits for its process to stop', async (t) => {
+  const { runs, run, made } = await forked(t);
+  await endTurn(run, made[0]);
+  let release = () => {};
+  const stopped = new Promise<void>((resolve) => (release = resolve));
+  (made[0] as unknown as { session: { close: () => Promise<void> } }).session.close = () => stopped;
+  const closing = runs.cancel(run, 'session');
+  await flush();
+  assert.equal(run.state, 'closed');
+  assert.equal(run.closedAt, undefined);
+  const resuming = runs.resume({ id: run.id } as SessionRecord, '/repo', 'more');
+  await flush();
+  assert.equal(made.length, 1, 'no second process while the first is stopping');
+  release();
+  await closing;
+  await resuming;
+  assert.equal(made.length, 2);
+  assert.equal(typeof run.closedAt, 'number');
+});
+
 test('a send before the idle time resets the timer', async (t) => {
   const { runs, run, made } = await forked(t);
   await endTurn(run, made[0]);

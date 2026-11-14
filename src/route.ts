@@ -7,11 +7,11 @@ export type Route = { via: 'own' } | { via: 'rest' } | { via: 'local-resume' } |
 
 export const RECENT_MS = 30 * 60 * 1000;
 
-// closedHere: this server closed the session itself, so it is free to load at once, and with a key it is
-// resumed locally as before rather than sent over REST, where droid_wait would not see the turn.
-export function routeSend(target: Target, opts: { restEnabled: boolean; allowLocalResume: boolean; now: number; cap: Autonomy; closedHere?: boolean }): Route {
+// closedAt: when this server finished closing the session itself. If nothing touched the transcript since, it is
+// free to load at once, and with a key it is resumed locally rather than over REST, where droid_wait would not see the turn.
+export function routeSend(target: Target, opts: { restEnabled: boolean; allowLocalResume: boolean; now: number; cap: Autonomy; closedAt?: number }): Route {
   if (target.kind === 'own') return { via: 'own' };
-  const ours = target.kind === 'local' && opts.closedHere;
+  const ours = target.kind === 'local' && opts.closedAt !== undefined && target.record.updatedAt <= opts.closedAt;
   if (opts.restEnabled && !ours) return { via: 'rest' };
   const refuse = (code: Refused['code'], message: string, fix: string) => ({ refused: new Refused(code, message, fix) });
   if (target.kind === 'unknown') {

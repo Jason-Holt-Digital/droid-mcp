@@ -66,6 +66,8 @@ export type OwnRun = {
   close: () => Promise<void>;
   autoClose: boolean;
   idleTimer?: NodeJS.Timeout;
+  // When this server finished closing the session; unset while the process is still stopping.
+  closedAt?: number;
 };
 export type Decision = { decision?: string; comment?: string; answers?: string[]; cancel?: boolean };
 
@@ -240,6 +242,8 @@ export class Runs {
   }
 
   async resume(record: SessionRecord, cwd: string, prompt: string, change: Change = {}): Promise<OwnRun> {
+    // A run of ours that is still shutting down holds the session; load it only once that process is gone.
+    await this.runs.get(record.id)?.lock;
     return this.open({
       cwd,
       prompt,
@@ -389,6 +393,7 @@ export class Runs {
   private async shut(run: OwnRun, note: string): Promise<void> {
     this.to(run, 'closed');
     await run.close();
+    run.closedAt = Date.now();
     this.push(run, { kind: 'state', text: note });
   }
 
