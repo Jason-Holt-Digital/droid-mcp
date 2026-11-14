@@ -327,7 +327,7 @@ test('Notification maps permission_prompt and elicitation_dialog; idle_prompt an
     try {
       await configure(home, srv.url);
       const base = { session_id: SESSION, transcript_path: join(home, 'missing.jsonl'), cwd: '/tmp/fake-repo' };
-      const send = (extra: object) => run('python3', [HOOK], { env: env(home), input: JSON.stringify({ ...base, ...extra }) });
+      const send = (extra: Record<string, string>) => run('python3', [HOOK], { env: env(home), input: JSON.stringify({ ...base, ...extra }) });
 
       for (const r of [
         await send({ hook_event_name: 'Notification', notification_type: 'idle_prompt', message: 'idle' }),

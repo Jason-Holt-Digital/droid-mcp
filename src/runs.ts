@@ -126,6 +126,23 @@ function cancelValue(kind: Pending['kind']): unknown {
   return kind === 'permission' ? 'cancel' : { cancelled: true, answers: [] };
 }
 
+function answerOf(p: Pending, d: Decision) {
+  if (d.cancel) return cancelValue(p.kind);
+  if (p.kind === 'permission') {
+    const options = p.options ?? [];
+    if (!d.decision || !options.includes(d.decision)) {
+      throw new ToolError('invalid', `decision must be one of: ${options.join(', ')}`, 'Pass one of those options as decision, or cancel: true.');
+    }
+    return d.comment ? { selectedOption: d.decision, comment: d.comment } : d.decision;
+  }
+  const questions = p.questions ?? [];
+  const answers = d.answers;
+  if (!answers || answers.length !== questions.length) {
+    throw new ToolError('invalid', `answers must have exactly ${questions.length} entries, one per question`, 'Pass one answer per question, in order.');
+  }
+  return { answers: questions.map((q, i) => ({ index: q.index, question: q.question, answer: answers[i] })) };
+}
+
 function toEvent(m: DroidStreamMessage): Pick<RunEvent, 'kind' | 'text'> | undefined {
   switch (m.type) {
     case 'assistant':
@@ -230,7 +247,8 @@ export class Runs {
               systemPrompt: s.appendSystemPrompt ? { type: 'preset', preset: 'droid', append: s.appendSystemPrompt } : undefined,
             }),
           );
-    const u: SettingsUpdate = { ...toUpdate(s), ...(fork ? { autonomyLevel: opts.autonomy } : {}) };
+    const u: SettingsUpdate = { ...toUpdate(s) };
+    if (fork) u.autonomyLevel = opts.autonomy;
     return this.open({
       cwd: opts.cwd,
       prompt: opts.prompt,
@@ -354,24 +372,7 @@ export class Runs {
   respond(run: OwnRun, requestId: string, d: Decision): void {
     const p = run.pending.get(requestId);
     if (!p) throw new ToolError('not_found', `no pending request ${requestId}`, 'Call droid_wait to see the pending requests and their ids.');
-    let value: unknown;
-    if (d.cancel) {
-      value = cancelValue(p.kind);
-    } else if (p.kind === 'permission') {
-      const options = p.options ?? [];
-      if (!d.decision || !options.includes(d.decision)) {
-        throw new ToolError('invalid', `decision must be one of: ${options.join(', ')}`, 'Pass one of those options as decision, or cancel: true.');
-      }
-      value = d.comment ? { selectedOption: d.decision, comment: d.comment } : d.decision;
-    } else {
-      const questions = p.questions ?? [];
-      if (!d.answers || d.answers.length !== questions.length) {
-        throw new ToolError('invalid', `answers must have exactly ${questions.length} entries, one per question`, 'Pass one answer per question, in order.');
-      }
-      const answers = d.answers;
-      value = { answers: questions.map((q, i) => ({ index: q.index, question: q.question, answer: answers[i] })) };
-    }
-    this.settle(run, requestId, value, 'answered');
+    this.settle(run, requestId, answerOf(p, d), 'answered');
   }
 
   cancel(run: OwnRun, scope: 'turn' | 'session'): Promise<void> {

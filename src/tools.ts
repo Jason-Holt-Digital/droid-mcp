@@ -339,7 +339,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       if (ctx.rest) {
         const rest = ctx.rest;
         const known = new Set(records.map((r) => r.id));
-        const ids = [...new Set(page.filter((i) => i.ws).map((i) => i.ws!.id))];
+        const ids = [...new Set(page.flatMap((i) => (i.ws ? [i.ws.id] : [])))];
         await Promise.all(
           ids.map(async (id) => {
             try {

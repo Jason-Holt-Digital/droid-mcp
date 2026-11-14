@@ -26,7 +26,7 @@ export const IDS = {
   archivedService: '07484013-afa4-57cb-82c0-16cbd16d6c2a',
 };
 
-const UPDATED: Record<string, number> = {
+const UPDATED = {
   [IDS.liveOrchestrator]: 1000,
   [IDS.liveAgentNewer]: 3000,
   [IDS.liveAgentOlder]: 2000,

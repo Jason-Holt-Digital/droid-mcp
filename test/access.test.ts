@@ -74,7 +74,7 @@ function fakeRest() {
   return { rest, calls };
 }
 
-function ownRun(): { runs: Runs; run: OwnRun; calls: unknown[][] } {
+function ownRun() {
   const calls: unknown[][] = [];
   const events: RunEvent[] = [
     { seq: 1, at: 1, kind: 'user', text: 'hi' },

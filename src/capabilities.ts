@@ -142,7 +142,7 @@ export function capabilities(input: CapabilityInput): Check[] {
   ];
 }
 
-export function doctorReport(checks: Check[]): { lines: string[]; code: number } {
+export function doctorReport(checks: Check[]) {
   const width = Math.max(...checks.map((c) => c.name.length));
   const lines = checks.map((c) => (c.ok ? `ok   ${c.name.padEnd(width)}  ${c.detail}` : `FIX  ${c.name.padEnd(width)}  ${c.detail} -> ${c.fix}`));
   return { lines, code: checks.every((c) => c.ok || !REQUIRED.includes(c.name)) ? 0 : 1 };
