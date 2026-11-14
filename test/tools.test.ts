@@ -78,15 +78,23 @@ test('Runs.wait returns at the timeout with nothing new, and early when an event
   const pending = runs.wait(run, 0, 5000);
   const emit = (e: RunEvent) => {
     run.events.push(e);
-    for (const w of [...run.waiters]) w();
+    for (const w of run.waiters) w();
   };
   setTimeout(() => emit({ seq: 1, at: Date.now(), kind: 'tool', text: 'Read a.txt' }), 10);
   setTimeout(() => emit({ seq: 2, at: Date.now(), kind: 'assistant', text: 'hi' }), 40);
-  assert.deepEqual((await pending).events.map((e) => e.seq), [1, 2], 'a tool event alone does not end the wait');
+  assert.deepEqual(
+    (await pending).events.map((e) => e.seq),
+    [1, 2],
+    'a tool event alone does not end the wait',
+  );
   assert.ok(Date.now() - t < 1000);
   assert.equal(run.waiters.size, 0);
 
-  assert.deepEqual((await runs.wait(run, 0, 5000)).events.map((e) => e.seq), [1, 2], 'already-available events return at once');
+  assert.deepEqual(
+    (await runs.wait(run, 0, 5000)).events.map((e) => e.seq),
+    [1, 2],
+    'already-available events return at once',
+  );
 
   run.events.splice(0, 1);
   assert.equal((await runs.wait(run, 0, 0)).gap, true, 'evicted events are reported as a gap');
@@ -125,7 +133,10 @@ test('droid_find groups the catalog, hides archived and subagents, and stays und
     assert.equal(ws.id, IDS.liveOrchestrator);
     assert.equal(ws.orchestrator.role, 'orchestrator');
     assert.deepEqual(ws.agents.map((a: { id: string }) => a.id).sort(), [IDS.liveAgentNewer, IDS.liveAgentOlder].sort());
-    assert.deepEqual(res.json.sessions[0].sessions.map((s: { id: string }) => s.id), [IDS.liveStandalone]);
+    assert.deepEqual(
+      res.json.sessions[0].sessions.map((s: { id: string }) => s.id),
+      [IDS.liveStandalone],
+    );
 
     const all = await c.call('droid_find', { includeArchived: true, includeSubagents: true, scope: 'workstreams', limit: 2 });
     assert.equal(all.json.total, 8);
@@ -241,13 +252,19 @@ test('droid_models lists the injected catalog, filters it and never shows secret
 
     const proxy = await c.call('droid_models', { filter: 'MY-PROXY' });
     assert.deepEqual(proxy.json.builtin, []);
-    assert.deepEqual(proxy.json.custom.map((m: { id: string }) => m.id), ['custom:my-proxy:opus-5-5']);
+    assert.deepEqual(
+      proxy.json.custom.map((m: { id: string }) => m.id),
+      ['custom:my-proxy:opus-5-5'],
+    );
     const byProvider = await c.call('droid_models', { filter: 'anthropic', include: ['custom'] });
     assert.equal(byProvider.json.custom.length, 1);
     assert.equal(byProvider.json.builtin, undefined);
     assert.equal(byProvider.json.aliases, undefined);
     const opus = await c.call('droid_models', { filter: 'opus 5.5', include: ['builtin'] });
-    assert.deepEqual(opus.json.builtin.map((m: { id: string }) => m.id), ['claude-opus-5-5', 'claude-opus-5-5-fast']);
+    assert.deepEqual(
+      opus.json.builtin.map((m: { id: string }) => m.id),
+      ['claude-opus-5-5', 'claude-opus-5-5-fast'],
+    );
   } finally {
     await c.close();
   }
@@ -331,6 +348,7 @@ test('Runs.send applies settings, autonomy and merged tags before the prompt', a
       calls.push('update');
       updates.push(u);
     },
+    // oxlint-disable-next-line require-yield -- fake stream that ends without messages
     stream: async function* () {
       calls.push('stream');
     },
@@ -526,12 +544,15 @@ test('droid_find merges this machine with online computers, dedupes, labels comp
     assert.ok(api.calls.every((x) => x.query.get('limit') === null || x.query.get('limit') === '100'));
 
     assert.deepEqual(res.json.computers.searched.sort(), ['cloud-a', 'laptop', 'this-box']);
-    assert.deepEqual(
-      res.json.computers.skipped.map((s: { name: string; state: string }) => [s.name, s.state]).sort(),
-      [['cloud-b', 'paused'], ['old-desk', 'offline']],
-    );
+    assert.deepEqual(res.json.computers.skipped.map((s: { name: string; state: string }) => [s.name, s.state]).sort(), [
+      ['cloud-b', 'paused'],
+      ['old-desk', 'offline'],
+    ]);
     assert.match(res.json.computers.skipped.find((s: { name: string }) => s.name === 'old-desk').lastSeen, /^20\d\d-\d\d-\d\dT/);
-    assert.deepEqual(res.json.computers.failed.map((f: { name: string }) => f.name), ['slow-box']);
+    assert.deepEqual(
+      res.json.computers.failed.map((f: { name: string }) => f.name),
+      ['slow-box'],
+    );
     assert.match(res.json.computers.failed[0].error, /timed out/);
     assert.deepEqual(res.json.computers.truncated, ['cloud-a']);
 
@@ -542,7 +563,11 @@ test('droid_find merges this machine with online computers, dedupes, labels comp
     assert.equal(byId.get(REMOTE.laptopStandalone)?.computer, 'laptop');
     assert.equal(byId.get(REMOTE.cloudStandalone)?.computer, 'cloud-a');
     const laptopGroup = res.json.sessions.find((g: { computer?: string }) => g.computer === 'laptop');
-    assert.deepEqual(laptopGroup.sessions.map((s: Found) => s.id), [REMOTE.laptopStandalone], 'remote standalone sessions group by computer');
+    assert.deepEqual(
+      laptopGroup.sessions.map((s: Found) => s.id),
+      [REMOTE.laptopStandalone],
+      'remote standalone sessions group by computer',
+    );
     assert.equal(laptopGroup.repo, undefined);
 
     const ws = res.json.workstreams.find((w: { id: string }) => w.id === IDS.liveOrchestrator);
@@ -551,7 +576,10 @@ test('droid_find merges this machine with online computers, dedupes, labels comp
     assert.deepEqual(agents[0], [REMOTE.laptopAgent, 'laptop'], 'a workstream spans computers, agents newest first');
     assert.deepEqual(
       agents.slice(1).sort(),
-      [[IDS.liveAgentNewer, 'this-box'], [IDS.liveAgentOlder, 'this-box']].sort(),
+      [
+        [IDS.liveAgentNewer, 'this-box'],
+        [IDS.liveAgentOlder, 'this-box'],
+      ].sort(),
     );
     assert.equal(res.json.workstreams[0].id, IDS.liveOrchestrator, 'workstreams with an orchestrator still come first');
 
@@ -596,7 +624,10 @@ test('a session tool naming an offline computer refuses before calling the sessi
       assert.match(res.error!.message, /^computer old-desk is offline \(daemon last seen 20\d\d-[\d-]+T[\d:]+Z\)$/, name);
       assert.equal(res.error?.fix, 'Start its daemon, or pick another computer from droid_computers.', name);
     }
-    assert.deepEqual(api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')), []);
+    assert.deepEqual(
+      api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')),
+      [],
+    );
     const missing = await c.call('droid_wait', { session: REMOTE.laptopStandalone, computer: 'nope' });
     assert.equal(missing.error?.code, 'not_found');
     assert.match(missing.error!.message, /no computer named nope; known computers: this-box, laptop/);
@@ -708,7 +739,10 @@ test('a run this server owns is read and closed locally even when its session is
   try {
     const wait = await c.call('droid_wait', { session: run.id, afterSeq: 0, waitMs: 0 });
     assert.equal(wait.isError, false, wait.text);
-    assert.deepEqual(wait.json.events.map((e: { text: string }) => e.text), ['done here']);
+    assert.deepEqual(
+      wait.json.events.map((e: { text: string }) => e.text),
+      ['done here'],
+    );
     const result = await c.call('droid_result', { session: run.id });
     assert.equal(result.json.content, 'the owned result', result.text);
     const named = await c.call('droid_result', { session: run.id, computer: 'old-desk' });
@@ -716,7 +750,10 @@ test('a run this server owns is read and closed locally even when its session is
     const cancel = await c.call('droid_cancel', { session: run.id, scope: 'session' });
     assert.equal(cancel.json.state, 'closed', cancel.text);
     assert.equal(closed, true);
-    assert.deepEqual(api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')), []);
+    assert.deepEqual(
+      api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')),
+      [],
+    );
   } finally {
     await c.close();
   }
@@ -736,9 +773,10 @@ test('droid_computers lists state per computer, and only this machine without a 
   const bare = await connect({});
   try {
     const res = await bare.call('droid_computers', {});
-    assert.deepEqual(res.json.computers.map((x: { name: string; state: string; thisMachine: boolean }) => [x.name, x.state, x.thisMachine]), [
-      ['test-host', 'online', true],
-    ]);
+    assert.deepEqual(
+      res.json.computers.map((x: { name: string; state: string; thisMachine: boolean }) => [x.name, x.state, x.thisMachine]),
+      [['test-host', 'online', true]],
+    );
     assert.match(res.json.note, /FACTORY_API_KEY/);
   } finally {
     await bare.close();
@@ -753,13 +791,19 @@ test('droid_events pages the event log and says whether forwarding is on', async
       events.add({ sessionId: IDS.liveStandalone, kind, text: `${kind} text` }, { computer: 'laptop', watched: false, forwarding: false });
     }
     const all = await c.call('droid_events', { after: 0 });
-    assert.deepEqual(all.json.events.map((e: { seq: number }) => e.seq), [1, 2, 3]);
+    assert.deepEqual(
+      all.json.events.map((e: { seq: number }) => e.seq),
+      [1, 2, 3],
+    );
     assert.equal(all.json.nextAfter, 3);
     assert.equal(all.json.forwarding, 'off');
     assert.match(all.json.note, /untrusted/);
     assert.match(all.json.events[0].at, /^\d{4}-/);
     const questions = await c.call('droid_events', { after: 0, kinds: ['question'] });
-    assert.deepEqual(questions.json.events.map((e: { kind: string }) => e.kind), ['question']);
+    assert.deepEqual(
+      questions.json.events.map((e: { kind: string }) => e.kind),
+      ['question'],
+    );
     assert.equal(questions.json.nextAfter, 3);
     const page = await c.call('droid_events', { after: 0, limit: 2 });
     assert.equal(page.json.nextAfter, 2);

@@ -48,8 +48,14 @@ test('pickComputer matches an exact id, then a name in any case; refuses ambiguo
   assert.equal(pickComputer(list, 'c1').name, 'Desk', 'an id wins over a name');
   assert.equal(pickComputer(list, 'desk').id, 'c1');
   assert.equal(pickComputer(list, 'c3').name, 'TWIN');
-  assert.throws(() => pickComputer(list, 'twin'), (err: Error) => err instanceof Refused && /ambiguous.*c2 \(offline\).*c3 \(online\)/.test(err.message));
-  assert.throws(() => pickComputer(list, 'laptop'), (err: Error) => err instanceof Refused && /no computer named laptop; known computers: Desk, twin, TWIN, c1/.test(err.message));
+  assert.throws(
+    () => pickComputer(list, 'twin'),
+    (err: Error) => err instanceof Refused && /ambiguous.*c2 \(offline\).*c3 \(online\)/.test(err.message),
+  );
+  assert.throws(
+    () => pickComputer(list, 'laptop'),
+    (err: Error) => err instanceof Refused && /no computer named laptop; known computers: Desk, twin, TWIN, c1/.test(err.message),
+  );
 });
 
 test('Computers caches for 30 s, marks this machine from computer.json, and require refuses offline computers', async () => {
@@ -61,7 +67,15 @@ test('Computers caches for 30 s, marks this machine from computer.json, and requ
     const api = fakeApi(() => ({
       computers: [
         { id: 'c-self', name: 'self', providerType: 'byom', status: 'active', providerStatus: null, lastSeenAt: NOW, createdAt: 1 },
-        { id: 'c-dead', name: 'dead-box', providerType: 'byom', status: 'active', providerStatus: null, lastSeenAt: Date.UTC(2026, 10, 13, 11, 50), createdAt: 1 },
+        {
+          id: 'c-dead',
+          name: 'dead-box',
+          providerType: 'byom',
+          status: 'active',
+          providerStatus: null,
+          lastSeenAt: Date.UTC(2026, 10, 13, 11, 50),
+          createdAt: 1,
+        },
         { id: 'c-nap', name: 'nap', providerType: 'e2b', status: 'active', providerStatus: 'paused', lastSeenAt: 1, createdAt: 1 },
       ],
     }));

@@ -89,11 +89,7 @@ async function readSettings(file: string): Promise<Settings | undefined> {
 }
 
 export async function readRecord(file: string): Promise<SessionRecord | undefined> {
-  const [line, st, parsed] = await Promise.all([
-    readFirstLine(file),
-    stat(file),
-    readSettings(file.replace(/\.jsonl$/, '.settings.json')),
-  ]);
+  const [line, st, parsed] = await Promise.all([readFirstLine(file), stat(file), readSettings(file.replace(/\.jsonl$/, '.settings.json'))]);
   const settings: Settings = parsed ?? {};
   let h: Record<string, unknown>;
   try {
@@ -233,11 +229,8 @@ export type FilterOptions = { query?: string; cwd?: string; includeArchived?: bo
 
 export function filterRecords<T extends Listing>(records: T[], opts: FilterOptions): T[] {
   const q = opts.query?.trim().toLowerCase();
-  const matches = (r: T) =>
-    !q || r.title.toLowerCase().includes(q) || r.id.startsWith(q) || Boolean(r.cwd?.toLowerCase().includes(q));
-  const matchedWorkstreams = new Set(
-    records.filter((r) => r.workstream?.role === 'orchestrator' && matches(r)).map((r) => r.workstream!.id),
-  );
+  const matches = (r: T) => !q || r.title.toLowerCase().includes(q) || r.id.startsWith(q) || Boolean(r.cwd?.toLowerCase().includes(q));
+  const matchedWorkstreams = new Set(records.filter((r) => r.workstream?.role === 'orchestrator' && matches(r)).map((r) => r.workstream!.id));
   const cwd = opts.cwd?.replace(/\/+$/, '');
   return records.filter(
     (r) =>
@@ -250,19 +243,19 @@ export function filterRecords<T extends Listing>(records: T[], opts: FilterOptio
 
 export function searchContent(root: string, query: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
-    execFile(
-      'rg',
-      ['-l', '-F', '--max-count', '1', '-g', '*.jsonl', '--', query, root],
-      { timeout: 40_000, maxBuffer: 32 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err && (err as { code?: unknown }).code !== 1) {
-          reject(new Error(err.killed ? 'content search timed out after 40 s' : `content search failed: ${err.message}`));
-          return;
-        }
-        const ids = new Set(stdout.split('\n').filter(Boolean).map((p) => basename(p, '.jsonl')));
-        resolve([...ids]);
-      },
-    );
+    execFile('rg', ['-l', '-F', '--max-count', '1', '-g', '*.jsonl', '--', query, root], { timeout: 40_000, maxBuffer: 32 * 1024 * 1024 }, (err, stdout) => {
+      if (err && (err as { code?: unknown }).code !== 1) {
+        reject(new Error(err.killed ? 'content search timed out after 40 s' : `content search failed: ${err.message}`));
+        return;
+      }
+      const ids = new Set(
+        stdout
+          .split('\n')
+          .filter(Boolean)
+          .map((p) => basename(p, '.jsonl')),
+      );
+      resolve([...ids]);
+    });
   });
 }
 

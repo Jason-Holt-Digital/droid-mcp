@@ -52,7 +52,26 @@ test('autonomy defaults to off, is capped at high, and DROID_MCP_MAX_AUTONOMY lo
 });
 
 test('permission answers can never raise autonomy past the cap', () => {
-  const offered = ['proceed_once', 'proceed_always', 'proceed_always_tools', 'proceed_auto_run', 'proceed_auto_run_low', 'proceed_auto_run_medium', 'proceed_auto_run_high', 'proceed_new_session', 'proceed_new_session_high', 'proceed_edit', 'cancel'];
+  const offered = [
+    'proceed_once',
+    'proceed_always',
+    'proceed_always_tools',
+    'proceed_auto_run',
+    'proceed_auto_run_low',
+    'proceed_auto_run_medium',
+    'proceed_auto_run_high',
+    'proceed_new_session',
+    'proceed_new_session_high',
+    'proceed_edit',
+    'cancel',
+  ];
   assert.deepEqual(allowedDecisions(offered, 'medium'), ['proceed_once', 'proceed_auto_run_low', 'proceed_auto_run_medium', 'cancel']);
-  assert.deepEqual(allowedDecisions(offered, 'high'), ['proceed_once', 'proceed_auto_run_low', 'proceed_auto_run_medium', 'proceed_auto_run_high', 'proceed_new_session_high', 'cancel']);
+  assert.deepEqual(allowedDecisions(offered, 'high'), [
+    'proceed_once',
+    'proceed_auto_run_low',
+    'proceed_auto_run_medium',
+    'proceed_auto_run_high',
+    'proceed_new_session_high',
+    'cancel',
+  ]);
 });

@@ -21,17 +21,30 @@ test('a completed key replays its result in a fresh store; a failed one can be r
     let calls = 0;
     assert.equal(await new KeyStore(path).once('k', async () => ++calls), 1);
     assert.equal(await new KeyStore(path).once('k', async () => ++calls), 1);
-    await assert.rejects(new KeyStore(path).once('busy', async () => Promise.reject(new Refused('busy', 'busy', 'wait'))), /busy/);
+    await assert.rejects(
+      new KeyStore(path).once('busy', async () => Promise.reject(new Refused('busy', 'busy', 'wait'))),
+      /busy/,
+    );
     assert.equal(await new KeyStore(path).once('busy', async () => 'ok'), 'ok', 'a refusal before any effect can be retried');
-    await assert.rejects(new KeyStore(path).once('net', async () => Promise.reject(new Error('socket hang up'))), /socket/);
-    await assert.rejects(new KeyStore(path).once('net', async () => 'again'), /may have taken effect/, 'an error after a possible effect is not retried');
+    await assert.rejects(
+      new KeyStore(path).once('net', async () => Promise.reject(new Error('socket hang up'))),
+      /socket/,
+    );
+    await assert.rejects(
+      new KeyStore(path).once('net', async () => 'again'),
+      /may have taken effect/,
+      'an error after a possible effect is not retried',
+    );
   }));
 
 test('a key whose action never finished (crash) refuses instead of running twice', () =>
   withDir(async (dir) => {
     const path = join(dir, 'state.json');
     await writeFile(path, JSON.stringify({ keys: { k: { at: Date.now(), pending: true } } }));
-    await assert.rejects(new KeyStore(path).once('k', async () => 'again'), /did not finish/);
+    await assert.rejects(
+      new KeyStore(path).once('k', async () => 'again'),
+      /did not finish/,
+    );
   }));
 
 test('concurrent keys in one store are all persisted', () =>
@@ -49,7 +62,7 @@ test('an unreadable state file fails closed rather than forgetting completed wor
     await assert.rejects(new KeyStore(path).once('k', async () => 'x'));
   }));
 
-test('two server processes sharing the file keep each other\'s keys, and a concurrent retry joins the first attempt', () =>
+test("two server processes sharing the file keep each other's keys, and a concurrent retry joins the first attempt", () =>
   withDir(async (dir) => {
     const path = join(dir, 'state.json');
     const a = new KeyStore(path);

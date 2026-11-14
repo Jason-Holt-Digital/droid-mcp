@@ -9,14 +9,21 @@ test('EventLog keeps the newest events, numbers them from 1 and reports a missed
   const log = new EventLog(3);
   for (let i = 0; i < 5; i++) log.add({ sessionId: SID, kind: 'finished', text: `t${i}` }, { computer: 'box', watched: false, now: i });
   const all = log.since(0, 50);
-  assert.deepEqual(all.events.map((e) => e.seq), [3, 4, 5]);
+  assert.deepEqual(
+    all.events.map((e) => e.seq),
+    [3, 4, 5],
+  );
   assert.equal(all.missed, true, 'events 1 and 2 were evicted');
   assert.equal(all.nextAfter, 5);
   assert.equal(log.since(1, 50).missed, true);
   assert.equal(log.since(2, 50).missed, false, 'nothing between 2 and the oldest kept event was lost');
   assert.deepEqual(log.since(3, 1), { events: [all.events[1]], nextAfter: 4, missed: false });
   assert.deepEqual(log.since(5, 10), { events: [], nextAfter: 5, missed: false });
-  assert.deepEqual(log.since(undefined, 2).events.map((e) => e.seq), [4, 5], 'without after, the latest events');
+  assert.deepEqual(
+    log.since(undefined, 2).events.map((e) => e.seq),
+    [4, 5],
+    'without after, the latest events',
+  );
   assert.equal(new EventLog().since(0, 5).missed, false);
 });
 
@@ -24,7 +31,10 @@ test('EventLog treats a cursor ahead of the log as stale from before a restart',
   const log = new EventLog();
   for (let i = 0; i < 2; i++) log.add({ sessionId: SID, kind: 'finished' }, { computer: 'box', watched: false, now: i });
   const res = log.since(100, 50);
-  assert.deepEqual(res.events.map((e) => e.seq), [1, 2]);
+  assert.deepEqual(
+    res.events.map((e) => e.seq),
+    [1, 2],
+  );
   assert.equal(res.nextAfter, 2);
   assert.equal(res.missed, true);
 });
@@ -66,7 +76,18 @@ test('parseEventBody validates the session id and field sizes and drops unknown 
   assert.doesNotThrow(() => parseEventBody({ sessionId: SID, kind: 'question', text: 'x'.repeat(1000), title: 'x'.repeat(200) }));
 });
 
-const event: DroidEvent = { seq: 7, at: Date.UTC(2026, 10, 13, 12), computer: 'laptop', sessionId: SID, kind: 'question', title: 'T', text: 'QUESTION: which?', cwd: '/home/dev/repos/x', tags: ['cto'], forwarded: true };
+const event: DroidEvent = {
+  seq: 7,
+  at: Date.UTC(2026, 10, 13, 12),
+  computer: 'laptop',
+  sessionId: SID,
+  kind: 'question',
+  title: 'T',
+  text: 'QUESTION: which?',
+  cwd: '/home/dev/repos/x',
+  tags: ['cto'],
+  forwarded: true,
+};
 
 test('Forwarder posts the compact event with both auth headers', async () => {
   const sent: Request[] = [];
@@ -111,7 +132,12 @@ test('Forwarder never throws, logs without the key or URL query, and is off with
   }) as typeof globalThis.fetch;
   const fw = new Forwarder({ url: 'https://hooks.example.test/wake?token=q', key: 'wh-key', fetch: failing, log: (m) => logs.push(m) });
   assert.equal(await fw.send(event), false);
-  const status = new Forwarder({ url: 'https://hooks.example.test/wake?token=q', key: 'wh-key', fetch: (async () => new Response('', { status: 500 })) as typeof globalThis.fetch, log: (m) => logs.push(m) });
+  const status = new Forwarder({
+    url: 'https://hooks.example.test/wake?token=q',
+    key: 'wh-key',
+    fetch: (async () => new Response('', { status: 500 })) as typeof globalThis.fetch,
+    log: (m) => logs.push(m),
+  });
   assert.equal(await status.send(event), false);
   assert.equal(logs.length, 2);
   for (const line of logs) {

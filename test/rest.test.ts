@@ -51,8 +51,17 @@ test('status combines the session with its pending elicitations', async () => {
           {
             type: 'permission',
             requestId: 'r1',
-            toolUses: [{ toolUse: { type: 'tool_use', id: 't', name: 'Execute', input: { command: 'ls' } }, confirmationType: 'exec', details: { type: 'exec', fullCommand: 'ls', command: 'ls' } }],
-            options: [{ label: 'Yes', value: 'proceed_once' }, { label: 'No', value: 'cancel' }],
+            toolUses: [
+              {
+                toolUse: { type: 'tool_use', id: 't', name: 'Execute', input: { command: 'ls' } },
+                confirmationType: 'exec',
+                details: { type: 'exec', fullCommand: 'ls', command: 'ls' },
+              },
+            ],
+            options: [
+              { label: 'Yes', value: 'proceed_once' },
+              { label: 'No', value: 'cancel' },
+            ],
           },
           { type: 'ask-user', requestId: 'r2', toolCallId: 'c', questions: [{ index: 0, topic: 'x', question: 'Which?', options: ['a', 'b'] }] },
         ],
@@ -89,7 +98,16 @@ test('children asks for attention; answer and interrupt hit the session paths', 
     'GET /api/v0/sessions/orc/children': {
       body: {
         sessions: [
-          { sessionId: 'a1', title: 'Agent', status: 'running', createdAt: 1, updatedAt: 2, attention: { kind: 'permission', since: 3 }, computerId: 'c1', computer: { id: 'c1', name: 'flutter-box', templateId: null } },
+          {
+            sessionId: 'a1',
+            title: 'Agent',
+            status: 'running',
+            createdAt: 1,
+            updatedAt: 2,
+            attention: { kind: 'permission', since: 3 },
+            computerId: 'c1',
+            computer: { id: 'c1', name: 'flutter-box', templateId: null },
+          },
         ],
       },
     },
@@ -111,7 +129,18 @@ test('messages returns text content and the next cursor', async () => {
   const { fetch, calls } = mockFetch({
     'GET /api/v0/sessions/abc/messages': {
       body: {
-        messages: [{ id: 'm1', role: 'assistant', content: [{ type: 'text', text: 'Done.' }, { type: 'tool_use', id: 't', name: 'x', input: {} }], createdAt: 5, updatedAt: 5 }],
+        messages: [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'Done.' },
+              { type: 'tool_use', id: 't', name: 'x', input: {} },
+            ],
+            createdAt: 5,
+            updatedAt: 5,
+          },
+        ],
         pagination: { hasMore: true, nextCursor: 'c2' },
       },
     },
@@ -136,7 +165,15 @@ test('computers and sessions map the listings and pass computerId, limit and the
       body: {
         sessions: [
           { sessionId: 's1', parent_session_id: 'p1', title: 'T', status: 'idle', createdAt: 1, updatedAt: 2, messageCount: 3, tags: [{ name: 'cto' }] },
-          { sessionId: 's2', status: 'running', createdAt: 1, updatedAt: 4, messageCount: 0, computerId: 'c9', sessionSettings: { archivedAt: '2026-01-01', tags: [{ name: 'x' }] } },
+          {
+            sessionId: 's2',
+            status: 'running',
+            createdAt: 1,
+            updatedAt: 4,
+            messageCount: 0,
+            computerId: 'c9',
+            sessionSettings: { archivedAt: '2026-01-01', tags: [{ name: 'x' }] },
+          },
         ],
         pagination: { hasMore: true, nextCursor: 'n2' },
       },
@@ -152,8 +189,30 @@ test('computers and sessions map the listings and pass computerId, limit and the
   assert.match(calls[1].query, /limit=100/);
   assert.equal(page.nextCursor, 'n2');
   assert.deepEqual(page.sessions, [
-    { sessionId: 's1', parentId: 'p1', title: 'T', status: 'idle', createdAt: 1, updatedAt: 2, computerId: 'c1', messageCount: 3, tags: [{ name: 'cto' }], archived: false },
-    { sessionId: 's2', parentId: undefined, title: undefined, status: 'running', createdAt: 1, updatedAt: 4, computerId: 'c9', messageCount: 0, tags: [{ name: 'x' }], archived: true },
+    {
+      sessionId: 's1',
+      parentId: 'p1',
+      title: 'T',
+      status: 'idle',
+      createdAt: 1,
+      updatedAt: 2,
+      computerId: 'c1',
+      messageCount: 3,
+      tags: [{ name: 'cto' }],
+      archived: false,
+    },
+    {
+      sessionId: 's2',
+      parentId: undefined,
+      title: undefined,
+      status: 'running',
+      createdAt: 1,
+      updatedAt: 4,
+      computerId: 'c9',
+      messageCount: 0,
+      tags: [{ name: 'x' }],
+      archived: true,
+    },
   ]);
 });
 

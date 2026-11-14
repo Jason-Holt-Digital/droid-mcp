@@ -76,10 +76,7 @@ test('validateSettings checks models, efforts and mode combinations', () => {
   assert.throws(() => validateSettings({ mission: true }, 'medium', c), /mission mode requires autonomy "high"/);
   assert.throws(() => validateSettings({ workerModel: 'claude-opus-5-5' }, 'high', c), /workerModel need mission: true/);
   assert.throws(() => validateSettings({ mission: true, useSpec: true }, 'high', c), /cannot be combined/);
-  assert.throws(
-    () => validateSettings({ mission: true, workerModel: 'gpt-6.1-sol', workerReasoningEffort: 'off' }, 'high', c),
-    /not supported by gpt-6.1-sol/,
-  );
+  assert.throws(() => validateSettings({ mission: true, workerModel: 'gpt-6.1-sol', workerReasoningEffort: 'off' }, 'high', c), /not supported by gpt-6.1-sol/);
   validateSettings({ mission: true, workerModel: 'gpt-6.1-sol', validatorModel: 'claude-opus-*', validatorReasoningEffort: 'off' }, 'high', c);
 });
 
