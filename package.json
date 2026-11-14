@@ -22,7 +22,10 @@
   "scripts": {
     "start": "node src/main.ts",
     "test": "node --test \"test/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "fmt": "oxfmt --write .",
+    "fmt:check": "oxfmt --check ."
   },
   "type": "module",
   "dependencies": {
@@ -32,6 +35,8 @@
   },
   "devDependencies": {
     "@types/node": "26.6.6",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
     "typescript": "7.0.2"
   },
   "private": true,
