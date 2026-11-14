@@ -1003,6 +1003,25 @@ test('droid_subscribe and droid_unsubscribe are idempotent, persist, and refuse 
   }
 });
 
+test('droid_start without an idempotencyKey always starts anew, and a key reused with another prompt is refused', async () => {
+  const ids = ['3c4d5e6f-7a8b-5c9d-8e0f-2a3b4c5d6e7f', '4d5e6f7a-8b9c-5d0e-9f1a-3b4c5d6e7f8a', '5e6f7a8b-9c0d-5e1f-8a2b-4c5d6e7f8a9b'];
+  let n = 0;
+  const runs = { get: () => undefined, start: async () => ({ id: ids[n++], state: 'working' }) } as unknown as Runs;
+  const c = await connect({ runs, subscriptions: new Subscriptions(join(dir, 'subs-nokey.json')) });
+  try {
+    const a = await c.call('droid_start', { cwd: project, prompt: 'first' });
+    const b = await c.call('droid_start', { cwd: project, prompt: 'first' });
+    assert.deepEqual([a.json.sessionId, b.json.sessionId], [ids[0], ids[1]], 'no key: two sessions');
+    assert.equal((await c.call('droid_start', { cwd: project, prompt: 'one', idempotencyKey: 'same' })).json.sessionId, ids[2]);
+    const other = await c.call('droid_start', { cwd: project, prompt: 'two', idempotencyKey: 'same' });
+    assert.equal(other.isError, true);
+    assert.match(other.error?.message ?? '', /different request/);
+    assert.equal(n, 3);
+  } finally {
+    await c.close();
+  }
+});
+
 test('droid_start subscribes by default, not with subscribe: false, and a retry keeps the first choice', async () => {
   const ids = ['1a2b3c4d-5e6f-5a7b-8c9d-0e1f2a3b4c5d', '2b3c4d5e-6f7a-5b8c-9d0e-1f2a3b4c5d6e'];
   let n = 0;

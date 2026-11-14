@@ -449,7 +449,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 - Changes: creates a session; the agent edits files in `cwd` up to the granted autonomy. Writes `~/.droid-mcp/state.json` and subscribes to the session in `~/.droid-mcp/subscriptions.json`.
 - Backend: `droid exec` child process spawned through the SDK.
 - Credential: `FACTORY_API_KEY` if found, otherwise the droid CLI login.
-- Parameters: `cwd`, `prompt`, `idempotencyKey` (required), `autonomy`, `subscribe` (default `true`), settings (see [Models and settings](#models-and-settings)).
+- Parameters: `cwd`, `prompt`, `idempotencyKey` (optional), `autonomy`, `subscribe` (default `true`), settings (see [Models and settings](#models-and-settings)).
 - Notes: returns `sessionId` and `state`. The turn runs in the background; follow it with `droid_wait`. A retry with the same key keeps the first call's `subscribe` choice.
 
 #### droid_send
@@ -460,7 +460,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 - Changes: sends a prompt as the user; changes model, tools and autonomy; may resume a local session. Writes `~/.droid-mcp/state.json`.
 - Backend: own child process, Factory REST API, or a new `droid exec` (local resume).
 - Credential: own session's existing connection; `FACTORY_API_KEY` for REST; CLI login for local resume (only reachable without a key).
-- Parameters: `session`, `computer`, `prompt`, `idempotencyKey` (required), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings.
+- Parameters: `session`, `computer`, `prompt`, `idempotencyKey` (optional), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings.
 - Notes: returns `via` (`own`, `local-resume`, `rest`), `nextSeq` for own and resumed sessions, `messageId` for REST. `queue` is refused while a turn is running. A `dead` own session is resumed under the same `sessionId` before the prompt is sent.
 
 #### droid_wait
@@ -699,9 +699,10 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 
 ### Idempotency keys
 
-`droid_start` and `droid_send` require an `idempotencyKey` (1 to 200 characters). Keys are stored in `~/.droid-mcp/state.json` for 7 days (`src/runs.ts`):
+`droid_start` and `droid_send` take an optional `idempotencyKey` (1 to 200 characters). Without one, every call acts. Keys are stored in `~/.droid-mcp/state.json` for 7 days (`src/runs.ts`):
 
-- A retry with a finished key returns the first result without running again. For `droid_start` the session state in the reply is current.
+- A retry with a finished key and the same arguments returns the first result without running again. For `droid_start` the session state in the reply is current, and `subscribe` is not part of the match.
+- A key reused with different arguments is refused, so it never returns another request's session.
 - A key is marked pending before the action runs. If the action was refused before any side effect, the key is dropped and can be reused. If it failed after it may have taken effect, the key stays pending and a retry is refused.
 - Each save merges with the file on disk, so several server processes can share it.
 

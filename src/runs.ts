@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
@@ -633,8 +633,18 @@ export async function writeAtomic(path: string, text: string): Promise<void> {
   await rename(tmp, path);
 }
 
-type KeyEntry = { at: number; result?: unknown; pending?: true };
+// fp fingerprints the request, so a key reused for a different request is refused instead of replaying another result.
+type KeyEntry = { at: number; fp?: string; result?: unknown; pending?: true };
 const KEY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Key order does not matter; undefined fields are dropped, as JSON drops them.
+function fingerprint(request: Record<string, unknown>): string {
+  const sorted = Object.fromEntries(Object.entries(request).sort(([a], [b]) => a.localeCompare(b)));
+  return createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
+}
+
+const reused = () =>
+  new Refused('invalid', 'this idempotencyKey was already used for a different request', 'Pass a new idempotencyKey, or omit it to always act anew.');
 
 // Write-ahead: a key is marked pending before the action runs and stays pending if the action fails after it may
 // have had an effect, so a retry refuses instead of repeating it. Each save merges with the file on disk, so
@@ -644,15 +654,19 @@ export class KeyStore {
   private readonly data: Record<string, KeyEntry> = {};
   private readonly dropped = new Set<string>();
   private saving: Promise<unknown> = Promise.resolve();
-  private readonly inflight = new Map<string, Promise<unknown>>();
+  private readonly inflight = new Map<string, { fp: string; p: Promise<unknown> }>();
 
   constructor(path: string) {
     this.path = path;
   }
 
-  async once<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  async once<T>(key: string, request: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+    const fp = fingerprint(request);
     const running = this.inflight.get(key);
-    if (running) return running as Promise<T>;
+    if (running) {
+      if (running.fp !== fp) throw reused();
+      return running.p as Promise<T>;
+    }
     const p = (async () => {
       const hit = this.data[key] ?? (await this.read())[key];
       if (hit?.pending) {
@@ -662,8 +676,11 @@ export class KeyStore {
           'Check droid_sessions for its session before retrying with a new idempotencyKey.',
         );
       }
-      if (hit) return hit.result as T;
-      this.data[key] = { at: Date.now(), pending: true };
+      if (hit) {
+        if (hit.fp !== fp) throw reused();
+        return hit.result as T;
+      }
+      this.data[key] = { at: Date.now(), fp, pending: true };
       try {
         await this.save();
       } catch (err) {
@@ -672,7 +689,7 @@ export class KeyStore {
       }
       try {
         const result = await fn();
-        this.data[key] = { at: Date.now(), result };
+        this.data[key] = { at: Date.now(), fp, result };
         return result;
       } catch (err) {
         if (err instanceof Refused) this.drop(key);
@@ -681,7 +698,7 @@ export class KeyStore {
         await this.save();
       }
     })().finally(() => this.inflight.delete(key));
-    this.inflight.set(key, p);
+    this.inflight.set(key, { fp, p });
     return p;
   }
 
