@@ -81,7 +81,7 @@ Reports what the server can do and what is missing. Takes no parameters.
 
 Installs the plugin on one computer through a Droid session there. See [Wake-ups](wake-ups.md#droid_setup).
 
-- Parameters: `computer` (required), `url` (default `DROID_MCP_EVENTS_URL`, else `http://<--http address>/events`).
+- Parameters: `computer` (required), `url` (default `DROID_MCP_EVENTS_URL`, else `http://<--http address>/events`). For another computer, a loopback or wildcard `--http` address is replaced by the `tailscale serve` address that proxies to this server, when there is one; `droid_status` uses the same URL in each other computer's paste line.
 - Returns at once with `computer`, `state` (`working`, `done`, `failed`), `sessionId`, `detail` and `pasteLine`.
 - Errors: `invalid` (no events URL, a bad URL or plugin source, a loopback URL for another computer, an ambiguous name), `needs_api_key`, `not_found`, `computer_offline`. The last two refusals carry the paste line in `fix`.
 
