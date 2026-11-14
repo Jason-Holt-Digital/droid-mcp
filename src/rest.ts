@@ -13,17 +13,28 @@ import {
   type AnswerSessionElicitationRequestBody,
 } from '@factory/droid-sdk/api';
 import type { RemoteSession } from './catalog.ts';
+import { ToolError, type ErrorCode } from './config.ts';
 import type { RawComputer } from './computers.ts';
 import type { RestSessionSettings } from './settings.ts';
 
 type ApiResult<T> = { data?: T; error?: unknown; response?: Response };
+
+const KEY_FIX = 'Check that FACTORY_API_KEY is valid and its account can use the Factory sessions API.';
+const BY_STATUS: Record<number, [ErrorCode, string]> = {
+  401: ['needs_api_key', KEY_FIX],
+  403: ['needs_api_key', KEY_FIX],
+  404: ['not_found', 'Check the id with droid_find or droid_computers.'],
+  409: ['busy', 'Check the session with droid_wait, then retry.'],
+};
 
 function unwrap<T>(r: ApiResult<T>, op: string): T {
   if (r.error !== undefined || r.data === undefined) {
     const e = (r.error ?? {}) as { status?: number; title?: string; detail?: string };
     const status = e.status ?? r.response?.status ?? 'error';
     const title = e.title ?? r.response?.statusText ?? 'request failed';
-    throw new Error(`Factory API ${op} ${status} ${title}${e.detail ? `: ${e.detail}` : ''}`);
+    const message = `Factory API ${op} ${status} ${title}${e.detail ? `: ${e.detail}` : ''}`;
+    const known = typeof status === 'number' ? BY_STATUS[status] : undefined;
+    throw known ? new ToolError(known[0], message, known[1]) : new Error(message);
   }
   return r.data;
 }

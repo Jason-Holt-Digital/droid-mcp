@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 
 export type Autonomy = 'off' | 'low' | 'medium' | 'high';
 
-type ErrorCode = 'computer_offline' | 'needs_api_key' | 'outside_roots' | 'busy' | 'not_found' | 'invalid' | 'internal';
+export type ErrorCode = 'computer_offline' | 'needs_api_key' | 'outside_roots' | 'busy' | 'not_found' | 'invalid' | 'internal';
 
 export class ToolError extends Error {
   readonly code: ErrorCode;

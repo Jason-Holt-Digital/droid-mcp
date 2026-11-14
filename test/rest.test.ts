@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRest } from '../src/rest.ts';
+import { ToolError } from '../src/config.ts';
 
 const KEY = 'fk-secret-test-key';
 
@@ -67,15 +68,20 @@ test('status combines the session with its pending elicitations', async () => {
   assert.deepEqual(s.elicitations[1].questions, [{ index: 0, question: 'Which?', options: ['a', 'b'] }]);
 });
 
-test('API errors become one Error with status and title, never the key', async () => {
+test('API errors become one Error with status and title, never the key, and known statuses carry a code', async () => {
   const { fetch } = mockFetch({
     'POST /api/v0/sessions/abc/messages': { status: 403, body: { status: 403, title: 'Forbidden', detail: 'REST is not enabled for this organization' } },
+    'GET /api/v0/sessions/gone': { status: 404, body: { status: 404, title: 'Not Found' } },
   });
-  await assert.rejects(createRest({ apiKey: KEY, fetch }).send('abc', 'x'), (err: Error) => {
+  const rest = createRest({ apiKey: KEY, fetch });
+  await assert.rejects(rest.send('abc', 'x'), (err: ToolError) => {
     assert.match(err.message, /403 Forbidden: REST is not enabled/);
+    assert.equal(err.code, 'needs_api_key');
     assert.ok(!err.message.includes(KEY));
     return true;
   });
+  await assert.rejects(rest.status('gone'), (err: ToolError) => err.code === 'not_found');
+  await assert.rejects(rest.send('other', 'x'), (err: Error) => !(err instanceof ToolError) && /500/.test(err.message));
 });
 
 test('children asks for attention; answer and interrupt hit the session paths', async () => {
