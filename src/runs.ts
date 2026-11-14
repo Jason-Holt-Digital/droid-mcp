@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
@@ -64,6 +64,10 @@ export type OwnRun = {
   lock: Promise<unknown>;
   waiters: Set<() => void>;
   close: () => Promise<void>;
+  autoClose: boolean;
+  idleTimer?: NodeJS.Timeout;
+  // When this server finished closing the session; unset while the process is still stopping.
+  closedAt?: number;
 };
 export type Decision = { decision?: string; comment?: string; answers?: string[]; cancel?: boolean };
 
@@ -76,6 +80,7 @@ type Create = (connection: Connection, handlers: Handlers) => Promise<Opened>;
 export type Change = { settings?: RunSettings; autonomy?: Autonomy };
 
 const PENDING_MS = 30 * 60 * 1000;
+const IDLE_MS = 30 * 60 * 1000;
 const INTERRUPT_GRACE_MS = 15_000;
 const MAX_EVENTS = 1000;
 const WAKE_KINDS = new Set<RunEvent['kind']>(['assistant', 'permission', 'ask_user', 'error', 'state']);
@@ -158,6 +163,7 @@ type OpenOptions = {
   execArgs?: string[];
   create: Create;
   settingsFor?: (session: DroidSession) => SettingsUpdate | undefined;
+  autoClose?: boolean;
 };
 
 export class Runs {
@@ -169,14 +175,23 @@ export class Runs {
   private readonly cap: Autonomy;
   private readonly opening = new Set<Promise<unknown>>();
   private readonly resumeSession: typeof resumeSession;
+  private readonly idleMs: number;
   private closing = false;
 
-  constructor(opts: { apiKey?: string; repoOf: (cwd: string) => string; maxRunning?: number; cap?: Autonomy; resumeSession?: typeof resumeSession }) {
+  constructor(opts: {
+    apiKey?: string;
+    repoOf: (cwd: string) => string;
+    maxRunning?: number;
+    cap?: Autonomy;
+    resumeSession?: typeof resumeSession;
+    idleMs?: number;
+  }) {
     this.apiKey = opts.apiKey;
     this.repoOf = opts.repoOf;
     this.maxRunning = opts.maxRunning ?? 3;
     this.cap = opts.cap ?? 'high';
     this.resumeSession = opts.resumeSession ?? resumeSession;
+    this.idleMs = opts.idleMs ?? IDLE_MS;
   }
 
   get(id: string): OwnRun | undefined {
@@ -222,15 +237,19 @@ export class Runs {
       execArgs: worktreeArgs(s.worktree),
       create,
       settingsFor: () => (Object.keys(u).length ? u : undefined),
+      autoClose: true,
     });
   }
 
   async resume(record: SessionRecord, cwd: string, prompt: string, change: Change = {}): Promise<OwnRun> {
+    // A run of ours that is still shutting down holds the session; load it only once that process is gone.
+    await this.runs.get(record.id)?.lock;
     return this.open({
       cwd,
       prompt,
       create: (connection, handlers) => this.resumeWithinCap(record.id, connection, handlers),
       settingsFor: (session) => changeFor(session, change),
+      autoClose: this.runs.get(record.id)?.autoClose,
     });
   }
 
@@ -360,9 +379,7 @@ export class Runs {
       if (run.state === 'closed') return;
       const stopped = await this.cancelTurn(run);
       if (scope === 'session') {
-        move(run, 'closed');
-        await run.close();
-        this.push(run, { kind: 'state', text: 'closed' });
+        await this.shut(run, 'closed');
       } else if (!stopped) {
         throw new ToolError(
           'busy',
@@ -371,6 +388,30 @@ export class Runs {
         );
       }
     });
+  }
+
+  private async shut(run: OwnRun, note: string): Promise<void> {
+    this.to(run, 'closed');
+    await run.close();
+    run.closedAt = Date.now();
+    this.push(run, { kind: 'state', text: note });
+  }
+
+  // Leaving idle clears the timer, so a timer that is still the run's own means the run has stayed idle.
+  private to(run: OwnRun, state: RunState): void {
+    move(run, state);
+    clearTimeout(run.idleTimer);
+    run.idleTimer = undefined;
+    if (state !== 'idle' || !run.autoClose) return;
+    const timer: NodeJS.Timeout = setTimeout(
+      () =>
+        void this.serial(run, async () => {
+          if (run.idleTimer === timer) await this.shut(run, `closed after ${this.idleMs / 60_000} min idle`);
+        }),
+      this.idleMs,
+    );
+    timer.unref();
+    run.idleTimer = timer;
   }
 
   async closeAll(): Promise<void> {
@@ -422,7 +463,7 @@ export class Runs {
     }
   }
 
-  private async openReserved({ cwd, prompt, execArgs, create, settingsFor }: OpenOptions, repo: string): Promise<OwnRun> {
+  private async openReserved({ cwd, prompt, execArgs, create, settingsFor, autoClose = false }: OpenOptions, repo: string): Promise<OwnRun> {
     try {
       let run: OwnRun | undefined;
       const { session, close } = await this.connect(cwd, execArgs, create, () => run);
@@ -445,6 +486,7 @@ export class Runs {
         lock: Promise.resolve(),
         waiters: new Set(),
         close,
+        autoClose,
       };
       this.runs.set(run.id, run);
       this.reserved.splice(this.reserved.indexOf(repo), 1);
@@ -496,7 +538,7 @@ export class Runs {
 
   private die(run: OwnRun): void {
     if (run.state === 'dead' || run.state === 'closed') return;
-    move(run, 'dead');
+    this.to(run, 'dead');
     for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'cancelled (droid process ended)');
     this.push(run, { kind: 'state', text: 'dead' });
   }
@@ -525,7 +567,7 @@ export class Runs {
       const timer = setTimeout(() => this.settle(run, requestId, cancelValue(kind), 'auto-cancelled after 30 min'), PENDING_MS);
       timer.unref();
       run.pending.set(requestId, { kind, resolve, expires: Date.now() + PENDING_MS, timer, ...extra });
-      if (run.state === 'working') move(run, 'needs_you');
+      if (run.state === 'working') this.to(run, 'needs_you');
       this.push(run, { kind, text: preview(text), requestId, ...extra });
     });
   }
@@ -536,12 +578,12 @@ export class Runs {
     clearTimeout(p.timer);
     run.pending.delete(requestId);
     p.resolve(value);
-    if (run.pending.size === 0 && run.state === 'needs_you') move(run, 'working');
+    if (run.pending.size === 0 && run.state === 'needs_you') this.to(run, 'working');
     this.push(run, { kind: 'state', text: `${note} ${requestId}`, requestId });
   }
 
   private begin(run: OwnRun, prompt: string): number {
-    move(run, 'working');
+    this.to(run, 'working');
     const seq = this.push(run, { kind: 'user', text: preview(prompt) });
     const turn: Promise<void> = this.drain(run, prompt).finally(() => {
       if (run.turn === turn) run.turn = undefined;
@@ -563,7 +605,7 @@ export class Runs {
     } finally {
       for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'turn ended');
       if (run.state === 'working') {
-        move(run, 'idle');
+        this.to(run, 'idle');
         this.push(run, { kind: 'state', text: 'idle' });
       }
     }
@@ -591,8 +633,18 @@ export async function writeAtomic(path: string, text: string): Promise<void> {
   await rename(tmp, path);
 }
 
-type KeyEntry = { at: number; result?: unknown; pending?: true };
+// fp fingerprints the request, so a key reused for a different request is refused instead of replaying another result.
+type KeyEntry = { at: number; fp?: string; result?: unknown; pending?: true };
 const KEY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Key order does not matter; undefined fields are dropped, as JSON drops them.
+function fingerprint(request: Record<string, unknown>): string {
+  const sorted = Object.fromEntries(Object.entries(request).sort(([a], [b]) => a.localeCompare(b)));
+  return createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
+}
+
+const reused = () =>
+  new Refused('invalid', 'this idempotencyKey was already used for a different request', 'Pass a new idempotencyKey, or omit it to always act anew.');
 
 // Write-ahead: a key is marked pending before the action runs and stays pending if the action fails after it may
 // have had an effect, so a retry refuses instead of repeating it. Each save merges with the file on disk, so
@@ -602,15 +654,19 @@ export class KeyStore {
   private readonly data: Record<string, KeyEntry> = {};
   private readonly dropped = new Set<string>();
   private saving: Promise<unknown> = Promise.resolve();
-  private readonly inflight = new Map<string, Promise<unknown>>();
+  private readonly inflight = new Map<string, { fp: string; p: Promise<unknown> }>();
 
   constructor(path: string) {
     this.path = path;
   }
 
-  async once<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  async once<T>(key: string, request: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+    const fp = fingerprint(request);
     const running = this.inflight.get(key);
-    if (running) return running as Promise<T>;
+    if (running) {
+      if (running.fp !== fp) throw reused();
+      return running.p as Promise<T>;
+    }
     const p = (async () => {
       const hit = this.data[key] ?? (await this.read())[key];
       if (hit?.pending) {
@@ -620,8 +676,11 @@ export class KeyStore {
           'Check droid_find for its session before retrying with a new idempotencyKey.',
         );
       }
-      if (hit) return hit.result as T;
-      this.data[key] = { at: Date.now(), pending: true };
+      if (hit) {
+        if (hit.fp !== fp) throw reused();
+        return hit.result as T;
+      }
+      this.data[key] = { at: Date.now(), fp, pending: true };
       try {
         await this.save();
       } catch (err) {
@@ -630,7 +689,7 @@ export class KeyStore {
       }
       try {
         const result = await fn();
-        this.data[key] = { at: Date.now(), result };
+        this.data[key] = { at: Date.now(), fp, result };
         return result;
       } catch (err) {
         if (err instanceof Refused) this.drop(key);
@@ -639,7 +698,7 @@ export class KeyStore {
         await this.save();
       }
     })().finally(() => this.inflight.delete(key));
-    this.inflight.set(key, p);
+    this.inflight.set(key, { fp, p });
     return p;
   }
 
