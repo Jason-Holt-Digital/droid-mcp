@@ -1,0 +1,12 @@
+{
+  "name": "droid-mcp",
+  "description": "Plugins for droid-mcp",
+  "owner": { "name": "Jason Holt" },
+  "plugins": [
+    {
+      "name": "droid-mcp",
+      "description": "Rings droid-mcp when a session stops, notifies or ends",
+      "source": "./plugin"
+    }
+  ]
+}
