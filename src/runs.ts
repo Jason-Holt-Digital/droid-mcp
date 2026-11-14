@@ -11,7 +11,7 @@ import {
   type DroidStreamMessage,
 } from '@factory/droid-sdk/node';
 import type { SessionRecord } from './catalog.ts';
-import { allowedDecisions, exceedsCap, Refused, type Autonomy } from './config.ts';
+import { allowedDecisions, exceedsCap, Refused, ToolError, type Autonomy } from './config.ts';
 import { addTags, toUpdate, type RunSettings, type SettingsUpdate } from './settings.ts';
 
 export type Question = { index: number; question: string; options: string[] };
@@ -205,7 +205,7 @@ export class Runs {
         const level = session.settings.autonomyLevel;
         if (level === undefined || exceedsCap(level, this.cap)) {
           await session.close().catch(() => {});
-          throw new Refused(`session autonomy '${level ?? 'unknown'}' exceeds the cap '${this.cap}'`);
+          throw new Refused('invalid', `session autonomy '${level ?? 'unknown'}' exceeds the cap '${this.cap}'`, 'Start a new session within the cap with droid_start.');
         }
         return opened(session);
       },
@@ -215,10 +215,12 @@ export class Runs {
 
   send(run: OwnRun, prompt: string, mode: 'queue' | 'interrupt', change: Change = {}): Promise<number> {
     return this.serial(run, async () => {
-      if (run.state === 'closed') throw new Refused('session is closed');
+      if (run.state === 'closed') throw new Refused('invalid', 'session is closed', 'Start a new session with droid_start.');
       if (run.turn) {
-        if (mode === 'queue') throw new Refused('busy: a turn is running; wait for it or send with mode "interrupt"');
-        if (!(await this.cancelTurn(run))) throw new Refused('the running turn did not stop after the interrupt; nothing was sent');
+        if (mode === 'queue') throw new Refused('busy', 'a turn is running', 'Wait for it with droid_wait, or send with mode "interrupt".');
+        if (!(await this.cancelTurn(run))) {
+          throw new Refused('busy', 'the running turn did not stop after the interrupt; nothing was sent', 'Wait for the turn with droid_wait, then send again.');
+        }
       }
       this.admit(run.repo, run);
       const u = changeFor(run.session, change);
@@ -264,18 +266,20 @@ export class Runs {
 
   respond(run: OwnRun, requestId: string, d: Decision): void {
     const p = run.pending.get(requestId);
-    if (!p) throw new Error(`no pending request ${requestId}`);
+    if (!p) throw new ToolError('not_found', `no pending request ${requestId}`, 'Call droid_wait to see the pending requests and their ids.');
     let value: unknown;
     if (d.cancel) {
       value = cancelValue(p.kind);
     } else if (p.kind === 'permission') {
       const options = p.options ?? [];
-      if (!d.decision || !options.includes(d.decision)) throw new Error(`decision must be one of: ${options.join(', ')}`);
+      if (!d.decision || !options.includes(d.decision)) {
+        throw new ToolError('invalid', `decision must be one of: ${options.join(', ')}`, 'Pass one of those options as decision, or cancel: true.');
+      }
       value = d.comment ? { selectedOption: d.decision, comment: d.comment } : d.decision;
     } else {
       const questions = p.questions ?? [];
       if (!d.answers || d.answers.length !== questions.length) {
-        throw new Error(`answers must have exactly ${questions.length} entries, one per question`);
+        throw new ToolError('invalid', `answers must have exactly ${questions.length} entries, one per question`, 'Pass one answer per question, in order.');
       }
       const answers = d.answers;
       value = { answers: questions.map((q, i) => ({ index: q.index, question: q.question, answer: answers[i] })) };
@@ -292,7 +296,11 @@ export class Runs {
         await run.close();
         this.push(run, { kind: 'state', text: 'closed' });
       } else if (!stopped) {
-        throw new Error(`the turn did not stop within ${INTERRUPT_GRACE_MS / 1000} s of the interrupt`);
+        throw new ToolError(
+          'busy',
+          `the turn did not stop within ${INTERRUPT_GRACE_MS / 1000} s of the interrupt`,
+          'Check it with droid_wait, and cancel again if it is still running.',
+        );
       }
     });
   }
@@ -318,13 +326,13 @@ export class Runs {
   }
 
   private admit(repo: string, except?: OwnRun): void {
-    if (this.closing) throw new Refused('server is shutting down');
+    if (this.closing) throw new Refused('busy', 'server is shutting down', 'Retry once the server has restarted.');
     const active = [...this.runs.values()].filter((r) => r !== except && (r.state === 'running' || r.state === 'waiting'));
     if (active.length + this.reserved.length >= this.maxRunning) {
-      throw new Refused(`busy: ${this.maxRunning} turns are already running`);
+      throw new Refused('busy', `${this.maxRunning} turns are already running`, 'Wait for a running turn to finish, then retry.');
     }
     if (active.some((r) => r.repo === repo) || this.reserved.includes(repo)) {
-      throw new Refused(`busy: another session is already running in ${repo}`);
+      throw new Refused('busy', `another session is already running in ${repo}`, "Wait for that session's turn to finish, then retry.");
     }
   }
 
@@ -495,7 +503,11 @@ export class KeyStore {
     const p = (async () => {
       const hit = this.data[key] ?? (await this.read())[key];
       if (hit?.pending) {
-        throw new Error('an earlier attempt with this idempotencyKey did not finish and may have taken effect; check droid_find');
+        throw new ToolError(
+          'invalid',
+          'an earlier attempt with this idempotencyKey did not finish and may have taken effect',
+          'Check droid_find for its session before retrying with a new idempotencyKey.',
+        );
       }
       if (hit) return hit.result as T;
       this.data[key] = { at: Date.now(), pending: true };

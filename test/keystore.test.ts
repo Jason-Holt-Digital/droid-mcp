@@ -21,7 +21,7 @@ test('a completed key replays its result in a fresh store; a failed one can be r
     let calls = 0;
     assert.equal(await new KeyStore(path).once('k', async () => ++calls), 1);
     assert.equal(await new KeyStore(path).once('k', async () => ++calls), 1);
-    await assert.rejects(new KeyStore(path).once('busy', async () => Promise.reject(new Refused('busy'))), /busy/);
+    await assert.rejects(new KeyStore(path).once('busy', async () => Promise.reject(new Refused('busy', 'busy', 'wait'))), /busy/);
     assert.equal(await new KeyStore(path).once('busy', async () => 'ok'), 'ok', 'a refusal before any effect can be retried');
     await assert.rejects(new KeyStore(path).once('net', async () => Promise.reject(new Error('socket hang up'))), /socket/);
     await assert.rejects(new KeyStore(path).once('net', async () => 'again'), /may have taken effect/, 'an error after a possible effect is not retried');

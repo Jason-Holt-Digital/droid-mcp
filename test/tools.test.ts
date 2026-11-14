@@ -29,6 +29,8 @@ const noSessions = {
   resume: () => Promise.reject(new Error('tests must never resume a droid session')),
 } as unknown as Runs;
 
+type ToolError = { code: string; message: string; fix: string };
+
 async function connect(ctx: Partial<Ctx>) {
   const server = new McpServer({ name: 'droid-mcp', version: 'test' });
   registerTools(server, {
@@ -49,7 +51,9 @@ async function connect(ctx: Partial<Ctx>) {
     async call(name: string, args: Record<string, unknown>) {
       const res = await client.callTool({ name, arguments: args });
       const text = (res.content as Array<{ type: string; text: string }>)[0].text;
-      return { isError: Boolean(res.isError), text, json: res.isError ? undefined : JSON.parse(text) };
+      const isError = Boolean(res.isError);
+      const error: ToolError | undefined = isError && text.startsWith('{') ? JSON.parse(text) : undefined;
+      return { isError, text, error, json: isError ? undefined : JSON.parse(text) };
     },
     listTools: () => client.listTools(),
     close: () => client.close(),
@@ -145,11 +149,16 @@ test('droid_send refuses workstream and unknown sessions without an API key', as
   try {
     const ws = await c.call('droid_send', { session: IDS.liveAgentNewer, prompt: 'hi', idempotencyKey: 'k1' });
     assert.equal(ws.isError, true);
-    assert.match(ws.text, /workstream sessions need FACTORY_API_KEY; never loaded locally/);
+    assert.equal(ws.error?.code, 'needs_api_key');
+    assert.equal(ws.error?.message, 'workstream sessions need FACTORY_API_KEY; never loaded locally');
+    assert.equal(ws.error?.fix, "Set FACTORY_API_KEY in the server's environment, or use a session this server started.");
     const unknown = await c.call('droid_send', { session: '1bd2caee-2a3d-5f4b-955e-85e5a0b99023', prompt: 'hi', idempotencyKey: 'k2' });
-    assert.match(unknown.text, /not on this machine/);
+    assert.equal(unknown.error?.code, 'needs_api_key');
+    assert.match(unknown.error!.message, /not on this machine/);
     const bad = await c.call('droid_send', { session: '../etc', prompt: 'hi', idempotencyKey: 'k3' });
-    assert.match(bad.text, /invalid session id/);
+    assert.deepEqual(bad.error, { code: 'invalid', message: 'invalid session id: ../etc', fix: 'Pass a session id from droid_find.' });
+    const follow = await c.call('droid_wait', { session: '1bd2caee-2a3d-5f4b-955e-85e5a0b99023' });
+    assert.equal(follow.error?.code, 'needs_api_key');
   } finally {
     await c.close();
   }
@@ -160,11 +169,59 @@ test('droid_start checks the cwd allow-list and autonomy cap before starting any
   try {
     const outside = await c.call('droid_start', { cwd: dir, prompt: 'hi', idempotencyKey: 's1' });
     assert.equal(outside.isError, true);
-    assert.match(outside.text, /outside the allowed roots/);
+    assert.equal(outside.error?.code, 'outside_roots');
+    assert.match(outside.error!.message, /outside the allowed roots/);
+    assert.equal(outside.error?.fix, 'Pass a cwd inside one of the allowed roots.');
     const escape = await c.call('droid_start', { cwd: join(project, '..', '..', '..'), prompt: 'hi', idempotencyKey: 's2' });
-    assert.match(escape.text, /outside the allowed roots/);
+    assert.match(escape.error!.message, /outside the allowed roots/);
+    const missing = await c.call('droid_start', { cwd: join(project, 'nope'), prompt: 'hi', idempotencyKey: 's4' });
+    assert.equal(missing.error?.code, 'outside_roots');
     const high = await c.call('droid_start', { cwd: project, prompt: 'hi', autonomy: 'high', idempotencyKey: 's3' });
-    assert.match(high.text, /exceeds the cap/);
+    assert.deepEqual(high.error, {
+      code: 'invalid',
+      message: "autonomy 'high' exceeds the cap 'medium' (DROID_MCP_MAX_AUTONOMY)",
+      fix: "Pass autonomy 'medium' or lower.",
+    });
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_send to an owned run with a running turn is refused as busy', async () => {
+  const run = {
+    id: '8c1d2e3f-4a5b-5c6d-9e7f-0a1b2c3d4e5f',
+    state: 'running',
+    turn: new Promise(() => {}),
+    session: { settings: { autonomyLevel: 'off' } },
+    lock: Promise.resolve(),
+    pending: new Map(),
+    events: [],
+    waiters: new Set(),
+  } as unknown as OwnRun;
+  class OwnedRuns extends Runs {
+    get(id: string) {
+      return id === run.id ? run : undefined;
+    }
+  }
+  const c = await connect({ runs: new OwnedRuns({ repoOf: (cwd) => cwd }) });
+  try {
+    const busy = await c.call('droid_send', { session: run.id, prompt: 'hi', idempotencyKey: 'busy1' });
+    assert.deepEqual(busy.error, { code: 'busy', message: 'a turn is running', fix: 'Wait for it with droid_wait, or send with mode "interrupt".' });
+  } finally {
+    await c.close();
+  }
+});
+
+test('an unexpected error becomes internal with a fix, its message collapsed and capped at 1000 characters', async () => {
+  const runs = { get: () => undefined, start: () => Promise.reject(new Error(`socket\n   hang up ${'x'.repeat(2000)}`)) } as unknown as Runs;
+  const c = await connect({ runs });
+  try {
+    const res = await c.call('droid_start', { cwd: project, prompt: 'hi', idempotencyKey: 'internal1' });
+    assert.equal(res.isError, true);
+    assert.equal(res.error?.code, 'internal');
+    assert.equal(res.error?.fix, 'Retry the call; if it fails again, report this message.');
+    assert.equal(res.error?.message.length, 1000);
+    assert.match(res.error!.message, /^socket hang up x+…$/);
   } finally {
     await c.close();
   }
@@ -237,11 +294,13 @@ test('droid_start refuses unknown models and invalid settings before starting an
   try {
     const typo = await c.call('droid_start', { cwd: project, prompt: 'hi', model: 'claude-opus-5-6', idempotencyKey: 'm1' });
     assert.equal(typo.isError, true);
-    assert.match(typo.text, /unknown model 'claude-opus-5-6'; close matches: .*claude-opus-5-5/);
+    assert.equal(typo.error?.code, 'not_found');
+    assert.match(typo.error!.message, /unknown model 'claude-opus-5-6'; close matches: .*claude-opus-5-5/);
     const effort = await c.call('droid_start', { cwd: project, prompt: 'hi', model: 'claude-opus-5-5', reasoningEffort: 'off', idempotencyKey: 'm2' });
-    assert.match(effort.text, /not supported by claude-opus-5-5/);
+    assert.equal(effort.error?.code, 'invalid');
+    assert.match(effort.error!.message, /not supported by claude-opus-5-5/);
     const mission = await c.call('droid_start', { cwd: project, prompt: 'hi', mission: true, idempotencyKey: 'm3' });
-    assert.match(mission.text, /mission mode requires autonomy "high"/);
+    assert.equal(mission.error?.message, 'mission mode requires autonomy "high"');
     const flag = await c.call('droid_start', { cwd: project, prompt: 'hi', worktree: '--skip-permissions-unsafe', idempotencyKey: 'm4' });
     assert.equal(flag.isError, true);
     assert.equal(started.length, 0);
@@ -533,11 +592,14 @@ test('a session tool naming an offline computer refuses before calling the sessi
     ] as const) {
       const res = await c.call(name, args);
       assert.equal(res.isError, true, name);
-      assert.match(res.text, /computer old-desk is offline \(daemon last seen 20\d\d-[\d-]+T[\d:]+Z\); start its daemon or pick another computer/, name);
+      assert.equal(res.error?.code, 'computer_offline', name);
+      assert.match(res.error!.message, /^computer old-desk is offline \(daemon last seen 20\d\d-[\d-]+T[\d:]+Z\)$/, name);
+      assert.equal(res.error?.fix, 'Start its daemon, or pick another computer from droid_computers.', name);
     }
     assert.deepEqual(api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')), []);
     const missing = await c.call('droid_wait', { session: REMOTE.laptopStandalone, computer: 'nope' });
-    assert.match(missing.text, /no computer named nope; known computers: this-box, laptop/);
+    assert.equal(missing.error?.code, 'not_found');
+    assert.match(missing.error!.message, /no computer named nope; known computers: this-box, laptop/);
   } finally {
     await c.close();
   }
@@ -560,7 +622,8 @@ test('send and wait pass computerId for a named or remembered computer, and a re
     clock.now += 10 * 60_000;
     const before = api.calls.length;
     const stale = await c.call('droid_send', { session: REMOTE.laptopStandalone, prompt: 'hi', idempotencyKey: 'c2' });
-    assert.match(stale.text, /computer laptop is offline/);
+    assert.equal(stale.error?.code, 'computer_offline');
+    assert.match(stale.error!.message, /computer laptop is offline/);
     assert.ok(api.calls.slice(before).every((x) => x.path === '/api/v0/computers'));
   } finally {
     await c.close();
@@ -581,17 +644,20 @@ test('droid_send on a closed owned run follows the named computer instead of tre
     const post = api.calls.find((x) => x.method === 'POST' && x.path === `/api/v0/sessions/${run.id}/messages`);
     assert.deepEqual(post?.body, { text: 'go', computerId: FLEET.cloudA.id });
     const offline = await c.call('droid_send', { session: run.id, computer: 'old-desk', prompt: 'go', idempotencyKey: 'closed2' });
-    assert.match(offline.text, /computer old-desk is offline/);
+    assert.equal(offline.error?.code, 'computer_offline');
+    assert.match(offline.error!.message, /computer old-desk is offline/);
   } finally {
     await c.close();
   }
 });
 
-test('a failed computer lookup in droid_send leaves the idempotencyKey free for a retry', async () => {
+test('a failed computer lookup in droid_send keeps a known API code and leaves the idempotencyKey free for a retry', async () => {
   let computerCalls = 0;
   const api = fakeApi((call) => {
     if (call.method === 'GET' && call.path === '/api/v0/computers') {
-      if (computerCalls++ === 0) return Response.json({ status: 503, title: 'Unavailable' }, { status: 503 });
+      const n = computerCalls++;
+      if (n === 0) return Response.json({ status: 503, title: 'Unavailable' }, { status: 503 });
+      if (n === 1) return Response.json({ status: 401, title: 'Unauthorized' }, { status: 401 });
       return { computers: [{ ...FLEET.cloudA, lastSeenAt: Date.now() }] };
     }
     if (call.method === 'POST' && call.path.endsWith('/messages')) return { messageId: 'm1', status: 'running' };
@@ -602,8 +668,10 @@ test('a failed computer lookup in droid_send leaves the idempotencyKey free for 
   try {
     const args = { session: REMOTE.cloudStandalone, computer: 'cloud-a', prompt: 'go', idempotencyKey: 'lookup-retry' };
     const first = await c.call('droid_send', args);
-    assert.equal(first.isError, true);
-    assert.match(first.text, /503/);
+    assert.equal(first.error?.code, 'internal');
+    assert.match(first.error!.message, /could not list computers: .*503/);
+    const denied = await c.call('droid_send', args);
+    assert.equal(denied.error?.code, 'needs_api_key', 'a known API error keeps its code');
     const retry = await c.call('droid_send', args);
     assert.equal(retry.isError, false, retry.text);
     assert.equal(retry.json.messageId, 'm1');
@@ -611,6 +679,7 @@ test('a failed computer lookup in droid_send leaves the idempotencyKey free for 
     await c.close();
   }
 });
+
 test('a run this server owns is read and closed locally even when its session is remembered on an offline computer', async () => {
   let closed = false;
   const run = {

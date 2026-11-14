@@ -137,7 +137,9 @@ export function checkModel(id: string, catalog: ModelCatalog): void {
   if (known.includes(id)) return;
   const close = closeMatches(id, known);
   throw new Refused(
+    'not_found',
     `unknown model '${id}'; ${close.length ? `close matches: ${close.join(', ')}` : 'no close matches'} (call droid_models for the full list)`,
+    'Pass a model id from droid_models.',
   );
 }
 
@@ -146,6 +148,10 @@ export function checkEffort(effort: string, modelId: string, catalog: ModelCatal
     catalog.builtin.find((b) => b.id === modelId)?.reasoning?.supported ??
     catalog.custom.find((c) => c.id === modelId)?.supportedReasoningEfforts;
   if (supported?.length && !supported.includes(effort)) {
-    throw new Refused(`reasoning effort '${effort}' is not supported by ${modelId}; supported: ${supported.join(', ')}`);
+    throw new Refused(
+      'invalid',
+      `reasoning effort '${effort}' is not supported by ${modelId}; supported: ${supported.join(', ')}`,
+      'Pass one of the supported efforts, or omit it to use the default.',
+    );
   }
 }
