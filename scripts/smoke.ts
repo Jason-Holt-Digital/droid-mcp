@@ -2,7 +2,7 @@
 // Usage: node scripts/smoke.ts [scratchDir] [oldScratchSessionIdToResume]
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -70,17 +70,12 @@ try {
   const ws = await call('droid_find', { scope: 'workstreams', limit: 200 });
   assert.ok(ws.workstreams.length > 0, 'workstreams found');
   const firstMissing = ws.workstreams.findIndex((w: any) => w.missingOrchestrator);
-  assert.ok(
-    firstMissing === -1 || ws.workstreams.slice(firstMissing).every((w: any) => w.missingOrchestrator),
-    'local orchestrators come first',
-  );
+  assert.ok(firstMissing === -1 || ws.workstreams.slice(firstMissing).every((w: any) => w.missingOrchestrator), 'local orchestrators come first');
   for (const w of ws.workstreams) for (const a of w.agents) assert.equal(a.role, 'agent');
   const orch = ws.workstreams.find((w: any) => w.orchestrator)!.orchestrator;
   console.log(
     'workstreams:',
-    ws.workstreams
-      .map((w: any) => `${w.title ?? w.id} (${w.agents.length} agents${w.missingOrchestrator ? ', orchestrator elsewhere' : ''})`)
-      .join('; '),
+    ws.workstreams.map((w: any) => `${w.title ?? w.id} (${w.agents.length} agents${w.missingOrchestrator ? ', orchestrator elsewhere' : ''})`).join('; '),
   );
 
   const all = await call('droid_find', {});
@@ -96,17 +91,11 @@ try {
   const followed = await call('droid_wait', { session: orch.id, maxEvents: 3 });
   assert.ok(followed.events.length > 0, 'reads a desktop-held orchestrator read-only');
   await call('droid_result', { session: orch.id, maxBytes: 300 });
-  assert.match(
-    await call('droid_send', { session: orch.id, prompt: 'x', idempotencyKey: randomUUID() }, true),
-    /workstream sessions need FACTORY_API_KEY/,
-  );
+  assert.match(await call('droid_send', { session: orch.id, prompt: 'x', idempotencyKey: randomUUID() }, true), /workstream sessions need FACTORY_API_KEY/);
   assert.match(await call('droid_cancel', { session: orch.id, scope: 'turn' }, true), /FACTORY_API_KEY/);
   assert.match(await call('droid_send', { session: randomUUID(), prompt: 'x', idempotencyKey: randomUUID() }, true), /not on this machine/);
   assert.match(await call('droid_start', { cwd: homedir(), prompt: 'x', idempotencyKey: randomUUID() }, true), /outside the allowed roots/);
-  assert.match(
-    await call('droid_start', { cwd: scratch, prompt: 'x', autonomy: 'high', idempotencyKey: randomUUID() }, true),
-    /exceeds the cap/,
-  );
+  assert.match(await call('droid_start', { cwd: scratch, prompt: 'x', autonomy: 'high', idempotencyKey: randomUUID() }, true), /exceeds the cap/);
 
   const key = randomUUID();
   const file = join(scratch, `smoke-${key.slice(0, 8)}.txt`);
@@ -121,10 +110,7 @@ try {
   const sid = started.sessionId;
   let s = await settle(sid, 0);
   assert.ok(s.attention.length === 1 && s.attention[0].kind === 'permission', 'permission prompt is parked');
-  assert.match(
-    await call('droid_respond', { session: sid, requestId: s.attention[0].requestId, decision: 'not-an-option' }, true),
-    /decision must be one of/,
-  );
+  assert.match(await call('droid_respond', { session: sid, requestId: s.attention[0].requestId, decision: 'not-an-option' }, true), /decision must be one of/);
   await call('droid_respond', { session: sid, requestId: s.attention[0].requestId, decision: 'proceed_once' });
   s = await settle(sid, s.seq);
   assert.equal(readFileSync(file, 'utf8').trim(), 'OK', 'approved tool ran');

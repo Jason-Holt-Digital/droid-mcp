@@ -7,10 +7,7 @@ export type Route = { via: 'own' } | { via: 'rest' } | { via: 'local-resume' } |
 
 export const RECENT_MS = 30 * 60 * 1000;
 
-export function routeSend(
-  target: Target,
-  opts: { restEnabled: boolean; allowLocalResume: boolean; now: number; cap: Autonomy },
-): Route {
+export function routeSend(target: Target, opts: { restEnabled: boolean; allowLocalResume: boolean; now: number; cap: Autonomy }): Route {
   if (target.kind === 'own') return { via: 'own' };
   if (opts.restEnabled) return { via: 'rest' };
   const refuse = (code: Refused['code'], message: string, fix: string) => ({ refused: new Refused(code, message, fix) });
@@ -39,7 +36,11 @@ export function routeSend(
     );
   }
   if (r.autonomy === undefined || exceedsCap(r.autonomy, opts.cap)) {
-    return refuse('invalid', `session autonomy '${r.autonomy ?? 'unknown'}' exceeds the cap '${opts.cap}'`, 'Start a new session within the cap with droid_start.');
+    return refuse(
+      'invalid',
+      `session autonomy '${r.autonomy ?? 'unknown'}' exceeds the cap '${opts.cap}'`,
+      'Start a new session within the cap with droid_start.',
+    );
   }
   return { via: 'local-resume' };
 }

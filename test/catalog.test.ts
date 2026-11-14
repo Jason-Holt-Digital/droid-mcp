@@ -94,10 +94,7 @@ test('filterRecords matches title, id prefix, cwd and whole workstreams by orche
     new Set(ids(filterRecords(records, { ...all, query: 'Triage the shop' }))),
     new Set([IDS.archivedOrchestrator, IDS.archivedAgentPayment, IDS.archivedAgentResearch]),
   );
-  assert.deepEqual(
-    new Set(ids(filterRecords(records, { ...all, cwd: '/home/dev/repos/personal/' }))),
-    new Set([IDS.subagent, IDS.subagentParent]),
-  );
+  assert.deepEqual(new Set(ids(filterRecords(records, { ...all, cwd: '/home/dev/repos/personal/' }))), new Set([IDS.subagent, IDS.subagentParent]));
   assert.deepEqual(ids(filterRecords(records, { ...all, cwd: '/home/dev/repos/mono' })), [], 'cwd is a path prefix, not a string prefix');
   assert.deepEqual(ids(filterRecords(records, { query: 'payment' })), [], 'archived still hidden while searching');
 });
@@ -110,7 +107,10 @@ test('readTranscript returns user and assistant text with byte cursors that resu
     const lines = [
       header.trim(),
       msg('user', [{ type: 'text', text: 'Reply OK' }]),
-      msg('assistant', [{ type: 'tool_use', id: 't1', name: 'Read', input: {} }, { type: 'text', text: 'Checking.' }]),
+      msg('assistant', [
+        { type: 'tool_use', id: 't1', name: 'Read', input: {} },
+        { type: 'text', text: 'Checking.' },
+      ]),
       msg('user', [{ type: 'tool_result', tool_use_id: 't1', content: 'x' }]),
       JSON.stringify({ type: 'todo_state', todos: [] }),
       msg('assistant', [{ type: 'text', text: 'OK' }]),
@@ -119,15 +119,33 @@ test('readTranscript returns user and assistant text with byte cursors that resu
     const file = join(dir, 's.jsonl');
     await writeFile(file, lines.join('\n'));
     const all = await readTranscript(file);
-    assert.deepEqual(all.entries.map((e) => [e.role, e.text]), [['user', 'Reply OK'], ['assistant', 'Checking.'], ['assistant', 'OK']]);
+    assert.deepEqual(
+      all.entries.map((e) => [e.role, e.text]),
+      [
+        ['user', 'Reply OK'],
+        ['assistant', 'Checking.'],
+        ['assistant', 'OK'],
+      ],
+    );
     assert.equal(all.end, Buffer.byteLength(lines.join('\n')), 'end covers every complete line');
     const afterFirst = await readTranscript(file, all.entries[0].seq);
-    assert.deepEqual(afterFirst.entries.map((e) => e.text), ['Checking.', 'OK'], 'reading from a seq skips that entry');
+    assert.deepEqual(
+      afterFirst.entries.map((e) => e.text),
+      ['Checking.', 'OK'],
+      'reading from a seq skips that entry',
+    );
     await appendFile(file, `${msg('assistant', [{ type: 'text', text: 'More' }])}\n${msg('user', [{ type: 'text', text: 'partial' }])}`);
     const appended = await readTranscript(file, all.end);
-    assert.deepEqual(appended.entries.map((e) => e.text), ['More'], 'an unterminated last line is not read yet');
+    assert.deepEqual(
+      appended.entries.map((e) => e.text),
+      ['More'],
+      'an unterminated last line is not read yet',
+    );
     const tail = await readTranscriptTail(file, () => true);
-    assert.deepEqual(tail.map((e) => e.text), ['Reply OK', 'Checking.', 'OK', 'More']);
+    assert.deepEqual(
+      tail.map((e) => e.text),
+      ['Reply OK', 'Checking.', 'OK', 'More'],
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

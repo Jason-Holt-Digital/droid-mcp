@@ -68,7 +68,8 @@ export function validateSettings(s: RunSettings, autonomy: string | undefined, c
   effort(s.workerReasoningEffort, s.workerModel);
   effort(s.validatorReasoningEffort, s.validatorModel);
   const missionOnly = setKeys(s, MISSION_ONLY);
-  if (!s.mission && missionOnly.length) throw new Refused('invalid', `${missionOnly.join(', ')} need mission: true`, 'Add mission: true, or drop those settings.');
+  if (!s.mission && missionOnly.length)
+    throw new Refused('invalid', `${missionOnly.join(', ')} need mission: true`, 'Add mission: true, or drop those settings.');
   if (s.mission && s.useSpec) throw new Refused('invalid', 'mission and useSpec cannot be combined', 'Pass only one of mission and useSpec.');
   if (s.mission && autonomy !== 'high') throw new Refused('invalid', 'mission mode requires autonomy "high"', 'Pass autonomy "high" with mission: true.');
 }

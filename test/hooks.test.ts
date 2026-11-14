@@ -95,7 +95,10 @@ async function fakeSession(home: string, lastAssistant: string) {
     // Pushes the header and the old message out of the 512 KB tail window.
     msg('user', 'x'.repeat(600 * 1024)),
     msg('user', [{ type: 'text', text: 'please do the fake task' }]),
-    msg('assistant', [{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: lastAssistant }]),
+    msg('assistant', [
+      { type: 'thinking', thinking: 'hmm' },
+      { type: 'text', text: lastAssistant },
+    ]),
     msg('assistant', [{ type: 'tool_use', id: 't', name: 'Read', input: {} }]),
   ];
   await writeFile(transcript, lines.join('\n') + '\n');
@@ -166,7 +169,8 @@ test('install keeps unrelated hooks, backs up, is idempotent, and uninstall rest
     await assert.rejects(stat(join(home, '.factory', 'droid-mcp')));
     const after = (await readdir(join(home, '.factory'))).filter((n) => n.startsWith('hooks.json.bak-droid-mcp-'));
     assert.equal(after.length, 2, 'uninstall keeps its own backup without overwriting the first');
-  }));
+  }),
+);
 
 const USER_HOOK = { type: 'command', command: '/usr/bin/true user-shared', timeout: 3 };
 
@@ -191,27 +195,46 @@ async function sharedGroupSurvives(home: string, ourCommand: string, installer: 
 }
 
 test('a user command sharing a group with ours keeps the group and its matcher through install and uninstall', { skip }, () =>
-  withHome((home) => sharedGroupSurvives(home, `python3 ${join(home, '.factory', 'droid-mcp', 'droid_mcp_hook.py')}`, (...extra) => install(home, ...extra))));
+  withHome((home) => sharedGroupSurvives(home, `python3 ${join(home, '.factory', 'droid-mcp', 'droid_mcp_hook.py')}`, (...extra) => install(home, ...extra))),
+);
 
 test('the PowerShell installer keeps a user command sharing a group with ours', { skip: pwshSkip }, () =>
   withHome((home) =>
     sharedGroupSurvives(home, `pwsh -File "${join(home, '.factory', 'droid-mcp', 'droid-mcp-hook.ps1')}"`, (...extra) =>
       run(
         'pwsh',
-        ['-NoProfile', '-NonInteractive', '-File', PS_INSTALLER, '-HomeDir', home, '-Url', 'http://127.0.0.1:9/events', ...(extra.length ? ['-Uninstall'] : [])],
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-File',
+          PS_INSTALLER,
+          '-HomeDir',
+          home,
+          '-Url',
+          'http://127.0.0.1:9/events',
+          ...(extra.length ? ['-Uninstall'] : []),
+        ],
         { env: env(home) },
       ),
     ),
-  ));
+  ),
+);
 
 test('the PowerShell installer creates hooks.json on a first install', { skip: pwshSkip }, () =>
   withHome(async (home) => {
-    const r = await run('pwsh', ['-NoProfile', '-NonInteractive', '-File', PS_INSTALLER, '-HomeDir', home, '-Url', 'http://127.0.0.1:9/events'], { env: env(home) });
+    const r = await run('pwsh', ['-NoProfile', '-NonInteractive', '-File', PS_INSTALLER, '-HomeDir', home, '-Url', 'http://127.0.0.1:9/events'], {
+      env: env(home),
+    });
     assert.equal(r.code, 0, r.stderr);
     const hooks = JSON.parse(await readFile(join(home, '.factory', 'hooks.json'), 'utf8'));
     assert.deepEqual(Object.keys(hooks), ['Stop', 'Notification', 'SessionEnd']);
-    assert.deepEqual((await readdir(join(home, '.factory'))).filter((n) => n.includes('.bak-')), [], 'nothing to back up');
-  }));
+    assert.deepEqual(
+      (await readdir(join(home, '.factory'))).filter((n) => n.includes('.bak-')),
+      [],
+      'nothing to back up',
+    );
+  }),
+);
 
 test('install creates hooks.json when missing; token can come from stdin and is never printed', { skip }, () =>
   withHome(async (home) => {
@@ -225,7 +248,8 @@ test('install creates hooks.json when missing; token can come from stdin and is 
     assert.equal(JSON.parse(await readFile(join(home, '.factory', 'droid-mcp', 'hook.json'), 'utf8')).token, 'stdin-token');
     await install(home, '--uninstall');
     assert.deepEqual(JSON.parse(await readFile(join(home, '.factory', 'hooks.json'), 'utf8')), {});
-  }));
+  }),
+);
 
 test('the installed command posts a QUESTION from the last assistant message with the bearer and only the known fields', { skip }, () =>
   withHome(async (home) => {
@@ -255,7 +279,8 @@ test('the installed command posts a QUESTION from the last assistant message wit
     } finally {
       await srv.close();
     }
-  }));
+  }),
+);
 
 test('Stop without a QUESTION line posts finished with the last 300 characters', { skip }, () =>
   withHome(async (home) => {
@@ -273,7 +298,8 @@ test('Stop without a QUESTION line posts finished with the last 300 characters',
     } finally {
       await srv.close();
     }
-  }));
+  }),
+);
 
 test('text is clipped to 1000 UTF-16 code units without splitting an emoji, so the server accepts it', { skip }, () =>
   withHome(async (home) => {
@@ -292,7 +318,8 @@ test('text is clipped to 1000 UTF-16 code units without splitting an emoji, so t
     } finally {
       await srv.close();
     }
-  }));
+  }),
+);
 
 test('Notification maps permission_prompt and elicitation_dialog; idle_prompt and unknown events post nothing', { skip }, () =>
   withHome(async (home) => {
@@ -329,7 +356,8 @@ test('Notification maps permission_prompt and elicitation_dialog; idle_prompt an
     } finally {
       await srv.close();
     }
-  }));
+  }),
+);
 
 test('the hook returns in well under 1 s while the server takes 2 s to answer', { skip }, () =>
   withHome(async (home) => {
@@ -345,7 +373,8 @@ test('the hook returns in well under 1 s while the server takes 2 s to answer', 
     } finally {
       await srv.close();
     }
-  }));
+  }),
+);
 
 test('an unreachable url or missing config still exits 0 quickly with no output', { skip }, () =>
   withHome(async (home) => {
@@ -363,7 +392,8 @@ test('an unreachable url or missing config still exits 0 quickly with no output'
       assert.equal(r.stdout + r.stderr, '');
       assert.ok(r.ms < 5000, `hook took ${r.ms.toFixed(0)} ms`);
     }
-  }));
+  }),
+);
 
 const LONG_TAGS = [...Array.from({ length: 19 }, (_, i) => ({ name: `${i}`.padEnd(101, 'x') })), { name: '😀'.repeat(51) }, { name: 'cto' }];
 
@@ -385,11 +415,13 @@ async function overlongTagsDropped(home: string, hook: (transcript: string) => R
 }
 
 test('tags over 100 UTF-16 units are left out before the first 20 are taken', { skip }, () =>
-  withHome((home) => overlongTagsDropped(home, (transcript) => run('python3', [HOOK], { env: env(home), input: stopInput(transcript) }))));
+  withHome((home) => overlongTagsDropped(home, (transcript) => run('python3', [HOOK], { env: env(home), input: stopInput(transcript) }))),
+);
 
 test('the PowerShell hook leaves out tags over 100 UTF-16 units', { skip: pwshSkip }, () =>
   withHome((home) =>
     overlongTagsDropped(home, (transcript) =>
       run('pwsh', ['-NoProfile', '-NonInteractive', '-File', join(ROOT, 'hooks', 'droid-mcp-hook.ps1')], { env: env(home), input: stopInput(transcript) }),
     ),
-  ));
+  ),
+);

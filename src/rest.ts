@@ -67,7 +67,10 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
             requestId: e.requestId,
             type: e.type,
             options: e.options.map((o) => o.value),
-            summary: e.toolUses.map((t) => `${t.toolUse.name} ${JSON.stringify(t.toolUse.input)}`).join('; ').slice(0, 400),
+            summary: e.toolUses
+              .map((t) => `${t.toolUse.name} ${JSON.stringify(t.toolUse.input)}`)
+              .join('; ')
+              .slice(0, 400),
           }
         : {
             requestId: e.requestId,
@@ -141,10 +144,7 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
       };
     },
 
-    async messages(
-      sessionId: string,
-      query: { limit?: number; cursor?: string; role?: 'user' | 'assistant' | 'tool'; computerId?: string } = {},
-    ) {
+    async messages(sessionId: string, query: { limit?: number; cursor?: string; role?: 'user' | 'assistant' | 'tool'; computerId?: string } = {}) {
       const data = unwrap(await getMessages({ client, path: { sessionId }, query }), 'getMessages');
       return {
         messages: data.messages.map((m) => ({
@@ -169,10 +169,7 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
     },
 
     async children(sessionId: string) {
-      const data = unwrap(
-        await listChildSessions({ client, path: { sessionId }, query: { includeAttention: true } }),
-        'children',
-      );
+      const data = unwrap(await listChildSessions({ client, path: { sessionId }, query: { includeAttention: true } }), 'children');
       return data.sessions.map((c) => ({
         sessionId: c.sessionId,
         title: c.title,

@@ -104,7 +104,10 @@ function toEvent(m: DroidStreamMessage): Pick<RunEvent, 'kind' | 'text'> | undef
     case 'user': {
       const content: unknown = m.message.content;
       const text = Array.isArray(content)
-        ? content.filter((b) => b?.type === 'text').map((b) => String(b.text)).join('\n')
+        ? content
+            .filter((b) => b?.type === 'text')
+            .map((b) => String(b.text))
+            .join('\n')
         : '';
       return text ? { kind: 'user', text: preview(text) } : undefined;
     }
@@ -205,7 +208,11 @@ export class Runs {
         const level = session.settings.autonomyLevel;
         if (level === undefined || exceedsCap(level, this.cap)) {
           await session.close().catch(() => {});
-          throw new Refused('invalid', `session autonomy '${level ?? 'unknown'}' exceeds the cap '${this.cap}'`, 'Start a new session within the cap with droid_start.');
+          throw new Refused(
+            'invalid',
+            `session autonomy '${level ?? 'unknown'}' exceeds the cap '${this.cap}'`,
+            'Start a new session within the cap with droid_start.',
+          );
         }
         return opened(session);
       },
@@ -219,7 +226,11 @@ export class Runs {
       if (run.turn) {
         if (mode === 'queue') throw new Refused('busy', 'a turn is running', 'Wait for it with droid_wait, or send with mode "interrupt".');
         if (!(await this.cancelTurn(run))) {
-          throw new Refused('busy', 'the running turn did not stop after the interrupt; nothing was sent', 'Wait for the turn with droid_wait, then send again.');
+          throw new Refused(
+            'busy',
+            'the running turn did not stop after the interrupt; nothing was sent',
+            'Wait for the turn with droid_wait, then send again.',
+          );
         }
       }
       this.admit(run.repo, run);
@@ -307,12 +318,12 @@ export class Runs {
 
   async closeAll(): Promise<void> {
     this.closing = true;
-    await Promise.allSettled([...this.opening]);
+    await Promise.allSettled(this.opening);
     await Promise.all([...this.runs.values()].map((r) => this.cancel(r, 'session').catch(() => {})));
   }
 
   private async cancelTurn(run: OwnRun): Promise<boolean> {
-    for (const [id, p] of [...run.pending]) this.settle(run, id, cancelValue(p.kind), 'cancelled');
+    for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'cancelled');
     const turn = run.turn;
     if (!turn) return true;
     let timer: NodeJS.Timeout | undefined;
@@ -408,7 +419,10 @@ export class Runs {
     return {
       permissionHandler: (params) => {
         const text = params.toolUses.map((t) => `${t.toolUse.name} ${JSON.stringify(t.toolUse.input)}`).join('; ');
-        const options = allowedDecisions(params.options.map((o) => o.value), this.cap);
+        const options = allowedDecisions(
+          params.options.map((o) => o.value),
+          this.cap,
+        );
         return this.park(get(), 'permission', text, { options }) as ReturnType<PermissionHandler>;
       },
       askUserHandler: (params) => {
@@ -418,12 +432,7 @@ export class Runs {
     };
   }
 
-  private park(
-    run: OwnRun | undefined,
-    kind: Pending['kind'],
-    text: string,
-    extra: { options?: string[]; questions?: Question[] },
-  ): Promise<unknown> {
+  private park(run: OwnRun | undefined, kind: Pending['kind'], text: string, extra: { options?: string[]; questions?: Question[] }): Promise<unknown> {
     if (!run) return Promise.resolve(cancelValue(kind));
     const requestId = randomUUID();
     return new Promise((resolve) => {
@@ -465,7 +474,7 @@ export class Runs {
     } catch (err) {
       this.push(run, { kind: 'error', text: preview(message(err)) });
     } finally {
-      for (const [id, p] of [...run.pending]) this.settle(run, id, cancelValue(p.kind), 'turn ended');
+      for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'turn ended');
       if (run.state !== 'closed') run.state = 'idle';
       this.push(run, { kind: 'state', text: run.state });
     }
@@ -475,7 +484,7 @@ export class Runs {
     const seq = run.nextSeq++;
     run.events.push({ ...e, seq, at: Date.now() });
     if (run.events.length > MAX_EVENTS) run.events.splice(0, run.events.length - MAX_EVENTS);
-    for (const w of [...run.waiters]) w();
+    for (const w of run.waiters) w();
     return seq;
   }
 }

@@ -17,8 +17,7 @@ const base: SessionRecord = {
   autonomy: 'off',
 };
 const local = (patch: Partial<SessionRecord>): Target => ({ kind: 'local', record: { ...base, ...patch } });
-const route = (target: Target, restEnabled: boolean, allowLocalResume = true) =>
-  routeSend(target, { restEnabled, allowLocalResume, now: NOW, cap: 'medium' });
+const route = (target: Target, restEnabled: boolean, allowLocalResume = true) => routeSend(target, { restEnabled, allowLocalResume, now: NOW, cap: 'medium' });
 const refusedWith = (r: ReturnType<typeof routeSend>, text: RegExp, code = 'invalid') => {
   assert.ok('refused' in r, `expected a refusal, got ${JSON.stringify(r)}`);
   assert.match(r.refused.message, text);

@@ -61,8 +61,7 @@ export class EventLog {
     const now = opts.now ?? Date.now();
     const key = `${input.sessionId}:${input.kind}`;
     const last = this.#lastForward.get(key);
-    const forwarded =
-      (opts.forwarding ?? true) && shouldForward(input.kind, opts.watched) && (last === undefined || now - last >= DEBOUNCE_MS);
+    const forwarded = (opts.forwarding ?? true) && shouldForward(input.kind, opts.watched) && (last === undefined || now - last >= DEBOUNCE_MS);
     if (forwarded) {
       this.#lastForward.set(key, now);
       if (this.#lastForward.size > this.#max) {

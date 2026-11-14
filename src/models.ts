@@ -93,9 +93,7 @@ let helpCache: { at: number; droidPath: string; help: Promise<Help> } | undefine
 
 function loadHelp(droidPath: string): Promise<Help> {
   if (helpCache && helpCache.droidPath === droidPath && Date.now() - helpCache.at < HELP_TTL_MS) return helpCache.help;
-  const help = promisify(execFile)(droidPath, ['exec', '--help'], { timeout: 15_000, maxBuffer: 8 * 1024 * 1024 }).then(({ stdout }) =>
-    parseHelp(stdout),
-  );
+  const help = promisify(execFile)(droidPath, ['exec', '--help'], { timeout: 15_000, maxBuffer: 8 * 1024 * 1024 }).then(({ stdout }) => parseHelp(stdout));
   const entry = { at: Date.now(), droidPath, help };
   helpCache = entry;
   help.catch(() => {
@@ -104,9 +102,7 @@ function loadHelp(droidPath: string): Promise<Help> {
   return help;
 }
 
-export async function loadCatalog(
-  opts: { droidPath?: string; settingsPath?: string } = {},
-): Promise<ModelCatalog> {
+export async function loadCatalog(opts: { droidPath?: string; settingsPath?: string } = {}): Promise<ModelCatalog> {
   const settingsPath = opts.settingsPath ?? join(homedir(), '.factory', 'settings.json');
   const [help, settings] = await Promise.all([
     loadHelp(opts.droidPath ?? 'droid'),
@@ -145,8 +141,7 @@ export function checkModel(id: string, catalog: ModelCatalog): void {
 
 export function checkEffort(effort: string, modelId: string, catalog: ModelCatalog): void {
   const supported =
-    catalog.builtin.find((b) => b.id === modelId)?.reasoning?.supported ??
-    catalog.custom.find((c) => c.id === modelId)?.supportedReasoningEfforts;
+    catalog.builtin.find((b) => b.id === modelId)?.reasoning?.supported ?? catalog.custom.find((c) => c.id === modelId)?.supportedReasoningEfforts;
   if (supported?.length && !supported.includes(effort)) {
     throw new Refused(
       'invalid',
