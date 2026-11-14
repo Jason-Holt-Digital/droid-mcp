@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
@@ -9,13 +9,14 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseEventBody } from '../src/events.ts';
+import { needs } from './helpers.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const HOOK = join(ROOT, 'hooks', 'droid_mcp_hook.py');
 const INSTALLER = join(ROOT, 'scripts', 'install_hooks.py');
 const PS_INSTALLER = join(ROOT, 'scripts', 'install-hooks.ps1');
-const skip = spawnSync('python3', ['--version']).error ? 'python3 not found' : false;
-const pwshSkip = spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).error ? 'pwsh not found' : false;
+const skip = needs('python3', ['--version']);
+const pwshSkip = needs('pwsh', ['-NoProfile', '-Command', 'exit 0']);
 const TOKEN = 'fake-events-token';
 const SESSION = '11111111-2222-3333-4444-555555555555';
 

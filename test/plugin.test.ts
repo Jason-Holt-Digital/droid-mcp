@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -8,10 +8,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { needs } from './helpers.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const EVENTS = ['Stop', 'Notification', 'SessionEnd'];
-const skip = spawnSync('curl', ['--version']).error ? 'curl not found' : false;
+const skip = needs('curl', ['--version']);
 
 type Hooks = Record<string, { hooks: { type: string; command: string; timeout: number }[] }[]>;
 
