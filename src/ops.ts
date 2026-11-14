@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { connectAndAuthenticate, createWebSocketDaemonClient, MachineType, SDK_VERSION } from '@factory/droid-sdk/node';
 import type { Computers } from './computers.ts';
-import { API_KEY_FIX, autonomyCap, exceedsCap, Refused, ToolError, type Autonomy } from './config.ts';
+import { API_KEY_FIX, autonomyCap, checkCwd, exceedsCap, Refused, ToolError, type Autonomy } from './config.ts';
 import type { HttpMethod, Rest, RestRequest } from './rest.ts';
 
 type ParamSchema = { type?: string; properties?: Record<string, unknown>; required?: string[]; description?: string };
@@ -17,7 +17,13 @@ export type Operation = {
   secret: boolean;
 };
 export type DaemonCall = (method: string, params: Record<string, unknown> | undefined) => Promise<unknown>;
-type OpsContext = { env?: NodeJS.ProcessEnv; rest?: Pick<Rest, 'call'>; computers: Pick<Computers, 'resolve'>; daemon?: DaemonCall };
+type OpsContext = {
+  env?: NodeJS.ProcessEnv;
+  roots: string[];
+  rest?: Pick<Rest, 'call'>;
+  computers: Pick<Computers, 'resolve' | 'thisId'>;
+  daemon?: DaemonCall;
+};
 type CallArgs = { id: string; params?: Record<string, unknown>; confirm?: boolean; computer?: string };
 
 const OPERATIONS: Operation[] = JSON.parse(readFileSync(new URL('./generated/catalog.json', import.meta.url), 'utf8')).operations;
@@ -86,6 +92,33 @@ export function checkAutonomy(value: unknown, cap: Autonomy, path = 'params'): v
   }
 }
 
+const CWD_KEYS = new Set(['cwd', 'workingDirectory', 'worktreePath']);
+
+function collect(value: unknown, keys: ReadonlySet<string>, out: Array<[string, unknown]> = []): Array<[string, unknown]> {
+  if (value === null || typeof value !== 'object') return out;
+  for (const [k, v] of Object.entries(value)) {
+    if (keys.has(k)) out.push([k, v]);
+    collect(v, keys, out);
+  }
+  return out;
+}
+
+// droid_start only starts sessions inside DROID_MCP_ROOTS; the same holds for any directory droid_call hands to
+// this machine: every daemon operation, and a REST operation whose computerId is this machine.
+async function checkLocalDirs(ctx: OpsContext, op: Operation, params: unknown): Promise<void> {
+  const dirs = collect(params, CWD_KEYS);
+  if (dirs.length === 0) return;
+  if (op.source === 'rest') {
+    const here = await ctx.computers.thisId();
+    const ids = collect(params, new Set(['computerId'])).map(([, v]) => v);
+    if (!here || !ids.includes(here)) return;
+  }
+  for (const [k, v] of dirs) {
+    if (typeof v !== 'string') throw new Refused('invalid', `${k} must be a path`, 'Pass a directory inside the allowed roots.');
+    checkCwd(v, ctx.roots);
+  }
+}
+
 // Shallow on purpose: required keys and unknown top-level keys. Daemon params carry only a signature description.
 function checkParams(op: Operation, params: Record<string, unknown>) {
   if (op.params.type !== 'object') return;
@@ -142,6 +175,7 @@ export async function callOperation(ctx: OpsContext, a: CallArgs): Promise<unkno
   }
   if (op.destructive && a.confirm !== true) throw new Refused('invalid', `${op.id} is destructive`, 'Confirm with the user, then pass confirm: true.');
   checkAutonomy(a.params, cap);
+  await checkLocalDirs(ctx, op, a.params);
   checkParams(op, a.params ?? {});
   if (op.source === 'rest') {
     if (a.computer !== undefined) {

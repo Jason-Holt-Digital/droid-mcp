@@ -193,10 +193,11 @@ Runs one operation from `droid_ops`.
   3. A destructive operation runs only when the server was started with `DROID_MCP_ALLOW_DESTRUCTIVE=1`. The agent cannot turn this on.
   4. On such a server, a destructive operation also needs `confirm: true`, passed after the user agreed.
   5. An `autonomyLevel`, `subagentAutonomyLevel` or `autonomyMode` anywhere in `params` must be within `DROID_MCP_MAX_AUTONOMY`, as for `droid_start` and `droid_send`. `subagentAutonomyLevel: 'inherit'` is allowed only at `high`. `skipPermissionsUnsafe` is refused at every cap.
-  6. `params` must match the schema.
+  6. A `cwd`, `workingDirectory` or `worktreePath` anywhere in `params` must be inside `DROID_MCP_ROOTS` when it is on this machine: for every daemon operation, and for a REST operation whose `computerId` is this machine. Otherwise `outside_roots`.
+  7. `params` must match the schema.
 - `readOnly` and `destructive` come from the catalog, not from the method name.
 - Returns `id` and `result`. A result over 8 KB comes back as `truncated: true`, `totalBytes` and a `preview` of the JSON instead.
-- Errors: `invalid` (an unknown id; an operation that returns a secret; a destructive operation on a server without `DROID_MCP_ALLOW_DESTRUCTIVE=1`, or without `confirm: true`; autonomy in `params` above the cap; an operation that is not read-only while `DROID_MCP_MAX_AUTONOMY` is `off` or `low`; params that do not match; `computer` on a REST operation, or naming another computer for a daemon operation), `needs_api_key`, and the REST mapping above.
+- Errors: `invalid` (an unknown id; an operation that returns a secret; a destructive operation on a server without `DROID_MCP_ALLOW_DESTRUCTIVE=1`, or without `confirm: true`; autonomy in `params` above the cap; an operation that is not read-only while `DROID_MCP_MAX_AUTONOMY` is `off` or `low`; params that do not match; `computer` on a REST operation, or naming another computer for a daemon operation), `outside_roots`, `needs_api_key`, and the REST mapping above.
 
 ## How it reaches sessions
 

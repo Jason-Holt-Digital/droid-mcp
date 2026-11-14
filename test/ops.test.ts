@@ -505,17 +505,44 @@ test('droid_call refuses skipPermissionsUnsafe at any cap, and allows it set to 
   const seen: string[] = [];
   const c = await connect({ env: { DROID_MCP_MAX_AUTONOMY: 'high', ...ALLOW }, daemon: async (m) => seen.push(m) });
   try {
+    // initialize_session and load_session take it, but they are refused anyway as secret; the walk guards any other op.
     for (const id of ['daemon.initialize_session', 'daemon.load_session']) {
-      const res = await c.call('droid_call', { id, params: { sessionId: 's', skipPermissionsUnsafe: true }, confirm: true });
-      assert.deepEqual(res.json, {
-        code: 'invalid',
-        message: 'params.skipPermissionsUnsafe is not allowed: droid-mcp never skips permission checks',
-        fix: 'Leave skipPermissionsUnsafe out, and set autonomy within the cap instead.',
-      });
+      assert.match((await c.call('droid_call', { id, params: { sessionId: 's', skipPermissionsUnsafe: true } })).json.message, /returns a key or token/);
     }
+    const res = await c.call('droid_call', { id: 'daemon.list_models', params: { options: { skipPermissionsUnsafe: true } } });
+    assert.deepEqual(res.json, {
+      code: 'invalid',
+      message: 'params.options.skipPermissionsUnsafe is not allowed: droid-mcp never skips permission checks',
+      fix: 'Leave skipPermissionsUnsafe out, and set autonomy within the cap instead.',
+    });
     assert.deepEqual(seen, []);
-    assert.equal((await c.call('droid_call', { id: 'daemon.load_session', params: { sessionId: 's', skipPermissionsUnsafe: false } })).isError, false);
-    assert.deepEqual(seen, ['loadSession']);
+    assert.equal((await c.call('droid_call', { id: 'daemon.list_models', params: { skipPermissionsUnsafe: false } })).isError, false);
+    assert.deepEqual(seen, ['listModels']);
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_call keeps directories on this machine inside the roots, as droid_start does', async () => {
+  const { fetch, calls } = recordingFetch({ id: 'new' });
+  const rest = createRest({ apiKey: 'k', fetch });
+  const file = join(dir, 'computer-roots.json');
+  await writeFile(file, JSON.stringify({ computerId: 'comp-self' }));
+  const seen: string[] = [];
+  const c = await connect({ rest, computers: new Computers({ rest, file }), daemon: async (m) => seen.push(m) });
+  try {
+    const outside = tmpdir();
+    const local = await c.call('droid_call', { id: 'rest.createSession', params: { body: { computerId: 'comp-self', cwd: outside } } });
+    assert.equal(local.json.code, 'outside_roots');
+    const daemon = await c.call('droid_call', { id: 'daemon.create_terminal', params: { cwd: outside } });
+    assert.equal(daemon.json.code, 'outside_roots');
+    const nested = await c.call('droid_call', { id: 'daemon.apply_automation_config', params: { config: { workingDirectory: outside } } });
+    assert.equal(nested.json.code, 'outside_roots');
+    assert.deepEqual([calls.length, seen.length], [0, 0]);
+    // Inside the roots it runs; another computer's directories are not this machine's to check.
+    assert.equal((await c.call('droid_call', { id: 'daemon.create_terminal', params: { cwd: dir } })).isError, false);
+    const remote = await c.call('droid_call', { id: 'rest.createSession', params: { body: { computerId: 'comp-laptop', cwd: '/home/other' } } });
+    assert.equal(remote.isError, false, remote.text);
   } finally {
     await c.close();
   }
