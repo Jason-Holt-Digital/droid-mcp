@@ -117,6 +117,11 @@ test('the curlrc check accepts any url that reaches the bind address', () => {
   assert.equal(ok('0.0.0.0:37999', 'http://100.73.48.66:37999/events'), true, 'wildcard bind, tailnet url');
   assert.equal(ok('[::]:37999', 'http://[::1]:37999/events'), true, 'IPv6 wildcard');
   assert.equal(ok('100.73.48.66:37999', 'http://127.0.0.1:37999/events'), false, 'loopback does not reach a tailnet bind');
+  assert.equal(ok('127.0.0.1:37999', 'http://127.0.0.2:37999/events'), false, 'another loopback address is another listener');
+  assert.equal(ok('127.0.0.1:37999', 'http://[::1]:37999/events'), false, 'IPv6 loopback does not reach an IPv4 bind');
+  assert.equal(ok('[::1]:37999', 'http://localhost:37999/events'), true, 'localhost reaches an IPv6 loopback bind');
+  assert.equal(ok('0.0.0.0:37999', 'http://[::1]:37999/events'), false, 'an IPv4 wildcard takes no IPv6 address');
+  assert.equal(ok('[::]:37999', 'http://127.0.0.1:37999/events'), true, 'an IPv6 wildcard takes IPv4 too');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:38000/events'), false, 'wrong port');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:37999/other'), false, 'wrong path');
   assert.equal(ok('0.0.0.0:37999', 'not a url'), false);
