@@ -817,7 +817,7 @@ test('droid_computers lists state per computer, and only this machine without a 
 
 test('droid_status reports checks and, per computer, when its plugin rang or the line to paste', async () => {
   const seen = new Map([
-    ['this-machine', NOW - 5000],
+    [FLEET.self.id, NOW - 5000],
     [FLEET.laptop.id, NOW - 60_000],
   ]);
   const doorbell = { seenAt: (k: string) => seen.get(k) } as unknown as Doorbell;
@@ -836,6 +836,15 @@ test('droid_status reports checks and, per computer, when its plugin rang or the
     assert.ok(plugin['cloud-a'].fix.endsWith(pasteLine('http://127.0.0.1:37999/events', FLEET.cloudA.id)));
   } finally {
     await c.close();
+  }
+
+  const proxied = await fleet({ ctx: { probe, status, env: { DROID_MCP_EVENTS_URL: 'https://droid.example.ts.net/events' } } });
+  try {
+    const res = await proxied.c.call('droid_status', {});
+    const cloud = res.json.computers.find((x: { name: string }) => x.name === 'cloud-a');
+    assert.equal(cloud.plugin.fix, `On cloud-a, run: ${pasteLine('https://droid.example.ts.net/events', FLEET.cloudA.id)}`, 'the configured events URL wins');
+  } finally {
+    await proxied.c.close();
   }
 
   const tailnet = await fleet({ ctx: { probe, status: { ...status, http: '100.73.48.66:37999' } } });
@@ -865,7 +874,7 @@ test('droid_status keeps its checks when the computer list fails, and tells stdi
   const bare = await connect({ probe: async () => ({}) });
   try {
     const res = await bare.call('droid_status', {});
-    assert.match(res.json.computers[0].plugin.fix, /stdio .*--http/);
+    assert.match(res.json.computers[0].plugin.fix, /no events URL; run it with --http/);
     assert.equal(res.json.checks.find((x: { name: string }) => x.name === 'api_key').ok, false);
   } finally {
     await bare.close();

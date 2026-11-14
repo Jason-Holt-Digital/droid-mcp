@@ -13,6 +13,7 @@ const ALL: CapabilityInput = {
   eventsToken: false,
   http: '127.0.0.1:37999',
   roots: ['/home/dev/repos'],
+  missingRoots: [],
   cap: 'medium',
   curlrcUrl: 'http://127.0.0.1:37999/events',
   pluginInstalled: true,
@@ -99,6 +100,20 @@ test('localOnly is true for loopback and wildcard binds only', () => {
   ]);
 });
 
+test('roots fail when none exists, and the detail names the missing ones', () => {
+  const none = byName({ ...ALL, roots: ['/a', '/b'], missingRoots: ['/a', '/b'] }).roots;
+  assert.equal(none.ok, false);
+  assert.match(none.detail, /missing: \/a:\/b$/);
+  const some = byName({ ...ALL, roots: ['/a', '/b'], missingRoots: ['/a'] }).roots;
+  assert.equal(some.ok, true);
+  assert.match(some.detail, /missing: \/a$/);
+});
+
+test('an out-of-range port is not a valid --http value', () => {
+  for (const http of ['127.0.0.1:99999', '127.0.0.1:0']) assert.equal(byName({ ...ALL, http }).http.ok, false, http);
+  assert.equal(byName({ ...ALL, http: '[::1]:65535' }).http.ok, true);
+});
+
 test('curlrcUrl reads the url with or without quotes and ignores the header line', () => {
   assert.equal(curlrcUrl('url = "http://a:1/events"\nheader = "x-droid-mcp-computer: c"\n'), 'http://a:1/events');
   assert.equal(curlrcUrl('url=http://b:2/events'), 'http://b:2/events');
@@ -111,7 +126,7 @@ test('doctorReport prints one aligned line per check and fails only on api_key, 
   assert.equal(ok.lines.length, 8);
   assert.equal(ok.lines[0], 'ok   api_key       FACTORY_API_KEY found');
   assert.match(ok.lines[1], /^FIX {2}webhook {7}.* -> Set DROID_MCP_WEBHOOK_URL/);
-  for (const broken of [{ apiKey: false }, { roots: [] }, { http: 'nonsense' }]) {
+  for (const broken of [{ apiKey: false }, { roots: [] }, { http: 'nonsense' }, { missingRoots: ['/home/dev/repos'] }]) {
     assert.equal(doctorReport(capabilities({ ...ALL, ...broken })).code, 1, JSON.stringify(broken));
   }
 });

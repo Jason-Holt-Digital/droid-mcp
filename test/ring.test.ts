@@ -270,13 +270,13 @@ test('rings are rate limited per source address', async () => {
   assert.equal(s.events().length, 3, 'the limited ring left no trace');
 });
 
-test('a ring marks its computer seen: the header when valid, else this-machine for loopback', async () => {
+test('a ring marks its computer seen: the header when valid, else only its source address', async () => {
   const s = await setup({ limit: 2 });
   const before = Date.now();
   await s.ring(hookInput('Stop'), undefined, { 'x-droid-mcp-computer': 'comp-laptop' });
   await s.ring(hookInput('Stop'), undefined, { 'x-droid-mcp-computer': 'bad id!' });
   assert.equal(await s.ring(hookInput('Stop'), undefined, { 'x-droid-mcp-computer': 'comp-limited' }), 429);
-  assert.deepEqual([...s.bell.seenAll().keys()], ['comp-laptop', 'this-machine']);
+  assert.deepEqual([...s.bell.seenAll().keys()], ['comp-laptop', 'addr:127.0.0.1']);
   assert.ok((s.bell.seenAt('comp-laptop') ?? 0) >= before);
   assert.equal(s.bell.seenAt('comp-limited'), undefined, 'a rate-limited ring is not recorded');
 
@@ -287,8 +287,8 @@ test('a ring marks its computer seen: the header when valid, else this-machine f
 
 test('seenKey falls back to the remote address for a missing, oversized or non-string header', () => {
   assert.equal(seenKey('comp.a_b-1', '100.1.2.3'), 'comp.a_b-1');
-  assert.equal(seenKey(undefined, '::ffff:127.0.0.1'), 'this-machine');
-  assert.equal(seenKey(undefined, '::1'), 'this-machine');
+  assert.equal(seenKey(undefined, '::ffff:127.0.0.1'), 'addr:::ffff:127.0.0.1', 'a loopback proxy may front remote computers');
+  assert.equal(seenKey(undefined, undefined), 'addr:unknown');
   assert.equal(seenKey('x'.repeat(101), '100.1.2.3'), 'addr:100.1.2.3');
   assert.equal(seenKey(['a', 'b'], '100.1.2.3'), 'addr:100.1.2.3');
 });
