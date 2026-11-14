@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { resultText } from './access.ts';
 import { isSessionId } from './catalog.ts';
 import { ToolError } from './config.ts';
 import type { DroidEvent, EventInput, EventKind } from './events.ts';
 import type { Target } from './route.ts';
 import { preview } from './runs.ts';
-import { resultText, type Ctx } from './tools.ts';
+import type { Ctx } from './tools.ts';
 
 const RING_LIMIT = 60;
 const RING_WINDOW_MS = 60_000;
