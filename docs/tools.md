@@ -219,7 +219,7 @@ Sessions droid-mcp starts live in its memory. On SIGINT, SIGTERM, or when the st
 `src/generated/catalog.json` lists 228 Factory operations: 145 `DaemonClient` methods from `@factory/droid-sdk` and 83 REST operations from `catalog/factory-openapi.json`. `npm run codegen` builds it; CI runs `npm run codegen:check`, which fails when the file is stale. Each operation has `readOnly`, `destructive` and `secret`:
 
 - `readOnly`: REST `GET`, or a daemon method on a hand-checked list. Methods that return keys or arbitrary file contents are not on it.
-- `destructive`: REST `DELETE`, or an id on a hand-checked list (38 in all). Multi-action operations, such as `daemon.update_mcp_config` with `action: 'remove'`, count as destructive as a whole. Names are not guessed from: a new operation whose name, or an action in its params, sounds destructive fails codegen until it is classified by hand.
+- `destructive`: REST `DELETE`, or an id on a hand-checked list (39 in all). Multi-action operations, such as `daemon.update_mcp_config` with `action: 'remove'` or `daemon.resolve_queued_user_message` with its `Delete` action, count as destructive as a whole. Names are not guessed from: a new operation whose name, or an action in its params, sounds destructive fails codegen until it is classified by hand.
 - `secret`: the operation returns a key or token (7, such as `daemon.get_proxy_token`).
 
 Left out on purpose:

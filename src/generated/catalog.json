@@ -1271,7 +1271,7 @@
         "description": "(params: ({ requestId: string; action: ResolveQueuedUserMessageAction.UpdateQueue; queuePlacement: QueuePlacement; } | { requestId: string; action: ResolveQueuedUserMessageAction.Delete; }) & { sessionId: string; })"
       },
       "readOnly": false,
-      "destructive": false,
+      "destructive": true,
       "secret": false
     },
     {

@@ -57,6 +57,7 @@ test('destructive is REST DELETE or a hand-checked id, never a word in the opera
     'daemon.automation_memory_edit': true,
     'daemon.update_mcp_config': true,
     'daemon.config_items': true,
+    'daemon.resolve_queued_user_message': true,
     'rest.answerSessionElicitation': false,
     'daemon.list_models': false,
     'daemon.initialize_session': false,
@@ -184,6 +185,20 @@ test('codegen fails on an operation with a destructive action in its params that
     const r = codegenCheck(dir);
     assert.equal(r.status, 1);
     assert.match(r.stderr, /daemon\.automation_memory_edit takes a destructive-sounding action in its params but is in no list/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('codegen also fails on an unclassified operation whose action is an enum member, such as Action.Delete', async () => {
+  const dir = await sandbox();
+  try {
+    const file = join(dir, 'scripts/codegen.ts');
+    const source = await readFile(file, 'utf8');
+    await writeFile(file, source.replace("  'resolve_queued_user_message',\n", ''));
+    const r = codegenCheck(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /daemon\.resolve_queued_user_message takes a destructive-sounding action in its params but is in no list/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
