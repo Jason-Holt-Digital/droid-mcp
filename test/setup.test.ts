@@ -225,3 +225,14 @@ test('close() ends a working job, interrupts and archives its session, and refus
   assert.deepEqual(calls.archived, ['setup-session']);
   await assert.rejects(setup.start('d', CMDS), (err: Refused) => err instanceof Refused && err.code === 'invalid');
 });
+
+test('a stalled interrupt is bounded: the job still returns and the session is still archived', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  rest.send = () => new Promise(() => {});
+  rest.interrupt = () => new Promise(() => {});
+  const setup = new Setup({ rest, pollMs: 1, timeoutMs: 10, cleanupMs: 10 });
+  const job = await setup.start('c', CMDS);
+  assert.equal(job.state, 'failed');
+  assert.match(job.detail, /timed out/);
+  assert.deepEqual(calls.archived, ['setup-session']);
+});
