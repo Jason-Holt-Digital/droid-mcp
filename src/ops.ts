@@ -64,7 +64,9 @@ export function checkAutonomy(value: unknown, cap: Autonomy, path = 'params'): v
   if (value === null || typeof value !== 'object') return;
   for (const [k, v] of Object.entries(value)) {
     const where = Array.isArray(value) ? `${path}[${k}]` : `${path}.${k}`;
-    const level = AUTONOMY_KEYS.has(k) ? v : k === 'autonomyMode' && typeof v === 'string' ? (MODE_LEVEL.get(v) ?? v) : undefined;
+    // A subagent that inherits gets its session's level, which can exceed a lower cap; at 'high' nothing can.
+    const inherits = k === 'subagentAutonomyLevel' && v === 'inherit' && cap === 'high';
+    const level = inherits ? undefined : AUTONOMY_KEYS.has(k) ? v : k === 'autonomyMode' && typeof v === 'string' ? (MODE_LEVEL.get(v) ?? v) : undefined;
     if (level !== undefined && level !== null && (typeof level !== 'string' || exceedsCap(level, cap))) {
       throw new Refused(
         'invalid',
@@ -96,8 +98,18 @@ function restRequest(op: Operation, params: Record<string, unknown>): [HttpMetho
   return [method as HttpMethod, url, req];
 }
 
+// Operations a dedicated tool already covers with its own guards; droid_call would bypass them.
+const COVERED = new Map([
+  ['rest.answerSessionElicitation', 'droid_respond'],
+  ['daemon.answer_elicitation', 'droid_respond'],
+]);
+
 export async function callOperation(ctx: OpsContext, a: CallArgs): Promise<unknown> {
   const op = operation(a.id);
+  const tool = COVERED.get(op.id);
+  if (tool) {
+    throw new Refused('invalid', `${op.id} is covered by ${tool}, which applies the permission and autonomy limits`, `Use ${tool} instead.`);
+  }
   if (op.secret) {
     throw new Refused(
       'invalid',

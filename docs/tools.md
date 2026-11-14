@@ -188,11 +188,11 @@ Runs one operation from `droid_ops`.
 - REST operations go to the Factory API with `FACTORY_API_KEY`, through the same client as the other tools. Path params are filled from `params`, the other keys become the query string, and `params.body` is the JSON body. `params` must have every required key and no key the schema does not list.
 - Daemon operations call one DaemonClient method on the Droid daemon already running on this machine, through Factory's relay (`createWebSocketDaemonClient` with this machine's computer id). `params` is the method's argument. Each call opens and closes its own connection, so it takes a few seconds, and a method that depends on an earlier call on the same connection will not work. droid-mcp never starts a daemon.
 - The checks run in this order, and each refuses before anything is sent:
-  1. An operation marked `secret` (it returns a key or token) is always refused.
+  1. An operation marked `secret` (it returns a key or token) is always refused. So are `rest.answerSessionElicitation` and `daemon.answer_elicitation`: use `droid_respond`, which limits the permission decisions.
   2. With `DROID_MCP_MAX_AUTONOMY` at `off` or `low`, only operations marked `readOnly` run.
   3. A destructive operation runs only when the server was started with `DROID_MCP_ALLOW_DESTRUCTIVE=1`. The agent cannot turn this on.
   4. On such a server, a destructive operation also needs `confirm: true`, passed after the user agreed.
-  5. An `autonomyLevel`, `subagentAutonomyLevel` or `autonomyMode` anywhere in `params` must be within `DROID_MCP_MAX_AUTONOMY`, as for `droid_start` and `droid_send`.
+  5. An `autonomyLevel`, `subagentAutonomyLevel` or `autonomyMode` anywhere in `params` must be within `DROID_MCP_MAX_AUTONOMY`, as for `droid_start` and `droid_send`. `subagentAutonomyLevel: 'inherit'` is allowed only at `high`.
   6. `params` must match the schema.
 - `readOnly` and `destructive` come from the catalog, not from the method name.
 - Returns `id` and `result`. A result over 8 KB comes back as `truncated: true`, `totalBytes` and a `preview` of the JSON instead.

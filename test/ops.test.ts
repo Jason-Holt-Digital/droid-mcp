@@ -463,3 +463,40 @@ test('droid_call refuses autonomy above the cap anywhere in params, before sendi
     await c.close();
   }
 });
+
+test('droid_call sends elicitation answers to droid_respond, which applies the decision limits', async () => {
+  const { fetch, calls } = recordingFetch({});
+  let ran = 0;
+  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: ALLOW, daemon: async () => ran++ });
+  try {
+    for (const id of ['rest.answerSessionElicitation', 'daemon.answer_elicitation']) {
+      const res = await c.call('droid_call', { id, params: { sessionId: 'abc', requestId: 'r1', body: { selectedOption: 'proceed_auto_run_high' } } });
+      assert.deepEqual(res.json, {
+        code: 'invalid',
+        message: `${id} is covered by droid_respond, which applies the permission and autonomy limits`,
+        fix: 'Use droid_respond instead.',
+      });
+    }
+    assert.deepEqual([calls.length, ran], [0, 0]);
+  } finally {
+    await c.close();
+  }
+});
+
+test("subagentAutonomyLevel 'inherit' is allowed at the high cap and refused below it", async () => {
+  const seen: unknown[] = [];
+  for (const [cap, allowed] of [
+    ['high', true],
+    ['medium', false],
+  ] as const) {
+    const c = await connect({ env: { DROID_MCP_MAX_AUTONOMY: cap }, daemon: async (_m, p) => seen.push(p) });
+    try {
+      const res = await c.call('droid_call', { id: 'daemon.update_session_defaults', params: { subagentAutonomyLevel: 'inherit' } });
+      assert.equal(res.isError, !allowed, res.text);
+      if (!allowed) assert.match(res.json.message, /subagentAutonomyLevel 'inherit' exceeds the autonomy cap 'medium'/);
+    } finally {
+      await c.close();
+    }
+  }
+  assert.deepEqual(seen, [{ subagentAutonomyLevel: 'inherit' }]);
+});
