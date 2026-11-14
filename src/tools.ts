@@ -1,35 +1,30 @@
 import { execFile } from 'node:child_process';
-import { stat } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { AnswerSessionElicitationRequestBody } from '@factory/droid-sdk/api';
 import { z } from 'zod';
+import { checkSessionId, locate, openSession, resolveTarget, sendTo } from './access.ts';
 import { capabilities, eventsUrl, hostPort, localOnly, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
 import {
   filterRecords,
   findSession,
   groupCatalog,
-  isSessionId,
   isSubagent,
-  readTranscript,
-  readTranscriptTail,
   remoteListing,
   repoRoot,
   scanSessions,
   searchContent,
   type Listing,
   type RepoGroup,
-  type TranscriptEntry,
   type Workstream,
 } from './catalog.ts';
 import { isoSeconds, offlineError, ONLINE_WINDOW_MS, type Computer, type Computers } from './computers.ts';
-import { allowedDecisions, API_KEY_FIX, autonomyCap, checkCwd, Refused, resolveAutonomy, ToolError, type Autonomy } from './config.ts';
+import { autonomyCap, checkCwd, INTERNAL_FIX, Refused, resolveAutonomy, ToolError } from './config.ts';
 import { EVENT_KINDS, type DroidEvent, type EventLog, type Forwarder } from './events.ts';
 import { loadCatalog, type ModelCatalog } from './models.ts';
 import type { Rest } from './rest.ts';
 import type { Doorbell } from './ring.ts';
-import { routeSend, type Target } from './route.ts';
-import { preview, type KeyStore, type RunEvent, type Runs } from './runs.ts';
-import { EFFORTS, startOnly, toRestSettings, validateSettings } from './settings.ts';
+import { routeSend } from './route.ts';
+import { preview, type KeyStore, type Runs } from './runs.ts';
+import { EFFORTS, validateSettings } from './settings.ts';
 import { pluginSource, setupCommands, validateSetup, type Setup } from './setup.ts';
 import type { Subscriptions } from './subscriptions.ts';
 
@@ -57,7 +52,6 @@ export type Ctx = {
 export const LIMIT_BYTES = 8192;
 export const DEFAULT_WAIT_MS = 25_000;
 export const MAX_WAIT_MS = 50_000;
-const EVENT_TEXT_MAX = 4000;
 // Leaves room for JSON escaping so a default page stays near the 8 KB result budget.
 const DEFAULT_RESULT_BYTES = 6000;
 const FANOUT_TIMEOUT_MS = 8000;
@@ -109,8 +103,6 @@ function reply(value: unknown) {
   return { content: [{ type: 'text' as const, text }] };
 }
 
-const INTERNAL_FIX = 'Retry the call; if it fails again, report this message.';
-
 function errorBody(err: unknown) {
   const { code, message, fix } =
     err instanceof ToolError ? err : { code: 'internal', message: err instanceof Error ? err.message : String(err), fix: INTERNAL_FIX };
@@ -131,12 +123,7 @@ function handle<A>(fn: (args: A) => Promise<unknown>) {
   };
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const iso = (ms: number) => new Date(ms).toISOString();
-
-function clip(text: string): { text: string; truncated?: true } {
-  return text.length > EVENT_TEXT_MAX ? { text: preview(text, EVENT_TEXT_MAX), truncated: true } : { text };
-}
 
 const HIDDEN_TAGS = new Set(['mission-v2', 'subagent', 'mission-v2-subagent']);
 
@@ -170,15 +157,7 @@ const MODEL_HELP =
 const USAGE =
   'Pass any id as model/specModel/workerModel/validatorModel to droid_start or droid_send; custom ids are BYOK models from ~/.factory/settings.json customModels';
 
-const SESSION_ID_FIX = 'Pass a session id from droid_find.';
-
-function checkSessionId(id: string): void {
-  if (!isSessionId(id)) throw new Refused('invalid', `invalid session id: ${id}`, SESSION_ID_FIX);
-}
-
 const COMPUTER = z.string().optional().describe('Computer name or id from droid_computers; defaults to this machine, or to where droid_find saw the session');
-
-const nonEmpty = (list: string[]) => (list.length ? list : undefined);
 
 function entry(r: Listing, ctx: Ctx) {
   return {
@@ -197,79 +176,12 @@ function entry(r: Listing, ctx: Ctx) {
   };
 }
 
-type Where = { computerId?: string; remote: boolean };
-
-// Fails fast on an offline computer, whether it was named or remembered from droid_find.
-// Runs this server owns are SDK processes on this machine, whatever computer is named or remembered.
-async function locate(ctx: Ctx, session: string, computer?: string, sending = false): Promise<Where> {
-  const run = ctx.runs.get(session);
-  if (run && !(sending && run.state === 'closed')) return { remote: false };
-  if (computer !== undefined) {
-    // A failed computer list is Refused so droid_send's idempotency key is not left pending.
-    const c = await ctx.computers.require(computer).catch((err) => {
-      if (err instanceof Refused) throw err;
-      const message = `could not list computers: ${err instanceof Error ? err.message : String(err)}`;
-      throw err instanceof ToolError ? new Refused(err.code, message, err.fix) : new Refused('internal', message, INTERNAL_FIX);
-    });
-    return c.thisMachine ? { remote: false } : { computerId: c.id, remote: true };
-  }
-  const remembered = ctx.sessionComputers?.get(session);
-  if (!remembered) return { remote: false };
-  let c: Computer | undefined;
-  try {
-    c = (await ctx.computers.list()).find((x) => x.id === remembered);
-  } catch {
-    c = undefined;
-  }
-  if (c?.state === 'offline') throw offlineError(c);
-  return c?.thisMachine ? { remote: false } : { computerId: remembered, remote: true };
-}
-
-// A closed run is still followed through its own event log, but a new send treats it as a local session again.
-async function resolveTarget(ctx: Ctx, id: string, opts: { sending?: boolean; where?: Where } = {}): Promise<Target> {
-  const run = ctx.runs.get(id);
-  if (run && !(opts.sending && run.state === 'closed')) return { kind: 'own', run };
-  checkSessionId(id);
-  if (opts.where?.remote) return { kind: 'unknown', id };
-  const record = await findSession(ctx.sessionsRoot, id);
-  return record ? { kind: 'local', record } : { kind: 'unknown', id };
-}
-
-function viaRest(ctx: Ctx, target: Target): Rest | undefined {
-  if (!ctx.rest) return undefined;
-  if (target.kind === 'unknown' || (target.kind === 'local' && target.record.workstream)) return ctx.rest;
-  return undefined;
-}
-
-function needRest(ctx: Ctx, what: string): Rest {
-  if (!ctx.rest) throw new ToolError('needs_api_key', `${what} for sessions this server did not start needs FACTORY_API_KEY`, API_KEY_FIX);
-  return ctx.rest;
-}
-
 function gitDiff(cwd: string): Promise<string> {
   return new Promise((resolve, reject) =>
     execFile('git', ['-C', cwd, 'diff', 'HEAD'], { maxBuffer: 64 * 1024 * 1024, timeout: 20_000 }, (err, stdout, stderr) =>
       err ? reject(new Error(`git diff failed in ${cwd}: ${stderr.split('\n')[0] || err.message}`)) : resolve(stdout),
     ),
   );
-}
-
-function lastAssistantText(entries: TranscriptEntry[]): string {
-  const lastUser = entries.findLastIndex((e) => e.role === 'user');
-  const after = entries.slice(lastUser + 1).filter((e) => e.role === 'assistant');
-  if (after.length) return after.map((e) => e.text).join('\n\n');
-  return entries.findLast((e) => e.role === 'assistant')?.text ?? '';
-}
-
-export async function resultText(ctx: Ctx, target: Target, computerId?: string): Promise<string> {
-  if (target.kind === 'own') {
-    return target.run.lastResult ?? target.run.events.findLast((e) => e.kind === 'assistant')?.text ?? '';
-  }
-  if (target.kind === 'local') {
-    return lastAssistantText(await readTranscriptTail(target.record.file, (e) => e.some((x) => x.role === 'user')));
-  }
-  const { messages } = await needRest(ctx, 'reading results').messages(target.id, { role: 'assistant', limit: 100, computerId });
-  return messages.sort((a, b) => a.createdAt - b.createdAt).at(-1)?.text ?? '';
 }
 
 function summarizeChildren(children: Awaited<ReturnType<Rest['children']>>, local: Set<string>) {
@@ -738,33 +650,16 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           closedAt: runs.get(a.session)?.closedAt,
         });
         if ('refused' in route) throw route.refused;
-        const autonomy: Autonomy | undefined = a.autonomy && resolveAutonomy(a.autonomy, ctx.env);
-        const current = target.kind === 'own' ? target.run.session.settings.autonomyLevel : target.kind === 'local' ? target.record.autonomy : undefined;
-        validateSettings(a, autonomy ?? (route.via === 'rest' ? undefined : current), await catalog());
-        const change = { settings: a, autonomy };
-        if (route.via === 'own' && target.kind === 'own') {
-          const seq = await runs.send(target.run, a.prompt, mode, change);
-          return { via: 'own', sessionId: target.run.id, status: target.run.state, nextSeq: seq, ignored: nonEmpty(startOnly(a)) };
-        }
-        if (route.via === 'local-resume' && target.kind === 'local') {
-          const run = await runs.resume(target.record, checkCwd(target.record.cwd, ctx.roots), a.prompt, change);
-          return { via: 'local-resume', sessionId: run.id, status: run.state, nextSeq: 1, ignored: nonEmpty(startOnly(a)) };
-        }
-        const rest = needRest(ctx, 'sending');
-        const { sessionSettings, ignored } = toRestSettings(a);
-        if (autonomy) sessionSettings.autonomyLevel = autonomy;
-        const applied = Object.keys(sessionSettings);
-        if (applied.length) await rest.update(a.session, sessionSettings);
-        if (mode === 'interrupt') await rest.interrupt(a.session);
-        const sent = await rest.send(a.session, a.prompt, where.computerId);
-        return {
-          via: 'rest',
-          sessionId: a.session,
-          messageId: sent.messageId,
-          status: sent.status,
-          applied: nonEmpty(applied),
-          ignored: nonEmpty(ignored),
-        };
+        const autonomy = a.autonomy && resolveAutonomy(a.autonomy, ctx.env);
+        return sendTo(ctx, target, route, {
+          session: a.session,
+          prompt: a.prompt,
+          mode,
+          settings: a,
+          autonomy,
+          computerId: where.computerId,
+          catalog: await catalog(),
+        });
       });
     }),
   );
@@ -784,89 +679,9 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
-      const waitMs = clampWait(a.waitMs);
-      const max = a.maxEvents ?? 50;
-      const where = await locate(ctx, a.session, a.computer);
-      const target = await resolveTarget(ctx, a.session, { where });
-
-      if (target.kind === 'own') {
-        const run = target.run;
-        const waited = a.afterSeq === undefined ? undefined : await runs.wait(run, a.afterSeq, waitMs);
-        const events = waited ? waited.events.slice(0, max) : run.events.slice(-max);
-        const lastSeq = run.events.at(-1)?.seq ?? 0;
-        return fit(events, (ev: RunEvent[]) => ({
-          state: run.state,
-          gap: waited?.gap || undefined,
-          events: ev.map((e) => ({ ...e, ...clip(e.text) })),
-          nextSeq: ev.at(-1)?.seq ?? a.afterSeq ?? lastSeq,
-          attention: runs.pendingRequests(run),
-        }));
-      }
-
-      const rest = viaRest(ctx, target);
-      if (rest) {
-        const deadline = Date.now() + waitMs;
-        const initial = await rest.status(a.session, where.computerId);
-        const after = a.afterSeq;
-        let s = initial;
-        const changed = () => after === undefined || s.messageCount > after || s.elicitations.length > 0 || s.status !== initial.status;
-        while (!changed() && Date.now() + 2000 <= deadline) {
-          await sleep(2000);
-          s = await rest.status(a.session, where.computerId);
-        }
-        let events: Array<{ seq: number; kind: string; text: string; truncated?: true }> = [];
-        let gap = false;
-        const unread = after === undefined ? Math.min(max, s.messageCount) : s.messageCount - after;
-        if (unread > 0) {
-          // Unverified against the live API: assumes getMessages returns the newest `limit` messages.
-          const { messages } = await rest.messages(a.session, { limit: 100, computerId: where.computerId });
-          const ordered = messages.sort((x, y) => x.createdAt - y.createdAt);
-          const firstSeq = s.messageCount - ordered.length + 1;
-          const from = after === undefined ? s.messageCount - unread + 1 : after + 1;
-          gap = from < firstSeq;
-          events = ordered
-            .map((m, i) => ({ seq: m.seq ?? firstSeq + i, m }))
-            .filter((x) => x.seq >= from)
-            .slice(0, max)
-            .map(({ seq, m }) => ({ seq, kind: m.role === 'assistant' ? 'assistant' : m.role === 'tool' ? 'tool' : 'user', ...clip(m.text) }));
-        }
-        return fit(events, (ev) => ({
-          state: s.status,
-          events: ev,
-          gap: gap || undefined,
-          nextSeq: ev.at(-1)?.seq ?? after ?? s.messageCount,
-          attention: s.elicitations,
-        }));
-      }
-
-      if (target.kind === 'unknown') {
-        throw new ToolError('needs_api_key', `session ${a.session} is not on this machine; following it needs FACTORY_API_KEY`, API_KEY_FIX);
-      }
-      const record = target.record;
-      const deadline = Date.now() + waitMs;
-      let entries: TranscriptEntry[];
-      let end: number | undefined;
-      if (a.afterSeq !== undefined) {
-        ({ entries, end } = await readTranscript(record.file, a.afterSeq));
-        while (entries.length === 0 && Date.now() + 1000 <= deadline) {
-          await sleep(1000);
-          if ((await stat(record.file)).size > end) ({ entries, end } = await readTranscript(record.file, end));
-        }
-        if (entries.length > max) {
-          entries = entries.slice(0, max);
-          end = undefined;
-        }
-      } else {
-        entries = (await readTranscriptTail(record.file, (e) => e.length >= max)).slice(-max);
-      }
-      const updated = iso((await stat(record.file)).mtimeMs);
-      return fit(entries, (ev) => ({
-        state: 'local',
-        updated,
-        events: ev.map((e) => ({ seq: e.seq, kind: e.role, ...clip(e.text) })),
-        nextSeq: end !== undefined && ev.length === entries.length ? end : (ev.at(-1)?.seq ?? a.afterSeq ?? 0),
-        attention: null,
-      }));
+      const access = await openSession(ctx, a.session, a.computer);
+      const { events, page } = await access.follow(a.afterSeq, clampWait(a.waitMs), a.maxEvents ?? 50);
+      return fit(events, page);
     }),
   );
 
@@ -886,37 +701,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
-    handle(async (a) => {
-      const target = await resolveTarget(ctx, a.session, { where: await locate(ctx, a.session, a.computer) });
-      if (target.kind === 'own') {
-        runs.respond(target.run, a.requestId, a);
-        return { sessionId: a.session, requestId: a.requestId, state: target.run.state };
-      }
-      const rest = needRest(ctx, 'answering prompts');
-      const pending = (await rest.elicitations(a.session)).find((e) => e.requestId === a.requestId);
-      if (!pending) throw new ToolError('not_found', `no pending request ${a.requestId}`, 'Call droid_wait to see the pending requests and their ids.');
-      let body: AnswerSessionElicitationRequestBody;
-      if (pending.type === 'permission') {
-        const options = allowedDecisions(pending.options ?? [], autonomyCap(ctx.env));
-        if (a.cancel) body = { selectedOption: 'cancel' };
-        else if (!a.decision || !options.includes(a.decision)) {
-          throw new ToolError('invalid', `decision must be one of: ${options.join(', ')}`, 'Pass one of those options as decision, or cancel: true.');
-        } else {
-          body = { selectedOption: a.decision as 'proceed_once', comment: a.comment };
-        }
-      } else if (a.cancel) {
-        body = { cancelled: true };
-      } else {
-        const questions = pending.questions ?? [];
-        const answers = a.answers ?? [];
-        if (answers.length !== questions.length) {
-          throw new ToolError('invalid', `answers must have exactly ${questions.length} entries, one per question`, 'Pass one answer per question, in order.');
-        }
-        body = { answers: questions.map((q, i) => ({ index: q.index, question: q.question, answer: answers[i] })) };
-      }
-      await rest.answer(a.session, a.requestId, body);
-      return { sessionId: a.session, requestId: a.requestId, via: 'rest' };
-    }),
+    handle(async (a) => (await openSession(ctx, a.session, a.computer)).respond(a.requestId, a)),
   );
 
   server.registerTool(
@@ -927,15 +712,8 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
-      const target = await resolveTarget(ctx, a.session, { where: await locate(ctx, a.session, a.computer) });
-      if (target.kind === 'own') {
-        await runs.cancel(target.run, a.scope);
-        return { sessionId: a.session, state: target.run.state };
-      }
-      if (a.scope === 'session')
-        throw new ToolError('invalid', 'only sessions this server started can be closed', "Use scope 'turn' to stop its running turn.");
-      await needRest(ctx, 'cancelling').interrupt(a.session);
-      return { sessionId: a.session, via: 'rest', interrupted: true };
+      const access = await openSession(ctx, a.session, a.computer);
+      return a.scope === 'session' ? access.close() : access.interrupt();
     }),
   );
 
@@ -954,15 +732,14 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     },
     handle(async (a) => {
       const include = a.include?.length ? [...new Set(a.include)] : ['text'];
-      const where = await locate(ctx, a.session, a.computer);
-      const target = await resolveTarget(ctx, a.session, { where });
+      const access = await openSession(ctx, a.session, a.computer);
       const parts: string[] = [];
       for (const part of include) {
         let body: string;
         if (part === 'text') {
-          body = await resultText(ctx, target, where.computerId);
+          body = await access.result();
         } else {
-          const cwd = target.kind === 'own' ? target.run.cwd : target.kind === 'local' ? target.record.cwd : undefined;
+          const cwd = access.cwd();
           if (!cwd) {
             throw new ToolError(
               'invalid',

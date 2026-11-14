@@ -23,6 +23,7 @@ export class ToolError extends Error {
 export class Refused extends ToolError {}
 
 export const API_KEY_FIX = "Set FACTORY_API_KEY in the server's environment, or use a session this server started.";
+export const INTERNAL_FIX = 'Retry the call; if it fails again, report this message.';
 const LEVELS: Autonomy[] = ['off', 'low', 'medium', 'high'];
 
 export function allowedRoots(env: NodeJS.ProcessEnv = process.env): string[] {
