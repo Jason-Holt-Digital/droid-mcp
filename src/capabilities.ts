@@ -1,3 +1,4 @@
+import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -18,6 +19,8 @@ export type CapabilityInput = ThisMachine & {
   // DROID_MCP_EVENTS_URL, when set: the URL droid_setup writes, e.g. behind a proxy.
   eventsUrl?: string;
   http?: string;
+  // The address a hostname bind such as localhost resolves to, which is where the server really listens.
+  bindAddress?: string;
   roots: string[];
   // Roots that do not exist; checkCwd skips them, so droid_start works only under the others.
   missingRoots: string[];
@@ -79,7 +82,7 @@ const isWildcard = (host: string) => host === '0.0.0.0' || host === '::';
 // Whether a curlrc url on this machine reaches a server bound to `bind`. Each loopback address is its own
 // listener (127.0.0.2 and ::1 do not reach 127.0.0.1); only the name localhost reaches a 127.0.0.1 or ::1
 // bind, since curl tries both. 0.0.0.0 takes any IPv4 address or name, :: takes anything.
-export function reachesBind(url: string, bind: { host: string; port: number }): boolean {
+export function reachesBind(url: string, bind: { host: string; port: number }, bindAddress?: string): boolean {
   let u: URL;
   try {
     u = new URL(url);
@@ -88,18 +91,18 @@ export function reachesBind(url: string, bind: { host: string; port: number }): 
   }
   const host = u.hostname.replace(/^\[(.*)\]$/, '$1');
   if (u.protocol !== 'http:' || u.pathname !== '/events' || Number(u.port || 80) !== bind.port) return false;
-  if (host === bind.host || bind.host === '::') return true;
+  if (host === bind.host || host === bindAddress || bind.host === '::') return true;
   if (bind.host === '0.0.0.0') return isIP(host) !== 6;
   return host === 'localhost' && (bind.host === '127.0.0.1' || bind.host === '::1');
 }
 
 // The configured URL (what droid_setup writes, e.g. a reverse proxy) or any url that reaches the --http bind.
-function curlrcCheck(http: string | undefined, configured: string | undefined, url: string | undefined): Check {
+function curlrcCheck(http: string | undefined, configured: string | undefined, url: string | undefined, bindAddress?: string): Check {
   const unlocks = 'rings from this machine reaching this server';
   const bind = http === undefined ? undefined : hostPort(http);
   const want = configured ?? (bind && (isWildcard(bind.host) ? `http://127.0.0.1:${bind.port}/events` : eventsUrl(http!)));
   if (!want) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
-  const ok = url !== undefined && (url === configured || (bind !== undefined && reachesBind(url, bind)));
+  const ok = url !== undefined && (url === configured || (bind !== undefined && reachesBind(url, bind, bindAddress)));
   const detail =
     url === undefined
       ? 'no url in ~/.factory/droid-mcp.curlrc'
@@ -135,7 +138,7 @@ export function capabilities(input: CapabilityInput): Check[] {
     ),
     check('autonomy_cap', true, `cap is ${input.cap} (DROID_MCP_MAX_AUTONOMY)`, `autonomy up to ${input.cap}`, ''),
     pluginCheck(input.pluginInstalled, input.pluginError),
-    curlrcCheck(input.http, input.eventsUrl, input.curlrcUrl),
+    curlrcCheck(input.http, input.eventsUrl, input.curlrcUrl, input.bindAddress),
     check(
       'events_token',
       true,
@@ -154,7 +157,24 @@ export function doctorReport(checks: Check[]) {
 
 export const missingRoots = (roots: string[]) => roots.filter((r) => !existsSync(r));
 
-export const curlrcUrl = (text: string) => /url\s*=\s*"?([^"\s]+)/.exec(text)?.[1];
+// The first active url option. curl treats a line whose first non-blank character is # as a comment.
+export function curlrcUrl(text: string): string | undefined {
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*(?:--)?url\s*[=:]?\s*"?([^"\s]+)"?/.exec(line);
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
+// Where a --http host:port really listens: Node binds a hostname to its first resolved address.
+export async function resolveBind(http: string | undefined): Promise<string | undefined> {
+  const host = http === undefined ? undefined : hostPort(http)?.host;
+  if (!host || isIP(host) !== 0) return undefined;
+  return lookup(host).then(
+    (r) => r.address,
+    () => undefined,
+  );
+}
 
 export async function probeThisMachine(): Promise<ThisMachine> {
   const [url, plugin] = await Promise.all([
