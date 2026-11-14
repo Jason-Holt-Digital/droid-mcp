@@ -71,7 +71,7 @@ const post = (url: string, token: string | undefined, body: unknown) =>
 test('POST /events needs the events token, and the MCP bearer is not accepted there', async () => {
   const base = await serve();
   const body = { sessionId: SID, kind: 'question', computerId: 'c-lap', text: 'QUESTION: ship it?' };
-  assert.equal((await post(`${base}/events`, undefined, body)).status, 401);
+  assert.equal((await post(`${base}/events`, undefined, body)).status, 400, 'without a header it is read as a ring');
   assert.equal((await post(`${base}/events`, 'wrong', body)).status, 401);
   assert.equal((await post(`${base}/events`, MCP_TOKEN, body)).status, 401);
   assert.equal(ctx.events.since(0, 50).events.length, 0, 'nothing recorded from rejected requests');

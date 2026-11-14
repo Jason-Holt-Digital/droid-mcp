@@ -2,7 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { parseEventBody, type DroidEvent, type EventInput } from './events.ts';
+import { parseEventBody } from './events.ts';
+import { Doorbell, parseRing, recordEvent } from './ring.ts';
 import { registerTools, type Ctx } from './tools.ts';
 
 export const EVENT_BODY_MAX = 16 * 1024;
@@ -43,47 +44,48 @@ async function readBody(req: IncomingMessage, max: number): Promise<string | und
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export async function recordEvent(ctx: Ctx, input: EventInput): Promise<DroidEvent> {
-  let computer: string | undefined;
-  if (input.computerId) {
-    try {
-      computer = (await ctx.computers.list()).find((c) => c.id === input.computerId)?.name;
-    } catch {
-      computer = undefined;
-    }
+async function readJson<T>(req: IncomingMessage, res: ServerResponse, parse: (json: unknown) => T): Promise<T | undefined> {
+  const text = await readBody(req, EVENT_BODY_MAX);
+  if (text === undefined) {
+    json(res, 413, { error: `event body exceeds ${EVENT_BODY_MAX} bytes` });
+    return undefined;
   }
-  if (input.computerId && computer !== undefined) ctx.sessionComputers?.set(input.sessionId, input.computerId);
-  const event = ctx.events.add(input, {
-    computer: computer ?? input.host ?? 'unknown',
-    forward: Boolean(ctx.forwarder?.enabled) && ctx.subscriptions.has(input.sessionId),
-  });
-  if (event.forwarded) void ctx.forwarder?.send(event);
-  return event;
+  try {
+    return parse(JSON.parse(text));
+  } catch (err) {
+    json(res, 400, { error: err instanceof SyntaxError ? 'invalid JSON' : err instanceof Error ? err.message : 'invalid event' });
+    return undefined;
+  }
 }
 
 // The events token sits on every computer's hooks, so it may only append events, never reach the MCP tools.
 async function handleEvent(ctx: Ctx, req: IncomingMessage, res: ServerResponse, authorized?: (h: string | undefined) => boolean) {
   if (!authorized) return json(res, 404, { error: 'events are not enabled (DROID_MCP_EVENTS_TOKEN is not set)' });
   if (!authorized(req.headers.authorization)) return json(res, 401, { error: 'unauthorized' });
-  const text = await readBody(req, EVENT_BODY_MAX);
-  if (text === undefined) return json(res, 413, { error: `event body exceeds ${EVENT_BODY_MAX} bytes` });
-  let input: EventInput;
-  try {
-    input = parseEventBody(JSON.parse(text));
-  } catch (err) {
-    return json(res, 400, { error: err instanceof SyntaxError ? 'invalid JSON' : err instanceof Error ? err.message : 'invalid event' });
-  }
+  const input = await readJson(req, res, parseEventBody);
+  if (!input) return;
   const event = await recordEvent(ctx, input);
   json(res, 202, { seq: event.seq, forwarded: event.forwarded });
 }
 
-export function createHandler(ctx: Ctx, opts: { token: string; eventsToken?: string }) {
+// A ring is only a claim: the doorbell verifies it after the reply, since the hook waits at most 3 s.
+async function handleRing(bell: Doorbell, req: IncomingMessage, res: ServerResponse) {
+  if (!bell.allow(req.socket.remoteAddress ?? '')) return json(res, 429, { error: 'too many rings' });
+  const ring = await readJson(req, res, parseRing);
+  if (!ring) return;
+  json(res, 202, { accepted: true });
+  bell.ring(ring);
+}
+
+export function createHandler(ctx: Ctx, opts: { token: string; eventsToken?: string; doorbell?: Doorbell }) {
   const mcpAuthorized = bearer(opts.token);
   const eventsAuthorized = opts.eventsToken ? bearer(opts.eventsToken) : undefined;
+  const bell = opts.doorbell ?? new Doorbell(ctx);
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.headers.origin !== undefined) return deny(res, 403, 'requests with an Origin header are not allowed');
     if (!URL.canParse(req.url ?? '/', 'http://localhost')) return json(res, 400, { error: 'bad request' });
     if (req.method === 'POST' && new URL(req.url ?? '/', 'http://localhost').pathname === '/events') {
+      if (req.headers.authorization === undefined) return handleRing(bell, req, res);
       return handleEvent(ctx, req, res, eventsAuthorized);
     }
     if (!mcpAuthorized(req.headers.authorization)) return deny(res, 401, 'unauthorized');
