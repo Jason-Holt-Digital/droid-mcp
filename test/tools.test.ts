@@ -815,7 +815,7 @@ test('droid_computers lists state per computer, and only this machine without a 
 
 test('droid_status reports checks and, per computer, when its plugin rang or the line to paste', async () => {
   const seen = new Map([
-    ['this-machine', NOW - 5000],
+    [FLEET.self.id, NOW - 5000],
     [FLEET.laptop.id, NOW - 60_000],
   ]);
   const doorbell = { seenAt: (k: string) => seen.get(k) } as unknown as Doorbell;

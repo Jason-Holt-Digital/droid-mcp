@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AnswerSessionElicitationRequestBody } from '@factory/droid-sdk/api';
 import { z } from 'zod';
-import { capabilities, eventsUrl, localOnly, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
+import { capabilities, eventsUrl, localOnly, missingRoots, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
 import {
   filterRecords,
   findSession,
@@ -507,6 +507,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         eventsToken: ctx.status?.eventsToken ?? false,
         http,
         roots: ctx.roots,
+        missingRoots: missingRoots(ctx.roots),
         cap: autonomyCap(ctx.env),
         ...(await (ctx.probe ?? probeThisMachine)()),
       });
@@ -517,7 +518,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         return `On ${c.name}, run this with ${eventsUrl(http)} replaced by a URL ${c.name} can reach, such as this server's tailnet address: ${line}`;
       };
       const view = (c: Computer) => {
-        const seen = Math.max(ctx.doorbell?.seenAt(c.id) ?? 0, (c.thisMachine && ctx.doorbell?.seenAt('this-machine')) || 0);
+        const seen = ctx.doorbell?.seenAt(c.id);
         return {
           id: c.id,
           name: c.name,

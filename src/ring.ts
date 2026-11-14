@@ -12,7 +12,6 @@ const RING_WINDOW_MS = 60_000;
 const STOP_RETRY_MS = 1000;
 const STOP_RETRIES = 5;
 const SEEN_MAX = 1000;
-const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 const RingBody = z.object({
   session_id: z.string().max(200).refine(isSessionId, 'invalid session id'),
@@ -69,9 +68,10 @@ function stopEvent(text: string): Pick<EventInput, 'kind' | 'text'> {
   return { kind: 'finished', text: text.trim().slice(-300) };
 }
 
+// Without the header the source is only an address: a loopback reverse proxy makes every remote ring look local.
 export function seenKey(computer: string | string[] | undefined, address: string | undefined): string {
   if (typeof computer === 'string' && /^[A-Za-z0-9._-]{1,100}$/.test(computer)) return computer;
-  return address !== undefined && LOOPBACK.has(address) ? 'this-machine' : `addr:${address ?? 'unknown'}`;
+  return `addr:${address ?? 'unknown'}`;
 }
 
 export class Doorbell {

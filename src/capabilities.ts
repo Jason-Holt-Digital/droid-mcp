@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +13,8 @@ export type CapabilityInput = ThisMachine & {
   eventsToken: boolean;
   http?: string;
   roots: string[];
+  // Roots that do not exist; checkCwd skips them, so droid_start works only under the others.
+  missingRoots: string[];
   cap: Autonomy;
 };
 
@@ -21,7 +24,8 @@ const REQUIRED = ['api_key', 'http', 'roots'];
 
 export function hostPort(spec: string): { host: string; port: number } | undefined {
   const m = /^(.+):(\d+)$/.exec(spec);
-  return m ? { host: m[1].replace(/^\[(.*)\]$/, '$1'), port: Number(m[2]) } : undefined;
+  const port = Number(m?.[2]);
+  return m && port >= 1 && port <= 65535 ? { host: m[1].replace(/^\[(.*)\]$/, '$1'), port } : undefined;
 }
 
 export const eventsUrl = (http: string) => `http://${http}/events`;
@@ -80,8 +84,8 @@ export function capabilities(input: CapabilityInput): Check[] {
     httpCheck(input.http),
     check(
       'roots',
-      input.roots.length > 0,
-      input.roots.join(':') || 'no roots',
+      input.roots.some((r) => !input.missingRoots.includes(r)),
+      (input.roots.join(':') || 'no roots') + (input.missingRoots.length ? `; missing: ${input.missingRoots.join(':')}` : ''),
       'droid_start in these directories',
       'Set DROID_MCP_ROOTS to colon-separated project directories.',
     ),
@@ -103,6 +107,8 @@ export function doctorReport(checks: Check[]): { lines: string[]; code: number }
   const lines = checks.map((c) => (c.ok ? `ok   ${c.name.padEnd(width)}  ${c.detail}` : `FIX  ${c.name.padEnd(width)}  ${c.detail} -> ${c.fix}`));
   return { lines, code: checks.every((c) => c.ok || !REQUIRED.includes(c.name)) ? 0 : 1 };
 }
+
+export const missingRoots = (roots: string[]) => roots.filter((r) => !existsSync(r));
 
 export const curlrcUrl = (text: string) => /url\s*=\s*"?([^"\s]+)/.exec(text)?.[1];
 
