@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
   createSession,
+  isDroidConnectionEnded,
   ProcessTransport,
   resumeSession,
   type AutonomyLevel,
@@ -32,7 +33,22 @@ type Pending = {
   options?: string[];
   questions?: Question[];
 };
-export type RunState = 'idle' | 'running' | 'waiting' | 'closed';
+export type RunState = 'working' | 'needs_you' | 'idle' | 'dead' | 'closed';
+
+const NEXT: Record<RunState, RunState[]> = {
+  working: ['needs_you', 'idle', 'dead', 'closed'],
+  needs_you: ['working', 'dead', 'closed'],
+  idle: ['working', 'dead', 'closed'],
+  dead: ['working', 'closed'],
+  closed: [],
+};
+
+export function move(run: { state: RunState }, to: RunState): void {
+  if (!NEXT[run.state].includes(to)) {
+    throw new ToolError('internal', `illegal session state change from ${run.state} to ${to}`, 'Report this as a droid-mcp bug.');
+  }
+  run.state = to;
+}
 export type OwnRun = {
   id: string;
   cwd: string;
@@ -56,12 +72,20 @@ type AskUserHandler = NonNullable<CreateSessionOptions['askUserHandler']>;
 type Handlers = { permissionHandler: PermissionHandler; askUserHandler: AskUserHandler };
 type Connection = { apiKey: string; execArgs?: string[] } | { transport: ProcessTransport };
 type Opened = { session: DroidSession; close: () => Promise<void> };
+type Create = (connection: Connection, handlers: Handlers) => Promise<Opened>;
 export type Change = { settings?: RunSettings; autonomy?: Autonomy };
 
 const PENDING_MS = 30 * 60 * 1000;
 const INTERRUPT_GRACE_MS = 15_000;
 const MAX_EVENTS = 1000;
 const WAKE_KINDS = new Set<RunEvent['kind']>(['assistant', 'permission', 'ask_user', 'error', 'state']);
+const ENDED_ERRORS = new Set(['DroidConnectionEndedError', 'ProcessExitError']);
+
+// The SDK reports a dead transport as a synthesized `error` session notification carrying the error's name.
+function connectionEnded(notification: Record<string, unknown>): boolean {
+  const n = notification as { params?: { notification?: { error?: { name?: string } } } };
+  return ENDED_ERRORS.has(n.params?.notification?.error?.name ?? '');
+}
 
 export function preview(text: string, max = 400): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
@@ -132,7 +156,7 @@ type OpenOptions = {
   cwd: string;
   prompt: string;
   execArgs?: string[];
-  create: (connection: Connection, handlers: Handlers) => Promise<Opened>;
+  create: Create;
   settingsFor?: (session: DroidSession) => SettingsUpdate | undefined;
 };
 
@@ -144,13 +168,15 @@ export class Runs {
   private readonly maxRunning: number;
   private readonly cap: Autonomy;
   private readonly opening = new Set<Promise<unknown>>();
+  private readonly resumeSession: typeof resumeSession;
   private closing = false;
 
-  constructor(opts: { apiKey?: string; repoOf: (cwd: string) => string; maxRunning?: number; cap?: Autonomy }) {
+  constructor(opts: { apiKey?: string; repoOf: (cwd: string) => string; maxRunning?: number; cap?: Autonomy; resumeSession?: typeof resumeSession }) {
     this.apiKey = opts.apiKey;
     this.repoOf = opts.repoOf;
     this.maxRunning = opts.maxRunning ?? 3;
     this.cap = opts.cap ?? 'high';
+    this.resumeSession = opts.resumeSession ?? resumeSession;
   }
 
   get(id: string): OwnRun | undefined {
@@ -163,7 +189,7 @@ export class Runs {
     const fork = s.fork;
     const create = fork
       ? async (connection: Connection, handlers: Handlers): Promise<Opened> => {
-          const source = await resumeSession(fork, { ...connection, ...handlers });
+          const source = await this.resumeSession(fork, { ...connection, ...handlers });
           try {
             const session = await source.fork({ tags });
             return {
@@ -203,27 +229,31 @@ export class Runs {
     return this.open({
       cwd,
       prompt,
-      create: async (connection, handlers) => {
-        const session = await resumeSession(record.id, { ...connection, ...handlers });
-        const level = session.settings.autonomyLevel;
-        if (level === undefined || exceedsCap(level, this.cap)) {
-          await session.close().catch(() => {});
-          throw new Refused(
-            'invalid',
-            `session autonomy '${level ?? 'unknown'}' exceeds the cap '${this.cap}'`,
-            'Start a new session within the cap with droid_start.',
-          );
-        }
-        return opened(session);
-      },
+      create: (connection, handlers) => this.resumeWithinCap(record.id, connection, handlers),
       settingsFor: (session) => changeFor(session, change),
     });
+  }
+
+  private async resumeWithinCap(id: string, connection: Connection, handlers: Handlers): Promise<Opened> {
+    const session = await this.resumeSession(id, { ...connection, ...handlers });
+    const level = session.settings.autonomyLevel;
+    if (level === undefined || exceedsCap(level, this.cap)) {
+      await session.close().catch(() => {});
+      throw new Refused(
+        'invalid',
+        `session autonomy '${level ?? 'unknown'}' exceeds the cap '${this.cap}'`,
+        'Start a new session within the cap with droid_start.',
+      );
+    }
+    return opened(session);
   }
 
   send(run: OwnRun, prompt: string, mode: 'queue' | 'interrupt', change: Change = {}): Promise<number> {
     return this.serial(run, async () => {
       if (run.state === 'closed') throw new Refused('invalid', 'session is closed', 'Start a new session with droid_start.');
-      if (run.turn) {
+      if (run.state === 'dead') {
+        await this.revive(run);
+      } else if (run.turn) {
         if (mode === 'queue') throw new Refused('busy', 'a turn is running', 'Wait for it with droid_wait, or send with mode "interrupt".');
         if (!(await this.cancelTurn(run))) {
           throw new Refused(
@@ -240,6 +270,33 @@ export class Runs {
     });
   }
 
+  private async revive(run: OwnRun): Promise<void> {
+    this.admit(run.repo, run);
+    this.reserved.push(run.repo);
+    try {
+      await run.turn;
+      await run.close();
+      const { session, close } = await this.connect(
+        run.cwd,
+        undefined,
+        (c, h) => this.resumeWithinCap(run.id, c, h),
+        () => run,
+      );
+      run.session = session;
+      run.close = close;
+      this.watch(run);
+    } catch (err) {
+      if (err instanceof ToolError) throw err;
+      throw new Refused(
+        'internal',
+        `the droid process behind this session ended, and resuming it failed: ${message(err)}`,
+        'Retry droid_send; if it fails again, start a new session with droid_start.',
+      );
+    } finally {
+      this.reserved.splice(this.reserved.indexOf(run.repo), 1);
+    }
+  }
+
   private serial<T>(run: OwnRun, fn: () => Promise<T>): Promise<T> {
     const next = run.lock.then(fn, fn);
     run.lock = next.catch(() => {});
@@ -250,7 +307,7 @@ export class Runs {
   async wait(run: OwnRun, afterSeq: number, waitMs: number): Promise<{ events: RunEvent[]; gap: boolean }> {
     const fresh = () => run.events.filter((e) => e.seq > afterSeq);
     const deadline = Date.now() + waitMs;
-    while (run.state !== 'closed' && !fresh().some((e) => WAKE_KINDS.has(e.kind)) && Date.now() < deadline) {
+    while (run.state !== 'closed' && run.state !== 'dead' && !fresh().some((e) => WAKE_KINDS.has(e.kind)) && Date.now() < deadline) {
       await new Promise<void>((resolve) => {
         const done = () => {
           clearTimeout(timer);
@@ -303,7 +360,7 @@ export class Runs {
       if (run.state === 'closed') return;
       const stopped = await this.cancelTurn(run);
       if (scope === 'session') {
-        run.state = 'closed';
+        move(run, 'closed');
         await run.close();
         this.push(run, { kind: 'state', text: 'closed' });
       } else if (!stopped) {
@@ -338,7 +395,7 @@ export class Runs {
 
   private admit(repo: string, except?: OwnRun): void {
     if (this.closing) throw new Refused('busy', 'server is shutting down', 'Retry once the server has restarted.');
-    const active = [...this.runs.values()].filter((r) => r !== except && (r.state === 'running' || r.state === 'waiting'));
+    const active = [...this.runs.values()].filter((r) => r !== except && (r.state === 'working' || r.state === 'needs_you'));
     if (active.length + this.reserved.length >= this.maxRunning) {
       throw new Refused('busy', `${this.maxRunning} turns are already running`, 'Wait for a running turn to finish, then retry.');
     }
@@ -366,27 +423,16 @@ export class Runs {
   }
 
   private async openReserved({ cwd, prompt, execArgs, create, settingsFor }: OpenOptions, repo: string): Promise<OwnRun> {
-    let transport: ProcessTransport | undefined;
     try {
       let run: OwnRun | undefined;
-      const handlers = this.handlers(() => run);
-      let connection: Connection;
-      if (this.apiKey) {
-        connection = { apiKey: this.apiKey, execArgs };
-      } else {
-        transport = new ProcessTransport({ cwd, droidExecExtraArgs: execArgs, env: { FACTORY_UPSTREAM_CLIENT_TYPE: 'sdk' } });
-        await transport.connect();
-        connection = { transport };
-      }
-      const { session, close } = await create(connection, handlers);
+      const { session, close } = await this.connect(cwd, execArgs, create, () => run);
       try {
         const u = settingsFor?.(session);
         if (u) await update(session, u);
       } catch (err) {
-        await close().catch(() => {});
+        await close();
         throw err;
       }
-      const t = transport;
       run = {
         id: session.id,
         cwd,
@@ -398,21 +444,61 @@ export class Runs {
         pending: new Map(),
         lock: Promise.resolve(),
         waiters: new Set(),
-        close: async () => {
-          await close().catch(() => {});
-          await t?.close().catch(() => {});
-        },
+        close,
       };
       this.runs.set(run.id, run);
       this.reserved.splice(this.reserved.indexOf(repo), 1);
+      this.watch(run);
       this.begin(run, prompt);
       return run;
     } catch (err) {
       const i = this.reserved.indexOf(repo);
       if (i >= 0) this.reserved.splice(i, 1);
+      throw err;
+    }
+  }
+
+  private async connect(cwd: string, execArgs: string[] | undefined, create: Create, get: () => OwnRun | undefined): Promise<Opened> {
+    let transport: ProcessTransport | undefined;
+    try {
+      let connection: Connection;
+      if (this.apiKey) {
+        connection = { apiKey: this.apiKey, execArgs };
+      } else {
+        transport = new ProcessTransport({ cwd, droidExecExtraArgs: execArgs, env: { FACTORY_UPSTREAM_CLIENT_TYPE: 'sdk' } });
+        await transport.connect();
+        connection = { transport };
+      }
+      const { session, close } = await create(connection, this.handlers(get));
+      const t = transport;
+      return {
+        session,
+        close: async () => {
+          await close().catch(() => {});
+          await t?.close().catch(() => {});
+        },
+      };
+    } catch (err) {
       await transport?.close().catch(() => {});
       throw err;
     }
+  }
+
+  private watch(run: OwnRun): void {
+    const session = run.session;
+    session.onNotification(
+      (n) => {
+        if (run.session === session && connectionEnded(n)) this.die(run);
+      },
+      { type: 'error' },
+    );
+  }
+
+  private die(run: OwnRun): void {
+    if (run.state === 'dead' || run.state === 'closed') return;
+    move(run, 'dead');
+    for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'cancelled (droid process ended)');
+    this.push(run, { kind: 'state', text: 'dead' });
   }
 
   private handlers(get: () => OwnRun | undefined): Handlers {
@@ -433,13 +519,13 @@ export class Runs {
   }
 
   private park(run: OwnRun | undefined, kind: Pending['kind'], text: string, extra: { options?: string[]; questions?: Question[] }): Promise<unknown> {
-    if (!run) return Promise.resolve(cancelValue(kind));
+    if (run?.state !== 'working' && run?.state !== 'needs_you') return Promise.resolve(cancelValue(kind));
     const requestId = randomUUID();
     return new Promise((resolve) => {
       const timer = setTimeout(() => this.settle(run, requestId, cancelValue(kind), 'auto-cancelled after 30 min'), PENDING_MS);
       timer.unref();
       run.pending.set(requestId, { kind, resolve, expires: Date.now() + PENDING_MS, timer, ...extra });
-      run.state = 'waiting';
+      if (run.state === 'working') move(run, 'needs_you');
       this.push(run, { kind, text: preview(text), requestId, ...extra });
     });
   }
@@ -450,12 +536,12 @@ export class Runs {
     clearTimeout(p.timer);
     run.pending.delete(requestId);
     p.resolve(value);
-    if (run.pending.size === 0 && run.state === 'waiting') run.state = 'running';
+    if (run.pending.size === 0 && run.state === 'needs_you') move(run, 'working');
     this.push(run, { kind: 'state', text: `${note} ${requestId}`, requestId });
   }
 
   private begin(run: OwnRun, prompt: string): number {
-    run.state = 'running';
+    move(run, 'working');
     const seq = this.push(run, { kind: 'user', text: preview(prompt) });
     const turn: Promise<void> = this.drain(run, prompt).finally(() => {
       if (run.turn === turn) run.turn = undefined;
@@ -473,10 +559,13 @@ export class Runs {
       }
     } catch (err) {
       this.push(run, { kind: 'error', text: preview(message(err)) });
+      if (isDroidConnectionEnded(err)) this.die(run);
     } finally {
       for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'turn ended');
-      if (run.state !== 'closed') run.state = 'idle';
-      this.push(run, { kind: 'state', text: run.state });
+      if (run.state === 'working') {
+        move(run, 'idle');
+        this.push(run, { kind: 'state', text: 'idle' });
+      }
     }
   }
 

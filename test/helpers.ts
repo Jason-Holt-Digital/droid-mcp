@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import type { resumeSession } from '@factory/droid-sdk/node';
 import { scanSessions, type SessionRecord } from '../src/catalog.ts';
 import { parseCustomModels, parseHelp, type ModelCatalog } from '../src/models.ts';
 
@@ -85,3 +86,53 @@ export const SETTINGS = {
   ],
 };
 export const catalog = (): ModelCatalog => ({ ...parseHelp(HELP), custom: parseCustomModels(SETTINGS) });
+
+export type FakeDroid = {
+  options: { permissionHandler?: (params: unknown) => Promise<unknown> };
+  prompts: string[];
+  closed: boolean;
+  finish: () => void;
+  exit: () => void;
+};
+
+// A resumeSession stand-in whose sessions never spawn droid; exit() fires the SDK's dead-transport notification.
+export function fakeResume(fail?: Error) {
+  const made: FakeDroid[] = [];
+  const resume = async (id: string, options: FakeDroid['options']) => {
+    if (fail) throw fail;
+    let listener: ((n: Record<string, unknown>) => void) | undefined;
+    let end: (err?: Error) => void = () => {};
+    const f: FakeDroid & { session: unknown } = {
+      options,
+      prompts: [],
+      closed: false,
+      finish: () => end(),
+      exit: () => {
+        listener?.({ params: { notification: { type: 'error', errorType: 'ProcessExitError', error: { name: 'ProcessExitError', message: 'exited' } } } });
+        end(new Error('droid process exited'));
+      },
+      session: {
+        id,
+        settings: { autonomyLevel: 'off', tags: [] },
+        onNotification: (cb: typeof listener, filter: { type: string }) => {
+          if (filter.type === 'error') listener = cb;
+          return () => {};
+        },
+        stream: async function* (prompt: string) {
+          f.prompts.push(prompt);
+          const err = await new Promise<Error | undefined>((resolve) => (end = resolve));
+          if (err) throw err;
+          yield* [];
+        },
+        interrupt: async () => end(),
+        close: async () => {
+          f.closed = true;
+        },
+        updateSettings: async () => ({}),
+      },
+    };
+    made.push(f);
+    return f.session;
+  };
+  return { resume: resume as unknown as typeof resumeSession, made };
+}
