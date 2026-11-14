@@ -2,7 +2,7 @@
 
 ![Session states](states.png)
 
-Every session in `droid_sessions` has one `state`. Sessions that droid-mcp runs itself can be in any of the five states below. A session droid-mcp does not run (your own sessions, or sessions on other computers) shows only `working` or `idle`: Factory's status `running` or `pending` maps to `working`, and anything else to `idle`. Factory does not report waiting prompts in that status, so those sessions never show `needs_you`. Use `droid_wait` on them to see pending prompts in `attention`.
+Every session in `droid_sessions` has one `state`. Sessions that droid-mcp runs itself can be in any of the five states below. A session droid-mcp does not run (your own sessions, or sessions on other computers) shows only `working` or `idle`: Factory's status `running` or `pending` maps to `working`, and anything else to `idle`. Factory does not report waiting prompts in that status, so those sessions never show `needs_you`. Use `droid_wait` on them to see pending prompts in `attention`. The exception is a standalone session you run on the server computer: droid-mcp reads it from its transcript, so `attention` is always `null` and its prompts can only be answered in your own Droid window.
 
 The rest of this page describes sessions droid-mcp runs: sessions started with `droid_start`, and local sessions that `droid_send` resumed in a new droid process. The code is `src/runs.ts`.
 
