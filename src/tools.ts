@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AnswerSessionElicitationRequestBody } from '@factory/droid-sdk/api';
 import { z } from 'zod';
-import { capabilities, eventsUrl, hostPort, localOnly, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
+import { capabilities, configuredEventsUrl, loopbackUrl, missingRoots, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
 import {
   filterRecords,
   findSession,
@@ -509,18 +509,21 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         eventsToken: ctx.status?.eventsToken ?? false,
         http,
         roots: ctx.roots,
+        missingRoots: missingRoots(ctx.roots),
         cap: autonomyCap(ctx.env),
         ...(await (ctx.probe ?? probeThisMachine)()),
       });
+      const env = ctx.env ?? process.env;
+      const url = configuredEventsUrl(env, http);
       const pluginFix = (c: Computer) => {
-        if (http === undefined) return 'This server runs over stdio and has no /events; run it with --http <host:port> first.';
-        const line = pasteLine(eventsUrl(http), c.id, pluginSource(ctx.env ?? process.env));
-        if (c.thisMachine || !localOnly(http)) return `On ${c.name}, run: ${line}`;
-        return `On ${c.name}, run this with ${eventsUrl(http)} replaced by a URL ${c.name} can reach, such as this server's tailnet address: ${line}`;
+        if (!url) return 'This server has no events URL; run it with --http <host:port>, or set DROID_MCP_EVENTS_URL.';
+        const line = pasteLine(url, c.id, pluginSource(env));
+        if (c.thisMachine || !loopbackUrl(url)) return `On ${c.name}, run: ${line}`;
+        return `On ${c.name}, run this with ${url} replaced by a URL ${c.name} can reach, such as this server's tailnet address: ${line}`;
       };
       const view = (c: Computer) => {
         const job = ctx.setup?.get(c.id);
-        const seen = Math.max(ctx.doorbell?.seenAt(c.id) ?? 0, (c.thisMachine && ctx.doorbell?.seenAt('this-machine')) || 0);
+        const seen = ctx.doorbell?.seenAt(c.id);
         return {
           id: c.id,
           name: c.name,
@@ -554,7 +557,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     handle(async (a) => {
       const env = ctx.env ?? process.env;
       const http = ctx.status?.http;
-      const url = a.url ?? env.DROID_MCP_EVENTS_URL ?? (http && hostPort(http) ? eventsUrl(http) : undefined);
+      const url = a.url ?? configuredEventsUrl(env, http);
       if (!url)
         throw new Refused(
           'invalid',
@@ -575,8 +578,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         const err = offlineError(c);
         throw new Refused(err.code, err.message, `${err.fix} Or, once it is up, run this on it: ${line}`);
       }
-      const { hostname, port } = new URL(url);
-      if (!c.thisMachine && localOnly(`${hostname}:${port || 80}`)) {
+      if (!c.thisMachine && loopbackUrl(url)) {
         throw new Refused(
           'invalid',
           `${url} is a loopback address, which ${c.name} cannot reach`,

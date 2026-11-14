@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { capabilities, doctorReport, hostPort, probeThisMachine } from './capabilities.ts';
+import { capabilities, doctorReport, hostPort, missingRoots, probeThisMachine } from './capabilities.ts';
 import { repoRoot } from './catalog.ts';
 import { Computers } from './computers.ts';
 import { allowedRoots, autonomyCap, lookupApiKey, lookupSecret } from './config.ts';
@@ -29,7 +29,14 @@ async function lookupConfig(http: string | undefined) {
 
 async function doctor(http: string | undefined): Promise<number> {
   const { apiKey, status } = await lookupConfig(http);
-  const checks = capabilities({ apiKey: Boolean(apiKey), ...status, roots: allowedRoots(), cap: autonomyCap(), ...(await probeThisMachine()) });
+  const checks = capabilities({
+    apiKey: Boolean(apiKey),
+    ...status,
+    roots: allowedRoots(),
+    missingRoots: missingRoots(allowedRoots()),
+    cap: autonomyCap(),
+    ...(await probeThisMachine()),
+  });
   const { lines, code } = doctorReport(checks);
   console.log(lines.join('\n'));
   return code;

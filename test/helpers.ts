@@ -145,7 +145,13 @@ type Step = { status: string; elicitations?: Elicitation[] };
 
 // A Rest stand-in for Setup: status() walks the steps and then repeats the last one.
 export function fakeSetupRest(steps: Step[], reply?: string) {
-  const calls = { created: [] as unknown[], sent: [] as string[], answers: [] as Array<{ requestId: string; body: unknown }>, archived: [] as string[] };
+  const calls = {
+    created: [] as unknown[],
+    sent: [] as string[],
+    answers: [] as Array<{ requestId: string; body: unknown }>,
+    interrupted: [] as string[],
+    archived: [] as string[],
+  };
   let i = 0;
   const rest: SetupRest = {
     create: async (computerId, settings) => {
@@ -172,6 +178,9 @@ export function fakeSetupRest(steps: Step[], reply?: string) {
     }),
     answer: async (_id, requestId, body) => {
       calls.answers.push({ requestId, body });
+    },
+    interrupt: async (id) => {
+      calls.interrupted.push(id);
     },
     archive: async (id) => {
       calls.archived.push(id);

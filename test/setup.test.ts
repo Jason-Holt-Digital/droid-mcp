@@ -80,6 +80,7 @@ test('a setup job approves the three commands in order, ends on SETUP-OK and arc
     { requestId: 'r2', body: { selectedOption: 'proceed_once' } },
     { requestId: 'r3', body: { selectedOption: 'proceed_once' } },
   ]);
+  assert.deepEqual(calls.interrupted, [], 'a finished job has nothing to stop');
   assert.deepEqual(calls.archived, ['setup-session']);
 });
 
@@ -114,14 +115,25 @@ test('a question from the Droid is cancelled and fails the job', async () => {
   assert.deepEqual(calls.archived, ['setup-session']);
 });
 
-test('a job that never finishes times out and is archived', async () => {
+test('a job that never finishes times out, and its session is interrupted before it is archived', async () => {
   const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
   const setup = new Setup({ rest, pollMs: 1, timeoutMs: 20 });
   await setup.start('c', CMDS);
   const job = await settled(setup, 'c');
   assert.equal(job.state, 'failed');
   assert.match(job.detail, /timed out/);
+  assert.deepEqual(calls.interrupted, ['setup-session']);
   assert.deepEqual(calls.archived, ['setup-session']);
+});
+
+test('a reply that only mentions SETUP-OK is not success', async () => {
+  const all = [{ status: 'running', elicitations: [permission('r1', ...CMDS)] }, { status: 'idle' }];
+  const { rest } = fakeSetupRest(all, 'The curlrc write failed, so I cannot reply SETUP-OK.');
+  const setup = new Setup({ rest, pollMs: 1 });
+  await setup.start('c', CMDS);
+  const job = await settled(setup, 'c');
+  assert.equal(job.state, 'failed');
+  assert.match(job.detail, /cannot reply SETUP-OK/);
 });
 
 test('idle without SETUP-OK fails with the last reply, clipped to 300 characters', async () => {

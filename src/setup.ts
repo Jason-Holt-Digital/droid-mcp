@@ -10,7 +10,7 @@ const COMPUTER_ID = /^[A-Za-z0-9-]+$/;
 const DETAIL_MAX = 300;
 
 export type Job = { state: 'working' | 'done' | 'failed'; sessionId?: string; detail: string; at: number };
-export type SetupRest = Pick<Rest, 'create' | 'send' | 'status' | 'messages' | 'answer' | 'archive'>;
+export type SetupRest = Pick<Rest, 'create' | 'send' | 'status' | 'messages' | 'answer' | 'interrupt' | 'archive'>;
 
 export const pluginSource = (env: NodeJS.ProcessEnv) => env.DROID_MCP_PLUGIN_SOURCE || DEFAULT_SOURCE;
 
@@ -114,8 +114,10 @@ export class Setup {
           const last = messages.sort((a, b) => b.createdAt - a.createdAt)[0]?.text;
           // Idle with no reply yet means the turn has not started.
           if (last !== undefined) {
-            if (approved === commands.length && last.includes('SETUP-OK')) return await this.#finish(job, 'done', 'plugin installed and curlrc written');
-            const detail = last.includes('SETUP-OK') ? `replied SETUP-OK after ${approved} of ${commands.length} commands` : last;
+            // Approval only let the commands run; success is a reply whose last line is the bare marker.
+            const ok = last.trim().split('\n').at(-1)?.trim() === 'SETUP-OK';
+            if (approved === commands.length && ok) return await this.#finish(job, 'done', 'plugin installed and curlrc written');
+            const detail = ok ? `replied SETUP-OK after ${approved} of ${commands.length} commands` : last;
             return await this.#finish(job, 'failed', detail.slice(0, DETAIL_MAX) || 'the Droid stopped without SETUP-OK');
           }
         }
@@ -129,6 +131,9 @@ export class Setup {
 
   async #finish(job: Job, state: 'done' | 'failed', detail: string): Promise<void> {
     Object.assign(job, { state, detail, at: this.#now() });
-    if (job.sessionId) await this.#rest.archive(job.sessionId).catch(() => {});
+    if (!job.sessionId) return;
+    // A failed job may still have a command running there; stop it before archiving.
+    if (state === 'failed') await this.#rest.interrupt(job.sessionId).catch(() => {});
+    await this.#rest.archive(job.sessionId).catch(() => {});
   }
 }
