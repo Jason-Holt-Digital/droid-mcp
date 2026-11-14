@@ -9,7 +9,7 @@ import { Computers } from '../src/computers.ts';
 import { EventLog, Forwarder } from '../src/events.ts';
 import { createHandler } from '../src/http.ts';
 import { createRest } from '../src/rest.ts';
-import { Doorbell, recordEvent } from '../src/ring.ts';
+import { Doorbell, recordEvent, seenKey } from '../src/ring.ts';
 import { KeyStore, type Runs } from '../src/runs.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
 import type { Ctx } from '../src/tools.ts';
@@ -88,10 +88,10 @@ async function setup(opts: { remote?: Remote; rest?: boolean; runs?: Record<stri
   await new Promise<void>((r) => server.listen(0, host, r));
   const port = (server.address() as AddressInfo).port;
   const base = `http://127.0.0.1:${port}`;
-  const ring = async (body: unknown, url = base) => {
+  const ring = async (body: unknown, url = base, headers: Record<string, string> = {}) => {
     const res = await fetch(`${url}/events`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...headers },
       body: typeof body === 'string' ? body : JSON.stringify(body),
     });
     await res.text();
@@ -99,7 +99,7 @@ async function setup(opts: { remote?: Remote; rest?: boolean; runs?: Record<stri
     return res.status;
   };
   const sessionCalls = () => api.calls.filter((c) => c.path.startsWith('/api/v0/sessions'));
-  return { ctx, api, forwarded, logs, ring, sessionCalls, port, events: () => ctx.events.since(0, 50).events };
+  return { ctx, api, bell, forwarded, logs, ring, sessionCalls, port, events: () => ctx.events.since(0, 50).events };
 }
 
 const hookInput = (hook_event_name: string, extra: Record<string, unknown> = {}) => ({
@@ -268,6 +268,38 @@ test('rings are rate limited per source address', async () => {
   assert.deepEqual([await s.ring(hookInput('Stop'), v4), await s.ring(hookInput('Stop'), v4), await s.ring(hookInput('Stop'), v4)], [202, 202, 429]);
   assert.equal(await s.ring(hookInput('Stop'), v6), 202);
   assert.equal(s.events().length, 3, 'the limited ring left no trace');
+});
+
+test('a ring marks its computer seen: the header when valid, else only its source address', async () => {
+  const s = await setup({ limit: 2 });
+  const before = Date.now();
+  await s.ring(hookInput('Stop'), undefined, { 'x-droid-mcp-computer': 'comp-laptop' });
+  await s.ring(hookInput('Stop'), undefined, { 'x-droid-mcp-computer': 'bad id!' });
+  assert.equal(await s.ring(hookInput('Stop'), undefined, { 'x-droid-mcp-computer': 'comp-limited' }), 429);
+  assert.deepEqual([...s.bell.seenAll().keys()], ['comp-laptop', 'addr:127.0.0.1']);
+  assert.ok((s.bell.seenAt('comp-laptop') ?? 0) >= before);
+  assert.equal(s.bell.seenAt('comp-limited'), undefined, 'a rate-limited ring is not recorded');
+
+  const parsed = await setup();
+  assert.equal(await parsed.ring({ session_id: SID }, undefined, { 'x-droid-mcp-computer': 'comp-bad-body' }), 400);
+  assert.equal(parsed.bell.seenAt('comp-bad-body'), undefined, 'a ring that does not parse is not recorded');
+});
+
+test('seenKey falls back to the remote address for a missing, oversized or non-string header', () => {
+  assert.equal(seenKey('comp.a_b-1', '100.1.2.3'), 'comp.a_b-1');
+  assert.equal(seenKey(undefined, '::ffff:127.0.0.1'), 'addr:::ffff:127.0.0.1', 'a loopback proxy may front remote computers');
+  assert.equal(seenKey(undefined, undefined), 'addr:unknown');
+  assert.equal(seenKey('x'.repeat(101), '100.1.2.3'), 'addr:100.1.2.3');
+  assert.equal(seenKey(['a', 'b'], '100.1.2.3'), 'addr:100.1.2.3');
+});
+
+test('the doorbell keeps only the newest 1000 seen computers', async () => {
+  const s = await setup();
+  for (let i = 0; i <= 1000; i++) s.bell.ring(hookInput('PreToolUse'), { computer: `c${i}` });
+  await s.bell.idle();
+  assert.equal(s.bell.seenAll().size, 1000);
+  assert.equal(s.bell.seenAt('c0'), undefined);
+  assert.ok(s.bell.seenAt('c1000'));
 });
 
 test('bad rings get a 400 and unknown hook events are accepted and ignored', async () => {

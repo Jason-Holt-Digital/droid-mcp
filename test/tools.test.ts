@@ -6,10 +6,12 @@ import { after, before, test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { pasteLine } from '../src/capabilities.ts';
 import type { SessionRecord } from '../src/catalog.ts';
 import { Computers } from '../src/computers.ts';
 import { EventLog } from '../src/events.ts';
 import { createRest } from '../src/rest.ts';
+import type { Doorbell } from '../src/ring.ts';
 import { KeyStore, Runs, type OwnRun, type RunEvent } from '../src/runs.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
 import { clampWait, DEFAULT_WAIT_MS, LIMIT_BYTES, MAX_WAIT_MS, pageBytes, registerTools, type Ctx } from '../src/tools.ts';
@@ -307,6 +309,7 @@ test('every tool declares all four hints with the expected values', async () => 
     const expected = {
       droid_find: hints(true, false, true, true),
       droid_computers: hints(true, false, true, true),
+      droid_status: hints(true, false, true, true),
       droid_events: hints(true, false, true, false),
       droid_models: hints(true, false, true, false),
       droid_start: hints(false, true, true, true),
@@ -805,6 +808,63 @@ test('droid_computers lists state per computer, and only this machine without a 
       [['test-host', 'online', true]],
     );
     assert.match(res.json.note, /FACTORY_API_KEY/);
+  } finally {
+    await bare.close();
+  }
+});
+
+test('droid_status reports checks and, per computer, when its plugin rang or the line to paste', async () => {
+  const seen = new Map([
+    [FLEET.self.id, NOW - 5000],
+    [FLEET.laptop.id, NOW - 60_000],
+  ]);
+  const doorbell = { seenAt: (k: string) => seen.get(k) } as unknown as Doorbell;
+  const probe = async () => ({ curlrcUrl: 'http://127.0.0.1:37999/events', pluginInstalled: true });
+  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true };
+  const { c } = await fleet({ ctx: { doorbell, probe, status } });
+  try {
+    const res = await c.call('droid_status', {});
+    assert.equal(res.isError, false, res.text);
+    const checks = Object.fromEntries(res.json.checks.map((x: { name: string; ok: boolean }) => [x.name, x.ok]));
+    assert.deepEqual(checks, { api_key: true, webhook: false, http: true, roots: true, autonomy_cap: true, plugin: true, curlrc: true, events_token: true });
+    const plugin = Object.fromEntries(res.json.computers.map((x: { name: string; plugin: unknown }) => [x.name, x.plugin]));
+    assert.deepEqual(plugin['this-box'], { seen: new Date(NOW - 5000).toISOString().replace(/\.\d{3}Z$/, 'Z') });
+    assert.deepEqual(plugin.laptop, { seen: new Date(NOW - 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z') });
+    assert.match(plugin['cloud-a'].fix, /^On cloud-a, run this with http:\/\/127\.0\.0\.1:37999\/events replaced by a URL cloud-a can reach/);
+    assert.ok(plugin['cloud-a'].fix.endsWith(pasteLine('http://127.0.0.1:37999/events', FLEET.cloudA.id)));
+  } finally {
+    await c.close();
+  }
+
+  const tailnet = await fleet({ ctx: { probe, status: { ...status, http: '100.73.48.66:37999' } } });
+  try {
+    const res = await tailnet.c.call('droid_status', {});
+    const self = res.json.computers.find((x: { thisMachine: boolean }) => x.thisMachine);
+    assert.equal(self.plugin.fix, `On this-box, run: ${pasteLine('http://100.73.48.66:37999/events', FLEET.self.id)}`);
+    assert.equal(res.json.checks.find((x: { name: string }) => x.name === 'curlrc').ok, false);
+  } finally {
+    await tailnet.c.close();
+  }
+});
+
+test('droid_status keeps its checks when the computer list fails, and tells stdio servers to run over HTTP', async () => {
+  const api = fakeApi(() => new Response('{}', { status: 500 }));
+  const rest = createRest({ apiKey: 'k', fetch: api.fetch });
+  const c = await connect({ rest, probe: async () => ({ pluginInstalled: undefined }) });
+  try {
+    const res = await c.call('droid_status', {});
+    assert.equal(res.isError, false, res.text);
+    assert.equal(res.json.checks.length, 8);
+    assert.equal(res.json.computers, undefined);
+    assert.ok(res.json.computersError.code && res.json.computersError.fix, res.text);
+  } finally {
+    await c.close();
+  }
+  const bare = await connect({ probe: async () => ({}) });
+  try {
+    const res = await bare.call('droid_status', {});
+    assert.match(res.json.computers[0].plugin.fix, /stdio .*--http/);
+    assert.equal(res.json.checks.find((x: { name: string }) => x.name === 'api_key').ok, false);
   } finally {
     await bare.close();
   }

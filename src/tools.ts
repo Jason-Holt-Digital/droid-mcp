@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AnswerSessionElicitationRequestBody } from '@factory/droid-sdk/api';
 import { z } from 'zod';
+import { capabilities, eventsUrl, localOnly, missingRoots, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
 import {
   filterRecords,
   findSession,
@@ -25,6 +26,7 @@ import { allowedDecisions, API_KEY_FIX, autonomyCap, checkCwd, Refused, resolveA
 import { EVENT_KINDS, type DroidEvent, type EventLog, type Forwarder } from './events.ts';
 import { loadCatalog, type ModelCatalog } from './models.ts';
 import type { Rest } from './rest.ts';
+import type { Doorbell } from './ring.ts';
 import { routeSend, type Target } from './route.ts';
 import { preview, type KeyStore, type RunEvent, type Runs } from './runs.ts';
 import { EFFORTS, startOnly, toRestSettings, validateSettings } from './settings.ts';
@@ -45,6 +47,9 @@ export type Ctx = {
   fanoutTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
   catalog?: () => Promise<ModelCatalog>;
+  doorbell?: Doorbell;
+  status?: { http?: string; bindAddress?: string; webhook: boolean; eventsToken: boolean; httpToken: boolean };
+  probe?: () => Promise<ThisMachine>;
 };
 
 export const LIMIT_BYTES = 8192;
@@ -104,11 +109,14 @@ function reply(value: unknown) {
 
 const INTERNAL_FIX = 'Retry the call; if it fails again, report this message.';
 
-function failure(err: unknown) {
+function errorBody(err: unknown) {
   const { code, message, fix } =
     err instanceof ToolError ? err : { code: 'internal', message: err instanceof Error ? err.message : String(err), fix: INTERNAL_FIX };
-  const text = JSON.stringify({ code, message: preview(message.replace(/\s+/g, ' ').trim(), 1000), fix });
-  return { isError: true, content: [{ type: 'text' as const, text }] };
+  return { code, message: preview(message.replace(/\s+/g, ' ').trim(), 1000), fix };
+}
+
+function failure(err: unknown) {
+  return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errorBody(err)) }] };
 }
 
 function handle<A>(fn: (args: A) => Promise<unknown>) {
@@ -487,6 +495,54 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         onlineWindowMinutes: ONLINE_WINDOW_MS / 60_000,
         note: ctx.rest ? undefined : 'FACTORY_API_KEY is not set, so only this machine is listed',
       };
+    }),
+  );
+
+  server.registerTool(
+    'droid_status',
+    {
+      description:
+        'Check what this server can do and what is missing, with a fix for each gap: API key, webhook, HTTP mode, roots, autonomy cap, and the doorbell plugin on this machine. Lists each computer with when its plugin last rang and, if it never did, the one line to paste on that computer.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    handle(async () => {
+      const http = ctx.status?.http;
+      const checks = capabilities({
+        apiKey: Boolean(ctx.rest),
+        webhook: ctx.status?.webhook ?? false,
+        eventsToken: ctx.status?.eventsToken ?? false,
+        httpToken: ctx.status?.httpToken ?? false,
+        http,
+        bindAddress: ctx.status?.bindAddress,
+        roots: ctx.roots,
+        missingRoots: missingRoots(ctx.roots),
+        cap: autonomyCap(ctx.env),
+        ...(await (ctx.probe ?? probeThisMachine)()),
+      });
+      const pluginFix = (c: Computer) => {
+        if (http === undefined) return 'This server runs over stdio and has no /events; run it with --http <host:port> first.';
+        const line = pasteLine(eventsUrl(http), c.id);
+        if (c.thisMachine || !localOnly(http)) return `On ${c.name}, run: ${line}`;
+        return `On ${c.name}, run this with ${eventsUrl(http)} replaced by a URL ${c.name} can reach, such as this server's tailnet address: ${line}`;
+      };
+      const view = (c: Computer) => {
+        const seen = ctx.doorbell?.seenAt(c.id);
+        return {
+          id: c.id,
+          name: c.name,
+          kind: c.kind,
+          state: c.state,
+          lastSeen: c.lastSeenAt === undefined ? undefined : isoSeconds(c.lastSeenAt),
+          thisMachine: c.thisMachine,
+          plugin: seen ? { seen: isoSeconds(seen) } : { fix: pluginFix(c) },
+        };
+      };
+      try {
+        return { checks, computers: (await ctx.computers.list(true)).map(view) };
+      } catch (err) {
+        return { checks, computersError: errorBody(err) };
+      }
     }),
   );
 

@@ -11,6 +11,7 @@ const RING_WINDOW_MS = 60_000;
 // Factory can still report a session as running for a moment after its Stop hook fires.
 const STOP_RETRY_MS = 1000;
 const STOP_RETRIES = 5;
+const SEEN_MAX = 1000;
 
 const RingBody = z.object({
   session_id: z.string().max(200).refine(isSessionId, 'invalid session id'),
@@ -73,6 +74,12 @@ function stopEvent(text: string): Pick<EventInput, 'kind' | 'text'> {
   return { kind: 'finished', text: text.trim().slice(-300) };
 }
 
+// Without the header the source is only an address: a loopback reverse proxy makes every remote ring look local.
+export function seenKey(computer: string | string[] | undefined, address: string | undefined): string {
+  if (typeof computer === 'string' && /^[A-Za-z0-9._-]{1,100}$/.test(computer)) return computer;
+  return `addr:${address ?? 'unknown'}`;
+}
+
 export class Doorbell {
   #ctx: Ctx;
   #limit: number;
@@ -80,6 +87,7 @@ export class Doorbell {
   #log: (msg: string) => void;
   #hits = new Map<string, { start: number; count: number }>();
   #pending = new Set<Promise<void>>();
+  #seen = new Map<string, number>();
 
   constructor(ctx: Ctx, opts: { limit?: number; retryMs?: number; log?: (msg: string) => void } = {}) {
     this.#ctx = ctx;
@@ -96,11 +104,24 @@ export class Doorbell {
     return true;
   }
 
-  ring(r: Ring): void {
+  // Rings are unauthenticated, so the keys are caller-chosen; only the newest SEEN_MAX are kept.
+  ring(r: Ring, from: { computer?: string | string[]; address?: string } = {}): void {
+    const key = seenKey(from.computer, from.address);
+    this.#seen.delete(key);
+    if (this.#seen.size >= SEEN_MAX) this.#seen.delete(this.#seen.keys().next().value!);
+    this.#seen.set(key, Date.now());
     const p: Promise<void> = this.#handle(r)
       .catch((err) => this.#log(`droid-mcp: ${r.hook_event_name} ring for ${r.session_id} failed: ${err instanceof Error ? err.message : String(err)}`))
       .finally(() => this.#pending.delete(p));
     this.#pending.add(p);
+  }
+
+  seenAt(key: string): number | undefined {
+    return this.#seen.get(key);
+  }
+
+  seenAll(): ReadonlyMap<string, number> {
+    return new Map(this.#seen);
   }
 
   async idle(): Promise<void> {
