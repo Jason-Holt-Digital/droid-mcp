@@ -10,7 +10,9 @@
       "params": {
         "description": "(params: { cwd: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.add_marketplace",
@@ -20,7 +22,9 @@
       "params": {
         "description": "(params: { source: { source: \"github\"; repo: string; ref?: string | undefined; sha?: string | undefined; } | { url: string; source: \"url\"; ref?: string | undefined; sha?: string | undefined; } | { path: string; source: \"local\"; } | { path: string; url: string; source: \"git-subdir\"; ref?: string | undefined; sha?: string | undefined; }; sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.add_mcp_server",
@@ -30,7 +34,9 @@
       "params": {
         "description": "(params: { type: \"http\" | \"sse\" | \"stdio\"; name: string; sessionId: string; url?: string | undefined; command?: string | undefined; args?: string[] | undefined; env?: Record<string, string> | undefined; headers?: Record<string, string> | undefined; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.add_user_message",
@@ -40,7 +46,9 @@
       "params": {
         "description": "(params: { text: string; sessionId: string; content?: ({ text: string; type: MessageContentBlockType.Text; id?: string | undefined; } | { type: MessageContentBlockType.Image; source: { type: \"base64\"; data: string; mediaType: \"image/gif\" | \"image/jpeg\" | \"image/png\" | \"image/webp\"; }; id?: string | undefined; elided?: { bytes: number; lines?: number | undefined; width?: number | undefined; height?: number | undefined; preview?: string | undefined; } | undefined; generated?: boolean | undefined; })[] | undefined; role?: MessageRole | undefined; userMessageSource?: SessionOrigin | undefined; sender?: { kind: MissionV2SessionKind.Orchestrator; sessionId: string; } | { kind: MissionV2SessionKind.Agent; sessionId: string; title: string; } | undefined; author?: { userId: string; source?: SessionOrigin | undefined; name?: string | undefined; receipt?: string | undefined; } | undefined; visibility?: MessageVisibility | undefined; messageId?: string | undefined; queuePlacement?: QueuePlacement | undefined; files?: ({ type: DocumentSourceType.Base64; data: string; mediaType: \"application/pdf\"; path?: string | undefined; name?: string | undefined; parsedData?: string | undefined; } | { type: DocumentSourceType.Text; data: string; mediaType: \"text/plain\"; name?: string | undefined; mime?: string | undefined; })[] | undefined; images?: { type: \"base64\"; data: string; mediaType: \"image/gif\" | \"image/jpeg\" | \"image/png\" | \"image/webp\"; }[] | undefined; imagePaths?: string[] | undefined; outputFormat?: { type: \"json_schema\"; schema: Record<string, unknown>; } | undefined; skipAgentLoop?: boolean | undefined; chatSettingsCatalog?: { kind: \"account\" | \"resource\" | \"setting\"; description: string; inputSchema: { type: \"object\"; properties: Record<string, unknown>; required?: string[] | undefined; additionalProperties?: boolean | undefined; }; label: string; operationId: string; pageId: string; section: string; riskLevel: RiskLevel; }[] | undefined; activeFile?: { path: string; } | undefined; pullFromOrigin?: boolean | undefined; }, requestId?: string | undefined, options?: (DispatchAdmission & { timeout?: number | undefined; onResponse?: (() => void) | undefined; }) | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.answer_elicitation",
@@ -50,7 +58,9 @@
       "params": {
         "description": "(params: { method: DaemonDroidEvent.REQUEST_PERMISSION; result: { selectedOption: ToolConfirmationOutcome; respondedBy?: { userId: string; source?: SessionOrigin | undefined; name?: string | undefined; receipt?: string | undefined; } | undefined; specHandoffId?: string | undefined; comment?: string | undefined; editedSpecContent?: string | undefined; clientStartsHandoffSession?: boolean | undefined; }; requestId: string; sessionId: string; } | { method: DaemonDroidEvent.ASK_USER; result: { answers: { index: number; question: string; answer: string; }[]; cancelled?: boolean | undefined; respondedBy?: { userId: string; source?: SessionOrigin | undefined; name?: string | undefined; receipt?: string | undefined; } | undefined; }; requestId: string; sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.apply_automation_config",
@@ -60,7 +70,9 @@
       "params": {
         "description": "(params: { name: string; automationId: string; prompt: string; schedule: string; paused?: boolean | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; privacyLevel?: AutomationPrivacyLevel | undefined; workingDirectory?: string | undefined; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; workstreamId?: string | undefined; basePath?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.apply_user_preferences",
@@ -70,7 +82,9 @@
       "params": {
         "description": "(params?: { conflict?: { updatedAt: string | null; scope: string; } | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.archive_session",
@@ -80,7 +94,9 @@
       "params": {
         "description": "(params: { sessionId: string; force?: boolean | undefined; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.authenticate",
@@ -90,7 +106,9 @@
       "params": {
         "description": "(params: { caller: string; apiKey?: string | undefined; metadata?: { sdk?: { version: string; language: \"python\" | \"typescript\"; } | undefined; tracing?: { app?: string | undefined; machineType?: string | undefined; machineProvider?: string | undefined; daemonTransport?: string | undefined; connectAttemptId?: string | undefined; connectAttemptTrigger?: string | undefined; } | undefined; } | undefined; token?: string | undefined; activeOrganizationId?: string | undefined; actAsGrant?: string | undefined; sharedSessionGrant?: string | undefined; attribution?: string | undefined; connectionId?: string | undefined; stampsRequestAttribution?: boolean | undefined; acceptEncodings?: string[] | undefined; pipeline?: { type: \"request\"; id: string; method: string; jsonrpc: \"2.0\"; factoryApiVersion: \"1.0.0\"; params?: unknown; _meta?: { traceparent?: string | undefined; tracestate?: string | undefined; requestAttribution?: { sdk: { version: string; language: \"python\" | \"typescript\"; }; client: ClientType.SDK; requestSurface?: \"daemon-direct\" | SessionOrigin | undefined; execOutputFormat?: ExecOutputFormat | undefined; execInputFormat?: ExecInputFormat | undefined; } | { client: ClientType.WebDesktop | ClientType.WebApp | ClientType.WebWorkspace | ClientType.Daemon | ClientType.CLI | ClientType.Backend; requestSurface?: \"daemon-direct\" | SessionOrigin | undefined; execOutputFormat?: ExecOutputFormat | undefined; execInputFormat?: ExecInputFormat | undefined; } | undefined; } | undefined; factoryProtocolVersion?: string | undefined; }[] | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.authenticate_mcp_server",
@@ -100,7 +118,9 @@
       "params": {
         "description": "(params: { sessionId: string; serverName: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.automation_memory_edit",
@@ -110,7 +130,9 @@
       "params": {
         "description": "(params: { edit: { kind: \"replace\"; oldText: string; newText: string; replaceAll?: boolean | undefined; } | { kind: \"write\"; content: string; baseSha256?: string | undefined; rewriteLargeFile?: boolean | undefined; } | { kind: \"append\"; content: string; } | { kind: \"delete\"; baseSha256: string; }; path: string; automationId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.automation_memory_list",
@@ -120,7 +142,9 @@
       "params": {
         "description": "(params: { automationId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.automation_memory_read",
@@ -130,7 +154,9 @@
       "params": {
         "description": "(params: { path: string; automationId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.automation_run_outcome_set",
@@ -140,7 +166,9 @@
       "params": {
         "description": "(params: { runId: string; automationId: string; changedBy: string; override: { status: \"failure\" | \"success\"; note?: string | undefined; } | null; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.cancel_mcp_auth",
@@ -150,7 +178,9 @@
       "params": {
         "description": "(params: { sessionId: string; serverName: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.change_working_directory",
@@ -160,7 +190,9 @@
       "params": {
         "description": "(params: { sessionId: string; workingDirectory: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.check_folder_trust",
@@ -170,7 +202,9 @@
       "params": {
         "description": "(params: { path: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.check_session_copy",
@@ -180,7 +214,9 @@
       "params": {
         "description": "(params: { sessionId: string; includeCode: boolean; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.checkout_git_branch",
@@ -190,7 +226,9 @@
       "params": {
         "description": "(params: { branch: string; cwd: string; create?: boolean | undefined; resolution?: \"commit\" | \"stash\" | undefined; pullFromOrigin?: boolean | undefined; createFromOrigin?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.cleanup_worktree",
@@ -200,7 +238,9 @@
       "params": {
         "description": "(params: { worktreePath: string; deleteLocalBranch?: boolean | undefined; deleteRemoteBranch?: boolean | undefined; force?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.clear_mcp_auth",
@@ -210,7 +250,9 @@
       "params": {
         "description": "(params: { sessionId: string; serverName: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.close_session",
@@ -220,7 +262,9 @@
       "params": {
         "description": "(params: { sessionId: string; preserveEmptyDraft?: boolean | undefined; deleteBtwForkFiles?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.close_terminal",
@@ -230,7 +274,9 @@
       "params": {
         "description": "(params: { sessionId: string; terminalId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.compact_session",
@@ -240,7 +286,9 @@
       "params": {
         "description": "(params: { sessionId: string; mode?: \"handoff\" | undefined; customInstructions?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.config_items",
@@ -250,7 +298,9 @@
       "params": {
         "description": "(params: { cwd: string; operation: { action: \"availability\"; } | { action: \"catalog\"; cursor?: string | undefined; } | { action: \"preview\"; target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; purpose?: \"publish\" | \"resolve\" | undefined; } | { action: \"publish\"; approval: { target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; itemId: string; localHash: string; candidateHash: string; expectedRevision?: string | undefined; scopeHash?: string | undefined; }; } | { action: \"publication-preview\"; cursor?: string | undefined; } | { action: \"publish-batch\"; approvals: { target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; itemId: string; localHash: string; candidateHash: string; candidate: { isDeleted: true; } | { isDeleted: false; snapshot: { metadata: Record<string, unknown>; files: { path: string; isExecutable: boolean; contentHash: string; byteLength: number; contentBase64: string; }[]; }; }; expectedRevision?: string | undefined; scopeHash?: string | undefined; baseRevision?: string | undefined; remoteHash?: string | undefined; }[]; } | { action: \"follow\"; enabled: boolean; item: { category: ConfigItemCategory; itemId: string; source?: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | undefined; pin?: string | undefined; }; } | { action: \"pull\"; } | { action: \"history\"; itemId: string; beforeRevision?: string | undefined; } | { action: \"revision\"; revision: string; itemId: string; } | { action: \"restore\"; expectedRevision: string; itemId: string; sourceRevision: string; snapshotHash: string; scopeHash?: string | undefined; } | { action: \"remove\"; expectedRevision: string; itemId: string; snapshotHash: string; scopeHash?: string | undefined; } | { action: \"resolve\"; resolution: { kind: \"local\"; } | { kind: \"remote\"; } | { kind: \"edited\"; snapshot: { isDeleted: true; } | { isDeleted: false; snapshot: { metadata: Record<string, unknown>; files: { path: string; isExecutable: boolean; contentHash: string; byteLength: number; contentBase64: string; }[]; }; }; }; expectedRevision: string; itemId: string; localHash: string; scopeHash?: string | undefined; pin?: string | undefined; } | { action: \"identity\"; sourceId: string; itemId?: string | undefined; expectedItemId?: string | undefined; previousPath?: string | undefined; }; level: \"project\" | \"user\"; }, signal?: AbortSignal | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.create_automation",
@@ -260,7 +310,9 @@
       "params": {
         "description": "(params: { id: string; name: string; schedule: string; paused?: boolean | undefined; skills?: { name: string; fingerprint: string; content?: string | undefined; supportingFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; }[] | undefined; instructions?: string | undefined; uuid?: string | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; privacyLevel?: AutomationPrivacyLevel | undefined; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; workstreamId?: string | undefined; basePath?: string | undefined; targetSessionId?: string | undefined; visualDescription?: string | undefined; memoryStrategy?: string | undefined; skipFirstRun?: boolean | undefined; creationSource?: AutomationCreationSource | undefined; creationSessionId?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.create_cron",
@@ -270,7 +322,9 @@
       "params": {
         "description": "(params: { kind: \"session_prompt\"; source: \"automation\" | \"cron_tool\" | \"loop_command\" | \"migration\"; schedule: { expression: string; recurring: boolean; }; scope: { type: \"session\"; sessionId: string; sessionCwd: string; }; payload: { type: \"prompt\"; target: { type: \"same_session\"; }; prompt: string; }; runImmediately?: boolean | undefined; runPolicy?: { whenSessionInactive: \"hold\"; } | undefined; } | { kind: \"root_prompt\"; source: \"automation\" | \"cron_tool\" | \"loop_command\" | \"migration\"; schedule: { expression: string; recurring: boolean; }; scope: { type: \"root\"; }; payload: { type: \"prompt\"; target: { type: \"new_session\"; title?: string | undefined; cwd?: string | undefined; }; prompt: string; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; }; runImmediately?: boolean | undefined; runPolicy?: { whenSessionInactive: \"run_in_background\"; } | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.create_pr",
@@ -280,7 +334,9 @@
       "params": {
         "description": "(params: { sessionId: string; title: string; baseBranch: string; draft?: boolean | undefined; body?: string | undefined; linkedTicketIds?: string[] | undefined; linkedTicketUrls?: string[] | undefined; jiraIssueKeys?: string[] | undefined; linearIssueIds?: string[] | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.create_terminal",
@@ -290,7 +346,9 @@
       "params": {
         "description": "(params: { sessionId: string; terminalId: string; cwd?: string | undefined; rows?: number | undefined; env?: Record<string, string> | undefined; cols?: number | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.delete_automation",
@@ -300,7 +358,9 @@
       "params": {
         "description": "(params: { automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.delete_cron",
@@ -310,7 +370,9 @@
       "params": {
         "description": "(params: { cronId: string; sessionId?: string | undefined; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.delete_custom_model",
@@ -320,7 +382,9 @@
       "params": {
         "description": "(params: { rawIndex: number; expectedModel: string; expectedRevision?: string | undefined; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.delete_model_provider",
@@ -330,7 +394,9 @@
       "params": {
         "description": "(params: { id: string; expectedRevision: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.delete_model_provider_entry",
@@ -340,7 +406,9 @@
       "params": {
         "description": "(params: { index: number; expectedRevision: string; expectedEntryFingerprint: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.delete_shared_folder_entry",
@@ -350,7 +418,9 @@
       "params": {
         "description": "(params: { path: string; sessionId: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.delete_worktree_setup_profile",
@@ -360,7 +430,9 @@
       "params": {
         "description": "(params: { cwd: string; profileId: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.dispatch_automation_run",
@@ -370,7 +442,9 @@
       "params": {
         "description": "(params: { automationId: string; basePath?: string | undefined; triggerSource?: \"automation\" | \"manual\" | undefined; sourceAutomationId?: string | undefined; sourceRunId?: string | undefined; triggerContext?: string | undefined; sourceAutomationName?: string | undefined; reservationId?: string | undefined; }, args?: { timeoutMs?: number | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.execute_rewind",
@@ -380,7 +454,9 @@
       "params": {
         "description": "(params: { sessionId: string; messageId: string; filesToRestore: { filePath: string; contentHash: string; size: number; }[]; filesToDelete: { filePath: string; }[]; forkTitle: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.fork_automation",
@@ -390,7 +466,9 @@
       "params": {
         "description": "(params: { name: string; automationId: string; prompt: string; schedule: string; forkedFrom: string; localDirName: string; skills?: { name: string; fingerprint: string; content?: string | undefined; supportingFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; }[] | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.fork_session",
@@ -400,7 +478,9 @@
       "params": {
         "description": "(params: { sessionId: string; title?: string | undefined; tags?: { name: string; metadata?: Record<string, string> | undefined; }[] | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.generate_semantic_diff",
@@ -410,7 +490,9 @@
       "params": {
         "description": "(params: { sessionId: string; diff: string; currentBranch: string; baseBranch: string; modelId?: string | undefined; unstagedDiff?: string | undefined; commitHash?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_automation_history",
@@ -420,7 +502,9 @@
       "params": {
         "description": "(params: { automationId: string; offset?: number | undefined; limit?: number | undefined; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_automation_visual",
@@ -430,7 +514,9 @@
       "params": {
         "description": "(params: { automationId: string; sessionId?: string | undefined; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_checkout_metadata",
@@ -440,7 +526,9 @@
       "params": {
         "description": "(params: { directories: string[]; subscriptionId: string; includePullRequest?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_context_breakdown",
@@ -450,7 +538,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_default_settings",
@@ -460,7 +550,9 @@
       "params": {
         "description": "(params?: { cwd?: string | undefined; } | undefined, signal?: AbortSignal | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_folder_starter_signals",
@@ -470,7 +562,9 @@
       "params": {
         "description": "(params: { cwd: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_git_diff",
@@ -480,7 +574,9 @@
       "params": {
         "description": "(params: { sessionId: string; cwd?: string | undefined; baseBranch?: string | undefined; statsOnly?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_git_diff_file_contents",
@@ -490,7 +586,9 @@
       "params": {
         "description": "(params: { source: DaemonGitDiffSource; sessionId: string; filePath: string; cwd?: string | undefined; baseBranch?: string | undefined; prevFilePath?: string | undefined; diffCapturedAtMs?: number | undefined; diffHeadCommitSha?: string | undefined; diffBaseCommitSha?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_mcp_config",
@@ -500,7 +598,9 @@
       "params": {
         "description": "()"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": true
     },
     {
       "id": "daemon.get_message_blocks",
@@ -510,7 +610,9 @@
       "params": {
         "description": "(params: { sessionId: string; refs: { messageId: string; blockIndex: number; }[]; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_mission_agent_roster",
@@ -520,7 +622,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_proxy_token",
@@ -530,7 +634,9 @@
       "params": {
         "description": "()"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": true
     },
     {
       "id": "daemon.get_rewind_info",
@@ -540,7 +646,9 @@
       "params": {
         "description": "(params: { sessionId: string; messageId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_semantic_diff_cache",
@@ -550,7 +658,9 @@
       "params": {
         "description": "(params: { currentBranch: string; baseBranch: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_session_messages",
@@ -560,7 +670,9 @@
       "params": {
         "description": "(params: { sessionId: string; limit: number; role?: MessageRoleNoSystem | undefined; display?: boolean | undefined; maxBytes?: number | undefined; cursor?: string | undefined; }, options?: { skipBeforeRequest?: boolean | undefined; timeout?: number | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_session_turn_outcome",
@@ -570,7 +682,9 @@
       "params": {
         "description": "(params: { sessionId: string; turnId: string; timeoutMs: number; }, options?: { signal?: AbortSignal | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_user_preferences_state",
@@ -580,7 +694,9 @@
       "params": {
         "description": "(params?: { cwd?: string | undefined; refresh?: boolean | undefined; includeSyncStatus?: boolean | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.get_workspace_file_content",
@@ -590,7 +706,9 @@
       "params": {
         "description": "(params: { sessionId: string; filePath: string; cwd?: string | undefined; encoding?: \"base64\" | \"utf8\" | undefined; metadataOnly?: boolean | undefined; allowDirectory?: boolean | undefined; }, options?: { timeout?: number | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.git_commit",
@@ -600,7 +718,9 @@
       "params": {
         "description": "(params: { message: string; sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.git_push",
@@ -610,7 +730,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.import_session",
@@ -620,7 +742,9 @@
       "params": {
         "description": "(params: { data: string; sessionId: string; sourceSessionId: string; pieceCount: number; pieceIndex: number; title?: string | undefined; header?: { historyPieceCount: number; code?: { manifest: { status: DaemonSessionCodeStatus.Ready; branch: string | null; repository: string; changedFileCount: number; headSha: string; workingTreeSha: string; indexTreeSha: string; prerequisiteShas: string[]; relativeCwd: string; unpushedCommitCount: number; emptySubmodules: string[]; }; pieceCount: number; } | undefined; } | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.initialize_session",
@@ -630,7 +754,9 @@
       "params": {
         "description": "(params: { cwd: string; machineId: string; token: string; systemPrompt?: string | { type: \"preset\"; preset: \"droid\"; append: string; } | undefined; blockOnMcpLoad?: boolean | undefined; blockOnStartupLoad?: boolean | undefined; sessionId?: string | undefined; title?: string | undefined; interactionMode?: DroidInteractionMode | undefined; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; tags?: { name: string; metadata?: Record<string, string> | undefined; }[] | undefined; autonomyMode?: AutonomyMode | undefined; autonomyLevel?: AutonomyLevel | undefined; specModeModelId?: string | undefined; specModeReasoningEffort?: ReasoningEffort | undefined; additionalToolIds?: string[] | undefined; enabledToolIds?: string[] | undefined; disabledToolIds?: string[] | undefined; restrictToolIds?: string[] | undefined; missionSettings?: { workerModel?: string | undefined; workerReasoningEffort?: ReasoningEffort | undefined; validationWorkerModel?: string | undefined; validationWorkerReasoningEffort?: ReasoningEffort | undefined; skipScrutiny?: boolean | undefined; skipUserTesting?: boolean | undefined; } | undefined; compactionThresholdCheckEnabled?: boolean | undefined; organizationId?: string | undefined; workspaceId?: string | undefined; mcpServers?: ({ name: string; command: string; args: string[]; env: Record<string, string>; } | { type: \"http\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { type: \"sse\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; })[] | undefined; systemPromptOverride?: string | undefined; decompSessionType?: DecompSessionType | undefined; decompMissionId?: string | undefined; skipPermissionsUnsafe?: boolean | undefined; sessionLocation?: string | undefined; sessionSource?: { platform: SessionPlatform.ReadinessRemediation; reportId: string; repoUrl: string; criterionId: string; } | { platform: SessionPlatform.ReadinessEvaluation; repoUrl: string; } | { platform: SessionPlatform.Automation; computerId: string; automationId: string; } | { platform: SessionPlatform.WikiGeneration; repoUrl: string; } | { platform: SessionPlatform.WikiCISetup; repoUrl: string; } | { platform: SessionPlatform.Tui; } | { platform: SessionPlatform.Desktop; } | { platform: SessionPlatform.Acp; } | { platform: SessionPlatform.Unknown; } | { platform: SessionPlatform.Slack; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; channel?: string | null | undefined; threadTs?: string | null | undefined; automationId?: string | null | undefined; } | { platform: SessionPlatform.Web; delegationSessionId: string; } | { platform: SessionPlatform.Api; delegationSessionId: string; } | { platform: SessionPlatform.SessionsApi; delegationSessionId: string; } | { platform: SessionPlatform.Linear; agentSessionId: string; delegationSessionId: string; userId?: string | null | undefined; issueId?: string | null | undefined; issueUrl?: string | null | undefined; issueIdentifier?: string | null | undefined; organizationId?: string | null | undefined; } | { platform: SessionPlatform.Jira; issueId: string; cloudId: string; delegationSessionId: string; userId?: string | null | undefined; issueKey?: string | null | undefined; siteId?: string | null | undefined; projectId?: string | null | undefined; commentId?: string | null | undefined; taskId?: string | null | undefined; } | { platform: SessionPlatform.MicrosoftTeams; tenantId: string; conversationId: string; serviceUrl: string; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; conversationType?: \"channel\" | \"groupChat\" | \"personal\" | null | undefined; rootMessageId?: string | null | undefined; channelId?: string | null | undefined; aadObjectId?: string | null | undefined; } | { platform: SessionPlatform.GoogleChat; customerId: string; spaceName: string; delegationSessionId: string; userId?: string | null | undefined; spaceType?: \"DIRECT_MESSAGE\" | \"GROUP_CHAT\" | \"SPACE\" | null | undefined; threadName?: string | null | undefined; } | undefined; sessionOriginHint?: SessionOrigin | undefined; privacyLevel?: \"organization\" | \"private\" | undefined; autoRejectPermissionRequests?: boolean | undefined; disableBuiltinSkills?: boolean | undefined; mcpOAuthCallbackUri?: string | undefined; worktree?: boolean | undefined; worktreeDir?: string | undefined; structuredOutputFormat?: { type: \"json_schema\"; schema: Record<string, unknown>; } | null | undefined; toolExecutionMode?: ToolExecutionMode | undefined; allowSubagentsInScripts?: boolean | undefined; worktreeLifecycle?: WorktreeLifecycle | undefined; worktreeBranchMode?: WorktreeBranchMode | undefined; worktreeBaseBranch?: string | undefined; worktreeBaseBranchFromOrigin?: boolean | undefined; worktreeNewBranch?: string | undefined; worktreePromptSlug?: string | undefined; worktreeSetupProfileId?: string | undefined; callingMetadata?: { callingSessionId: string; callingToolUseId: string; } | undefined; inactivityTimeoutMs?: number | undefined; disableInactivityTimeout?: boolean | undefined; runtimeSettingsPath?: string | undefined; pullFromOrigin?: boolean | undefined; }, options?: { timeout?: number | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.inspect_mission_readiness",
@@ -640,7 +766,9 @@
       "params": {
         "description": "(params: { cwd: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.inspect_worktree_deletion",
@@ -650,7 +778,9 @@
       "params": {
         "description": "(params: { worktreePath: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.install_plugin",
@@ -660,7 +790,9 @@
       "params": {
         "description": "(params: { sessionId: string; scope: string; marketplace: string; pluginName: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.interrupt_session",
@@ -670,7 +802,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.kill_background_process",
@@ -680,7 +814,9 @@
       "params": {
         "description": "(params: { sessionId: string; processId: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.kill_worker_session",
@@ -690,7 +826,9 @@
       "params": {
         "description": "(params: { sessionId: string; workerSessionId: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.list_automations",
@@ -700,7 +838,9 @@
       "params": {
         "description": "(params: { basePath?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_available_plugins",
@@ -710,7 +850,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_available_sessions",
@@ -720,7 +862,9 @@
       "params": {
         "description": "(params: { limit: number; filter?: { missionSessions?: boolean | undefined; includeBtwForks?: boolean | undefined; missionVersion?: \"v1\" | \"v2\" | undefined; missionStates?: MissionState[] | undefined; } | undefined; includeArchived?: boolean | undefined; endBefore?: number | undefined; includeMissionMetadata?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_commands",
@@ -730,7 +874,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_crons",
@@ -740,7 +886,9 @@
       "params": {
         "description": "(params: { sessionId?: string | undefined; includeInactive?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_custom_models",
@@ -750,7 +898,9 @@
       "params": {
         "description": "()"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": true
     },
     {
       "id": "daemon.list_files",
@@ -760,7 +910,9 @@
       "params": {
         "description": "(params: { sessionId: string; showHidden: boolean; path?: string | undefined; cwd?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_git_branches",
@@ -770,7 +922,9 @@
       "params": {
         "description": "(params: { cwd: string; includeOriginBranches?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_installed_plugins",
@@ -780,7 +934,9 @@
       "params": {
         "description": "(params: { sessionId: string; scope?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_managed_worktrees",
@@ -790,7 +946,9 @@
       "params": {
         "description": "(params?: { includeSizes?: boolean | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_marketplaces",
@@ -800,7 +958,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_mcp_registry",
@@ -810,7 +970,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_mcp_servers",
@@ -820,7 +982,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_mcp_tools",
@@ -830,7 +994,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_model_providers",
@@ -840,7 +1006,9 @@
       "params": {
         "description": "(params?: {} | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": true
     },
     {
       "id": "daemon.list_models",
@@ -850,7 +1018,9 @@
       "params": {
         "description": "(params?: { includeDisabled?: boolean | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_opened_sessions",
@@ -860,7 +1030,9 @@
       "params": {
         "description": "(params?: { filter?: { missionSessions?: boolean | undefined; includeBtwForks?: boolean | undefined; } | undefined; includeArchived?: boolean | undefined; } | undefined, options?: { timeout?: number | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_shared_folder",
@@ -870,7 +1042,9 @@
       "params": {
         "description": "(params: { sessionId: string; limit?: number | undefined; pathPrefix?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_skills",
@@ -880,7 +1054,9 @@
       "params": {
         "description": "(params: { sessionId: string; skillName?: string | undefined; includeContent?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_terminals",
@@ -890,7 +1066,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.list_worktree_setup_profiles",
@@ -900,7 +1078,9 @@
       "params": {
         "description": "(params: { cwd: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.load_session",
@@ -910,7 +1090,9 @@
       "params": {
         "description": "(params: { sessionId: string; token: string; additionalToolIds?: string[] | undefined; enabledToolIds?: string[] | undefined; disabledToolIds?: string[] | undefined; mcpServers?: ({ name: string; command: string; args: string[]; env: Record<string, string>; } | { type: \"http\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { type: \"sse\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; })[] | undefined; skipPermissionsUnsafe?: boolean | undefined; sessionLocation?: SessionLocation | undefined; sessionSource?: { platform: SessionPlatform.ReadinessRemediation; reportId: string; repoUrl: string; criterionId: string; } | { platform: SessionPlatform.ReadinessEvaluation; repoUrl: string; } | { platform: SessionPlatform.Automation; computerId: string; automationId: string; } | { platform: SessionPlatform.WikiGeneration; repoUrl: string; } | { platform: SessionPlatform.WikiCISetup; repoUrl: string; } | { platform: SessionPlatform.Tui; } | { platform: SessionPlatform.Desktop; } | { platform: SessionPlatform.Acp; } | { platform: SessionPlatform.Unknown; } | { platform: SessionPlatform.Slack; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; channel?: string | null | undefined; threadTs?: string | null | undefined; automationId?: string | null | undefined; } | { platform: SessionPlatform.Web; delegationSessionId: string; } | { platform: SessionPlatform.Api; delegationSessionId: string; } | { platform: SessionPlatform.SessionsApi; delegationSessionId: string; } | { platform: SessionPlatform.Linear; agentSessionId: string; delegationSessionId: string; userId?: string | null | undefined; issueId?: string | null | undefined; issueUrl?: string | null | undefined; issueIdentifier?: string | null | undefined; organizationId?: string | null | undefined; } | { platform: SessionPlatform.Jira; issueId: string; cloudId: string; delegationSessionId: string; userId?: string | null | undefined; issueKey?: string | null | undefined; siteId?: string | null | undefined; projectId?: string | null | undefined; commentId?: string | null | undefined; taskId?: string | null | undefined; } | { platform: SessionPlatform.MicrosoftTeams; tenantId: string; conversationId: string; serviceUrl: string; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; conversationType?: \"channel\" | \"groupChat\" | \"personal\" | null | undefined; rootMessageId?: string | null | undefined; channelId?: string | null | undefined; aadObjectId?: string | null | undefined; } | { platform: SessionPlatform.GoogleChat; customerId: string; spaceName: string; delegationSessionId: string; userId?: string | null | undefined; spaceType?: \"DIRECT_MESSAGE\" | \"GROUP_CHAT\" | \"SPACE\" | null | undefined; threadName?: string | null | undefined; } | undefined; sessionOriginHint?: SessionOrigin | undefined; autoRejectPermissionRequests?: boolean | undefined; disableBuiltinSkills?: boolean | undefined; mcpOAuthCallbackUri?: string | undefined; structuredOutputFormat?: { type: \"json_schema\"; schema: Record<string, unknown>; } | null | undefined; agentTurnOutcomeTurnId?: string | undefined; loadAllMessages?: boolean | undefined; messageLimit?: number | undefined; display?: boolean | undefined; maxBytes?: number | undefined; disableInactivityTimeout?: boolean | undefined; runtimeSettingsPath?: string | undefined; }, options?: DispatchAdmission | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.logout",
@@ -920,7 +1102,9 @@
       "params": {
         "description": "()"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.pause_automation",
@@ -930,7 +1114,9 @@
       "params": {
         "description": "(params: { automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.preview_model_provider",
@@ -940,7 +1126,9 @@
       "params": {
         "description": "(params: { configuration: Record<string, unknown>; expectedRevision: string; preservedSecrets?: ([\"apiKey\"] | [\"apiKeyHelper\"] | [\"extraHeaders\"] | [\"bedrock\", \"awsAuthRefresh\"] | [\"bedrock\", \"awsCredentialExport\"] | [\"extraHeaders\", string])[] | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": true
     },
     {
       "id": "daemon.pull_url_to_cwd_file",
@@ -950,7 +1138,9 @@
       "params": {
         "description": "(params: { sessionId: string; presignedGetUrl: string; destPath: string; expectedContentLength?: number | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.push_cwd_file_to_url",
@@ -960,7 +1150,9 @@
       "params": {
         "description": "(params: { sessionId: string; filePath: string; presignedPutUrl: string; cwd?: string | undefined; contentType?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.record_mission_agent_title",
@@ -970,7 +1162,9 @@
       "params": {
         "description": "(params: { sessionId: string; title: string; agentSessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.refresh_connector_tool_catalog",
@@ -980,7 +1174,9 @@
       "params": {
         "description": "()"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.remove_marketplace",
@@ -990,7 +1186,9 @@
       "params": {
         "description": "(params: { name: string; sessionId: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.remove_mcp_server",
@@ -1000,7 +1198,9 @@
       "params": {
         "description": "(params: { sessionId: string; serverName: string; settingsLevel: SettingsLevel.User; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.rename_automation",
@@ -1010,7 +1210,9 @@
       "params": {
         "description": "(params: { automationId: string; newName: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.rename_session",
@@ -1020,7 +1222,9 @@
       "params": {
         "description": "(params: { sessionId: string; title: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.resize_terminal",
@@ -1030,7 +1234,9 @@
       "params": {
         "description": "(params: { sessionId: string; terminalId: string; rows: number; cols: number; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.resolve_file_links",
@@ -1040,7 +1246,9 @@
       "params": {
         "description": "(params: { sessionId: string; messageId: string; tokens: string[]; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.resolve_pull_request_statuses",
@@ -1050,7 +1258,9 @@
       "params": {
         "description": "(params: { lookups: { subject: { kind: DaemonPullRequestSubjectKind.Branch; sessionId: string; cwd?: string | undefined; } | { kind: DaemonPullRequestSubjectKind.Url; url: string; sessionId: string; cwd?: string | undefined; }; reason?: DaemonPullRequestLookupReason | undefined; invalidate?: boolean | undefined; }[]; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.resolve_queued_user_message",
@@ -1060,7 +1270,9 @@
       "params": {
         "description": "(params: ({ requestId: string; action: ResolveQueuedUserMessageAction.UpdateQueue; queuePlacement: QueuePlacement; } | { requestId: string; action: ResolveQueuedUserMessageAction.Delete; }) & { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.resolve_user_preferences",
@@ -1070,7 +1282,9 @@
       "params": {
         "description": "(params: { token: string; resolution: DaemonUserPreferencesResolution; cwd?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.resume_automation",
@@ -1080,7 +1294,9 @@
       "params": {
         "description": "(params: { automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.run_automation",
@@ -1090,7 +1306,9 @@
       "params": {
         "description": "(params: { automationId: string; skills?: { name: string; fingerprint: string; content?: string | undefined; supportingFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; }[] | undefined; computerId?: string | undefined; basePath?: string | undefined; automationDirName?: string | undefined; memoryFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; executionTemplateBacked?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.save_semantic_diff_cache",
@@ -1100,7 +1318,9 @@
       "params": {
         "description": "(params: { content: string; truncated: boolean; currentBranch: string; baseBranch: string; commitHash: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.save_worktree_setup_profile",
@@ -1110,7 +1330,9 @@
       "params": {
         "description": "(params: { name: string; cwd: string; script?: string | undefined; initialPrompt?: string | undefined; cleanupScript?: string | undefined; profileId?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.search_files",
@@ -1120,7 +1342,9 @@
       "params": {
         "description": "(params: { sessionId: string; query: string; showHidden: boolean; maxResults: number; cwd?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.search_sessions",
@@ -1130,7 +1354,9 @@
       "params": {
         "description": "(params: { query: string; kind?: \"all\" | SessionSearchDocKind | undefined; limitSessions?: number | undefined; limitHitsPerSession?: number | undefined; contextChars?: number | undefined; updatedAfterMs?: number | undefined; updatedBeforeMs?: number | undefined; }, options?: { signal?: AbortSignal | undefined; } | undefined)"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.send_session",
@@ -1140,7 +1366,9 @@
       "params": {
         "description": "(params: { sessionId: string; title: string; includeCode: boolean; agentProfileId: string; copySessionId: string; history?: DaemonSessionTransferHistory | undefined; supersedesSessionId?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.set_plugin_enabled",
@@ -1150,7 +1378,9 @@
       "params": {
         "description": "(params: { sessionId: string; enabled: boolean; pluginId: string; scope: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.set_skill_disabled",
@@ -1160,7 +1390,9 @@
       "params": {
         "description": "(params: { disabled: boolean; sessionId: string; skillName: string; settingsLevel?: SettingsLevel.User | SettingsLevel.Project | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.start_pull_request_layer_manifest_generation",
@@ -1170,7 +1402,9 @@
       "params": {
         "description": "(params: { sessionId: string; operation: PullRequestLayerManifestOperation; prUrl: string; repoDir: string; baseSha: string; headSha: string; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.submit_bug_report",
@@ -1180,7 +1414,9 @@
       "params": {
         "description": "(params: { sessionId: string; userComment: string; source?: { surface: \"cli\" | \"desktop\" | \"web\"; runtime?: \"byom\" | \"cloud-workspace\" | \"droid-computer\" | \"local\" | undefined; version?: string | undefined; cliVersion?: string | undefined; platform?: string | undefined; arch?: string | undefined; osVersion?: string | undefined; } | undefined; clientLogs?: string | undefined; tuiLogs?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.submit_mcp_auth_code",
@@ -1190,7 +1426,9 @@
       "params": {
         "description": "(params: { code: string; sessionId: string; serverName: string; state: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.submit_mcp_auth_error",
@@ -1200,7 +1438,9 @@
       "params": {
         "description": "(params: { error: string; sessionId: string; serverName: string; state: string; errorDescription?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.sync_connected_model_providers",
@@ -1210,7 +1450,9 @@
       "params": {
         "description": "()"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.test_custom_model",
@@ -1220,7 +1462,9 @@
       "params": {
         "description": "(params: { rawIndex: number; expectedModel: string; expectedRevision?: string | undefined; timeoutMs?: number | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.toggle_mcp_server",
@@ -1230,7 +1474,9 @@
       "params": {
         "description": "(params: { sessionId: string; serverName: string; enabled: boolean; settingsLevel: SettingsLevel.User; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.toggle_mcp_tool",
@@ -1240,7 +1486,9 @@
       "params": {
         "description": "(params: { sessionId: string; serverName: string; toolName: string; enabled: boolean; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.trust_folder",
@@ -1250,7 +1498,9 @@
       "params": {
         "description": "(params: { path: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.unarchive_session",
@@ -1260,7 +1510,9 @@
       "params": {
         "description": "(params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.uninstall_plugin",
@@ -1270,7 +1522,9 @@
       "params": {
         "description": "(params: { sessionId: string; pluginId: string; scope: string; })"
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.update_automation",
@@ -1280,7 +1534,9 @@
       "params": {
         "description": "(params: { name: string; automationId: string; prompt: string; schedule: string; paused?: boolean | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; privacyLevel?: AutomationPrivacyLevel | undefined; workingDirectory?: string | undefined; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; workstreamId?: string | undefined; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_automation_model",
@@ -1290,7 +1546,9 @@
       "params": {
         "description": "(params: { model: string | null; automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_automation_privacy",
@@ -1300,7 +1558,9 @@
       "params": {
         "description": "(params: { automationId: string; privacyLevel: AutomationPrivacyLevel; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; basePath?: string | undefined; createdBy?: { name: string; email?: string | undefined; avatarUrl?: string | undefined; } | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_automation_prompt",
@@ -1310,7 +1570,9 @@
       "params": {
         "description": "(params: { automationId: string; prompt: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_automation_schedule",
@@ -1320,7 +1582,9 @@
       "params": {
         "description": "(params: { automationId: string; schedule: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_cron",
@@ -1330,7 +1594,9 @@
       "params": {
         "description": "(params: { cronId: string; status?: \"active\" | \"paused\" | undefined; schedule?: { expression: string; recurring: boolean; } | undefined; payload?: { prompt?: string | undefined; } | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_marketplace",
@@ -1340,7 +1606,9 @@
       "params": {
         "description": "(params: { sessionId: string; name?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_mcp_config",
@@ -1350,7 +1618,9 @@
       "params": {
         "description": "(params: { action: \"add\" | \"disable\" | \"enable\" | \"remove\"; serverNames: string[]; serverConfig?: { disabled: boolean; type: \"stdio\"; command: string; args: string[]; env?: Record<string, string> | undefined; } | { disabled: boolean; type: \"http\"; url: string; headers?: Record<string, string> | undefined; oauth?: { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { disabled: boolean; type: \"sse\"; url: string; headers?: Record<string, string> | undefined; oauth?: { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_plugin",
@@ -1360,7 +1630,9 @@
       "params": {
         "description": "(params: { sessionId: string; pluginId?: string | undefined; scope?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_session_defaults",
@@ -1370,7 +1642,9 @@
       "params": {
         "description": "(params: { interactionMode?: DroidInteractionMode | undefined; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; autonomyLevel?: AutonomyLevel | undefined; specModeModelId?: string | null | undefined; specModeReasoningEffort?: ReasoningEffort | null | undefined; compactionThresholdCheckEnabled?: boolean | undefined; compactionTokenLimit?: number | undefined; compactionTokenLimitPerModel?: Record<string, number> | undefined; compactionModel?: string | undefined; enableOneHourAnthropicCaching?: boolean | undefined; cloudSessionSync?: boolean | undefined; cloudConfigSync?: boolean | undefined; cloudItemPull?: boolean | undefined; routedModelVisibilityEnabled?: boolean | undefined; subagentAutonomyLevel?: \"high\" | \"inherit\" | \"low\" | \"medium\" | \"off\" | null | undefined; specSaveDir?: string | null | undefined; missionOrchestratorModel?: string | null | undefined; missionOrchestratorReasoningEffort?: ReasoningEffort | null | undefined; imageGenerationModel?: string | null | undefined; worktreeDirectory?: string | null | undefined; worktreeAutoDeleteLimit?: number | null | undefined; compactionModelMode?: \"current-model\" | \"factory-default\" | undefined; runInWorktree?: boolean | null | undefined; includeCoAuthoredByDroid?: boolean | undefined; enableDroidShield?: boolean | undefined; hooksDisabled?: boolean | undefined; outputStyle?: string | undefined; acknowledgeLegacyModelId?: string | undefined; subagentModelSettings?: { lightModel?: string | undefined; lightReasoningEffort?: ReasoningEffort | undefined; mediumModel?: string | undefined; mediumReasoningEffort?: ReasoningEffort | undefined; heavyModel?: string | undefined; heavyReasoningEffort?: ReasoningEffort | undefined; } | undefined; subagentInheritTiers?: (\"heavy\" | \"light\" | \"medium\")[] | undefined; missionModelSettings?: { workerModel?: string | undefined; workerReasoningEffort?: ReasoningEffort | undefined; validationWorkerModel?: string | undefined; validationWorkerReasoningEffort?: ReasoningEffort | undefined; skipScrutiny?: boolean | undefined; skipUserTesting?: boolean | undefined; } | undefined; droidCoreModel?: string | null | undefined; modelProviderChoices?: Record<string, string | null> | undefined; }, signal?: AbortSignal | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.update_session_settings",
@@ -1380,7 +1654,9 @@
       "params": {
         "description": "(params: Omit<{ sessionId: string; interactionMode?: DroidInteractionMode | undefined; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; tagPatch?: Record<string, Record<string, string | null> | null> | undefined; tags?: { name: string; metadata?: Record<string, string> | undefined; }[] | undefined; autonomyMode?: AutonomyMode | undefined; autonomyLevel?: AutonomyLevel | undefined; specModeModelId?: string | null | undefined; specModeReasoningEffort?: ReasoningEffort | null | undefined; additionalToolIds?: string[] | undefined; enabledToolIds?: string[] | undefined; disabledToolIds?: string[] | undefined; restrictToolIds?: string[] | undefined; missionSettings?: { workerModel?: string | undefined; workerReasoningEffort?: ReasoningEffort | undefined; validationWorkerModel?: string | undefined; validationWorkerReasoningEffort?: ReasoningEffort | undefined; skipScrutiny?: boolean | undefined; skipUserTesting?: boolean | undefined; } | undefined; compactionThresholdCheckEnabled?: boolean | undefined; compactionTokenLimit?: number | undefined; }, \"tagPatch\" | \"tags\"> & SessionTagsUpdate, requestId?: string | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.upsert_custom_model",
@@ -1390,7 +1666,9 @@
       "params": {
         "description": "(params: { model: string; provider: string; displayName?: string | undefined; baseUrl?: string | undefined; apiKey?: string | undefined; maxOutputTokens?: number | null | undefined; noImageSupport?: boolean | null | undefined; rawIndex?: number | undefined; expectedModel?: string | undefined; configuration?: Record<string, unknown> | undefined; preservedSecrets?: ([\"apiKey\"] | [\"apiKeyHelper\"] | [\"extraHeaders\"] | [\"bedrock\", \"awsAuthRefresh\"] | [\"bedrock\", \"awsCredentialExport\"] | [\"extraHeaders\", string])[] | undefined; expectedRevision?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.upsert_model_provider",
@@ -1400,7 +1678,9 @@
       "params": {
         "description": "(params: { configuration: Record<string, unknown>; expectedRevision: string; preservedSecrets?: ([\"apiKey\"] | [\"apiKeyHelper\"] | [\"extraHeaders\"] | [\"bedrock\", \"awsAuthRefresh\"] | [\"bedrock\", \"awsCredentialExport\"] | [\"extraHeaders\", string])[] | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.validate_working_directory",
@@ -1410,7 +1690,9 @@
       "params": {
         "description": "(params: { workingDirectory: string; })"
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.wait_for_config_pull",
@@ -1420,7 +1702,9 @@
       "params": {
         "description": "(timeoutMs: number, signal?: AbortSignal | undefined)"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.warmup_cache",
@@ -1430,7 +1714,9 @@
       "params": {
         "description": "(_params: { sessionId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "daemon.write_shared_folder_file",
@@ -1440,7 +1726,9 @@
       "params": {
         "description": "(params: { path: string; content: string; sessionId: string; encoding?: \"base64\" | \"utf8\" | undefined; baseFingerprint?: string | undefined; baseModifiedAtMs?: number | undefined; createOnly?: boolean | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.write_terminal_data",
@@ -1450,7 +1738,9 @@
       "params": {
         "description": "(params: { data: string; sessionId: string; terminalId: string; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "daemon.write_workspace_file_content",
@@ -1460,7 +1750,9 @@
       "params": {
         "description": "(params: { content: string; sessionId: string; filePath: string; cwd?: string | undefined; baseFingerprint?: string | undefined; })"
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.DeleteDeleteAWikiRun",
@@ -1478,7 +1770,9 @@
           "wikiRunId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.GetCheckWhetherTheCallerCanUploadAWikiForARepository",
@@ -1497,7 +1791,9 @@
           "repoUrl"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetExportAWikiRunAsAZip",
@@ -1515,7 +1811,9 @@
           "wikiRunId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetGetAWikiPage",
@@ -1537,7 +1835,9 @@
           "pageId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetGetAWikiRun",
@@ -1555,7 +1855,9 @@
           "wikiRunId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetListCiAutomationJobs",
@@ -1566,7 +1868,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetListCiEligibleRepositories",
@@ -1577,7 +1881,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetListCiRepositoryOwners",
@@ -1588,7 +1894,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetListGithubActionsRunsForCiAutomationWorkflows",
@@ -1599,7 +1907,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetListTheLatestWikiRuns",
@@ -1610,7 +1920,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetListWikiRunHistoryForARepository",
@@ -1628,7 +1940,9 @@
           "repoUrl"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetScanRepositoriesForCiWorkflows",
@@ -1639,7 +1953,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.GetSearchAWikiRun",
@@ -1657,7 +1973,9 @@
           "wikiRunId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.PostCreateAWikiRun",
@@ -1668,7 +1986,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.PostCreateAWikiVideoUploadUrl",
@@ -1679,7 +1999,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.PostExecuteADroidTurn",
@@ -1867,7 +2189,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.PostOpenACiWorkflowPrCreateEditDelete",
@@ -1878,7 +2202,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.PostUpdateWikiRunPrivacyLevel",
@@ -1896,7 +2222,9 @@
           "wikiRunId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.answerSessionElicitation",
@@ -2052,7 +2380,9 @@
           "requestId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.bulkCreateComputers",
@@ -2106,7 +2436,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.cancelEnvironmentBuild",
@@ -2131,7 +2463,9 @@
           "buildId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.completeComputerFileUpload",
@@ -2183,7 +2517,9 @@
           "fileName"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.createComputer",
@@ -2475,7 +2811,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.createComputerFileDownload",
@@ -2531,7 +2869,9 @@
           "fileName"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.createComputerFileUpload",
@@ -2580,7 +2920,9 @@
           "fileName"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.createEnvironment",
@@ -2712,7 +3054,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.createServiceAccount",
@@ -2750,7 +3094,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.createServiceAccountApiKey",
@@ -2789,7 +3135,9 @@
           "serviceAccountId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": true
     },
     {
       "id": "rest.createSession",
@@ -3054,7 +3402,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.deleteComputer",
@@ -3074,7 +3424,9 @@
           "computerId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.deleteEnvironment",
@@ -3094,7 +3446,9 @@
           "environmentId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.deleteServiceAccount",
@@ -3114,7 +3468,9 @@
           "serviceAccountId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.deleteSession",
@@ -3137,7 +3493,9 @@
           "sessionId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.ensureDefaultEnvironment",
@@ -3148,7 +3506,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getComputer",
@@ -3177,7 +3537,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getComputerByName",
@@ -3211,7 +3573,9 @@
           "name"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getComputerMetrics",
@@ -3236,7 +3600,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getEnvironment",
@@ -3256,7 +3622,9 @@
           "environmentId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getEnvironmentBuildAttemptDiagnostics",
@@ -3281,7 +3649,9 @@
           "buildId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getEnvironmentBuildDiagnostics",
@@ -3301,7 +3671,9 @@
           "environmentId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getGlobalLimit",
@@ -3312,7 +3684,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getGroupLimits",
@@ -3323,7 +3697,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getMessage",
@@ -3351,7 +3727,9 @@
           "messageId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getMessages",
@@ -3391,7 +3769,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getServiceAccount",
@@ -3411,7 +3791,9 @@
           "serviceAccountId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getSession",
@@ -3434,7 +3816,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getSharedUserLimits",
@@ -3445,7 +3829,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.getUserLimits",
@@ -3456,7 +3842,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.interruptSession",
@@ -3474,7 +3862,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.inviteUser",
@@ -3510,7 +3900,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listAvailableComputerProviders",
@@ -3521,7 +3913,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listChildSessions",
@@ -3573,7 +3967,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listComputers",
@@ -3610,7 +4006,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listEnterpriseControlChangeHistory",
@@ -3631,7 +4029,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listEnvironmentBuildStatuses",
@@ -3659,7 +4059,9 @@
           "environmentIds"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listEnvironmentSources",
@@ -3670,7 +4072,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listEnvironments",
@@ -3686,7 +4090,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listOrganizationAuditEvents",
@@ -3772,7 +4178,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listOrganizationComputerSecrets",
@@ -3783,7 +4191,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listOrganizationUsers",
@@ -3804,7 +4214,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listServiceAccountApiKeys",
@@ -3824,7 +4236,9 @@
           "serviceAccountId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listServiceAccounts",
@@ -3835,7 +4249,9 @@
         "type": "object",
         "properties": {}
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listSessionElicitations",
@@ -3854,7 +4270,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.listSessions",
@@ -3879,7 +4297,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": true,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.postMessage",
@@ -4074,7 +4494,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.recordComputerActivity",
@@ -4099,7 +4521,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.refreshComputer",
@@ -4119,7 +4543,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.removeUser",
@@ -4139,7 +4565,9 @@
           "email"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.restartComputer",
@@ -4180,7 +4608,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.retryEnvironmentBuild",
@@ -4200,7 +4630,9 @@
           "environmentId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.retryInstallDeps",
@@ -4220,7 +4652,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.revokeServiceAccountApiKey",
@@ -4246,7 +4680,9 @@
           "keyId"
         ]
       },
-      "destructive": true
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.rotateServiceAccountApiKey",
@@ -4289,7 +4725,9 @@
           "keyId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": true
     },
     {
       "id": "rest.setDefaultEnvironment",
@@ -4314,7 +4752,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.setGlobalLimit",
@@ -4341,7 +4781,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.setGroupLimits",
@@ -4389,7 +4831,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.setSharedUserLimits",
@@ -4436,7 +4880,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.setUserLimits",
@@ -4484,7 +4930,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.updateComputer",
@@ -4549,7 +4997,9 @@
           "computerId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.updateEnvironment",
@@ -4661,7 +5111,9 @@
           "environmentId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.updateOrganizationComputerSecrets",
@@ -4720,7 +5172,9 @@
           }
         }
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": true,
+      "secret": false
     },
     {
       "id": "rest.updateServiceAccount",
@@ -4758,7 +5212,9 @@
           "serviceAccountId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     },
     {
       "id": "rest.updateSession",
@@ -4972,7 +5428,9 @@
           "sessionId"
         ]
       },
-      "destructive": false
+      "readOnly": false,
+      "destructive": false,
+      "secret": false
     }
   ]
 }

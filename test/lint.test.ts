@@ -13,7 +13,11 @@ test('oxlint loads the anti-slop plugin and reports its rules', async () => {
   try {
     const file = join(dir, 'filter-map.ts');
     await copyFile(join(root, 'test/fixtures/anti-slop/filter-map.ts'), file);
-    const r = spawnSync(join(root, 'node_modules/.bin/oxlint'), ['-c', join(root, '.oxlintrc.json'), '-f', 'json', file], { cwd: root, encoding: 'utf8' });
+    // Run oxlint's JS entry with node: on Windows node_modules/.bin/oxlint is a shell shim spawnSync cannot start.
+    const r = spawnSync(process.execPath, [join(root, 'node_modules/oxlint/bin/oxlint'), '-c', join(root, '.oxlintrc.json'), '-f', 'json', file], {
+      cwd: root,
+      encoding: 'utf8',
+    });
     const codes = JSON.parse(r.stdout).diagnostics.map((d: { code: string }) => d.code);
     assert.deepEqual(codes, ['anti-slop(no-array-filter-map)']);
     assert.equal(r.status, 1);

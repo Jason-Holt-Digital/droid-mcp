@@ -45,18 +45,44 @@ function prompt(commands: string[]): string {
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Settles when p does or after ms, whichever comes first, and never rejects.
+const bounded = (p: Promise<unknown>, ms: number) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    p.catch(() => {}).finally(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+
+// One timer for the whole job. Every REST call races it, so a stalled call cannot outlive it; stop() ends it early.
+type Deadline = { at: number; within: <T>(p: Promise<T>) => Promise<T>; stop: (reason: string) => void; clear: () => void };
+
+function deadline(at: number, ms: number): Deadline {
+  let fail: (err: Error) => void = () => {};
+  const expired = new Promise<never>((_, reject) => {
+    fail = reject;
+  });
+  expired.catch(() => {});
+  const timer = setTimeout(() => fail(new Error(`timed out after ${Math.round(ms / 1000)} s`)), ms);
+  return { at, within: (p) => Promise.race([expired, p]), stop: (reason) => fail(new Error(reason)), clear: () => clearTimeout(timer) };
+}
 
 export class Setup {
   #rest: SetupRest;
   #pollMs: number;
   #timeoutMs: number;
+  #cleanupMs: number;
   #now: () => number;
   #jobs = new Map<string, Job>();
+  #running = new Set<{ stop: (reason: string) => void; done: Promise<void> }>();
+  #closed = false;
 
-  constructor(opts: { rest: SetupRest; pollMs?: number; timeoutMs?: number; now?: () => number }) {
+  constructor(opts: { rest: SetupRest; pollMs?: number; timeoutMs?: number; cleanupMs?: number; now?: () => number }) {
     this.#rest = opts.rest;
     this.#pollMs = opts.pollMs ?? 2000;
     this.#timeoutMs = opts.timeoutMs ?? 4 * 60_000;
+    this.#cleanupMs = opts.cleanupMs ?? 10_000;
     this.#now = opts.now ?? Date.now;
   }
 
@@ -68,43 +94,71 @@ export class Setup {
   async start(computerId: string, commands: string[]): Promise<Job> {
     const current = this.#jobs.get(computerId);
     if (current?.state === 'working') return current;
+    if (this.#closed) throw new Refused('invalid', 'the server is shutting down', 'Call droid_setup again once the server is back.');
     const job: Job = { state: 'working', detail: 'creating the setup session', at: this.#now() };
     this.#jobs.set(computerId, job);
-    try {
-      job.sessionId = await this.#rest.create(computerId, {
+    const d = deadline(this.#now() + this.#timeoutMs, this.#timeoutMs);
+    let started = () => {};
+    const ready = new Promise<void>((r) => {
+      started = r;
+    });
+    const entry = { stop: d.stop, done: Promise.resolve() };
+    entry.done = this.#run(job, computerId, commands, d, started).finally(() => {
+      d.clear();
+      this.#running.delete(entry);
+      started();
+    });
+    this.#running.add(entry);
+    await ready;
+    return job;
+  }
+
+  // Ends every job still working: interrupts and archives its session. The server awaits this before it exits.
+  async close(): Promise<void> {
+    this.#closed = true;
+    const all = [...this.#running];
+    for (const r of all) r.stop('the server shut down during setup');
+    await Promise.all(all.map((r) => r.done));
+  }
+
+  async #run(job: Job, computerId: string, commands: string[], d: Deadline, started: () => void): Promise<void> {
+    const created = Promise.resolve().then(() =>
+      this.#rest.create(computerId, {
         model: 'claude-haiku-4-5-20251001',
         autonomyLevel: 'off',
         interactionMode: 'auto',
         tags: [{ name: SETUP_TAG }],
-      });
-      await this.#rest.send(job.sessionId, prompt(commands), computerId);
-      job.detail = 'waiting for the Droid to run the setup commands';
+      }),
+    );
+    try {
+      job.sessionId = await d.within(created);
     } catch (err) {
-      await this.#finish(job, 'failed', message(err));
-      return job;
+      // A create that lands after the deadline still made a session there; stop it too.
+      created.then(
+        (id) => this.#cleanup(id, 'failed'),
+        () => {},
+      );
+      return await this.#finish(job, 'failed', message(err));
     }
-    void this.#watch(job, job.sessionId, computerId, commands);
-    return job;
+    try {
+      await d.within(this.#rest.send(job.sessionId, prompt(commands), computerId));
+    } catch (err) {
+      return await this.#finish(job, 'failed', message(err));
+    }
+    job.detail = 'waiting for the Droid to run the setup commands';
+    started();
+    await this.#watch(job, job.sessionId, computerId, commands, d);
   }
 
-  async #watch(job: Job, sessionId: string, computerId: string, commands: string[]): Promise<void> {
-    const deadline = this.#now() + this.#timeoutMs;
-    const timedOut = `timed out after ${Math.round(this.#timeoutMs / 1000)} s`;
-    // A stalled REST call must not outlive the deadline: every call races it, and a late reply is ignored.
-    let timer: NodeJS.Timeout | undefined;
-    const expired = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(timedOut)), this.#timeoutMs);
-    });
-    expired.catch(() => {});
-    const within = <T>(p: Promise<T>) => Promise.race([expired, p]);
+  async #watch(job: Job, sessionId: string, computerId: string, commands: string[], d: Deadline): Promise<void> {
     const rest = {
-      status: (...a: Parameters<SetupRest['status']>) => within(this.#rest.status(...a)),
-      answer: (...a: Parameters<SetupRest['answer']>) => within(this.#rest.answer(...a)),
-      messages: (...a: Parameters<SetupRest['messages']>) => within(this.#rest.messages(...a)),
+      status: (...a: Parameters<SetupRest['status']>) => d.within(this.#rest.status(...a)),
+      answer: (...a: Parameters<SetupRest['answer']>) => d.within(this.#rest.answer(...a)),
+      messages: (...a: Parameters<SetupRest['messages']>) => d.within(this.#rest.messages(...a)),
     };
     let approved = 0;
     try {
-      while (this.#now() < deadline) {
+      while (this.#now() < d.at) {
         const s = await rest.status(sessionId, computerId);
         for (const e of s.elicitations) {
           if (e.type !== 'permission') {
@@ -133,21 +187,30 @@ export class Setup {
             return await this.#finish(job, 'failed', detail.slice(0, DETAIL_MAX) || 'the Droid stopped without SETUP-OK');
           }
         }
-        await within(sleep(this.#pollMs));
+        await d.within(sleep(this.#pollMs));
       }
-      await this.#finish(job, 'failed', timedOut);
+      await this.#finish(job, 'failed', `timed out after ${Math.round(this.#timeoutMs / 1000)} s`);
     } catch (err) {
       await this.#finish(job, 'failed', message(err));
-    } finally {
-      clearTimeout(timer);
     }
   }
 
   async #finish(job: Job, state: 'done' | 'failed', detail: string): Promise<void> {
     Object.assign(job, { state, detail, at: this.#now() });
-    if (!job.sessionId) return;
-    // A failed job may still have a command running there; stop it before archiving.
-    if (state === 'failed') await this.#rest.interrupt(job.sessionId).catch(() => {});
-    await this.#rest.archive(job.sessionId).catch(() => {});
+    if (job.sessionId) await this.#cleanup(job.sessionId, state);
+  }
+
+  // A failed job may still have a command running there; stop it before archiving.
+  // Each call gets its own bound, so a stalled interrupt cannot block the archive or the job's result.
+  async #cleanup(sessionId: string, state: 'done' | 'failed'): Promise<void> {
+    if (state === 'failed')
+      await bounded(
+        Promise.resolve().then(() => this.#rest.interrupt(sessionId)),
+        this.#cleanupMs,
+      );
+    await bounded(
+      Promise.resolve().then(() => this.#rest.archive(sessionId)),
+      this.#cleanupMs,
+    );
   }
 }
