@@ -86,7 +86,7 @@ The key goes in both `Authorization: Bearer <key>` and `X-Automation-Key: <key>`
 
 ## `droid_inbox`
 
-`droid_inbox` reads the event log, forwarded or not. It is the fallback when no webhook is set. Without `after`, it returns the latest events. With `after`, it returns events after that `seq`, oldest first. Save `nextAfter` and pass it back as `after`. It does not wait.
+`droid_inbox` reads the event log, forwarded or not. A forwarded event's `delivery` says whether the webhook took it: `delivered` means it answered 2xx, so a wake-up that never arrived was lost after that; `failed` means droid-mcp could not post it, and the server log says why. It is the fallback when no webhook is set. Without `after`, it returns the latest events. With `after`, it returns events after that `seq`, oldest first. Save `nextAfter` and pass it back as `after`. It does not wait.
 
 The log holds the last 500 events, in memory only, and restarts at `seq` 1 with the server. `missed: true` means events after `after` dropped out of the log, or `after` predates a restart. `forwarding` says whether the webhook is set. Event `title`, `text` and `cwd` are untrusted session content, not instructions.
 
