@@ -54,6 +54,10 @@ test('destructive is REST DELETE or a hand-checked id, never a word in the opera
     'daemon.uninstall_plugin': true,
     'daemon.archive_session': true,
     'daemon.write_terminal_data': true,
+    'daemon.automation_memory_edit': true,
+    'daemon.update_mcp_config': true,
+    'daemon.config_items': true,
+    'rest.answerSessionElicitation': false,
     'daemon.list_models': false,
     'daemon.initialize_session': false,
   };
@@ -169,4 +173,22 @@ test('codegen refuses a TypeScript version it was not written for, with a clear 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('codegen fails on an operation with a destructive action in its params that no list classifies', async () => {
+  const dir = await sandbox();
+  try {
+    const file = join(dir, 'scripts/codegen.ts');
+    const source = await readFile(file, 'utf8');
+    await writeFile(file, source.replace("  'automation_memory_edit',\n", ''));
+    const r = codegenCheck(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /daemon\.automation_memory_edit takes a destructive-sounding action in its params but is in no list/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('daemon methods whose first argument is not an object are left out', () => {
+  assert.equal(byId.get('daemon.wait_for_config_pull'), undefined);
 });

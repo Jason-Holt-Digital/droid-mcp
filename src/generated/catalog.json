@@ -131,7 +131,7 @@
         "description": "(params: { edit: { kind: \"replace\"; oldText: string; newText: string; replaceAll?: boolean | undefined; } | { kind: \"write\"; content: string; baseSha256?: string | undefined; rewriteLargeFile?: boolean | undefined; } | { kind: \"append\"; content: string; } | { kind: \"delete\"; baseSha256: string; }; path: string; automationId: string; })"
       },
       "readOnly": false,
-      "destructive": false,
+      "destructive": true,
       "secret": false
     },
     {
@@ -299,7 +299,7 @@
         "description": "(params: { cwd: string; operation: { action: \"availability\"; } | { action: \"catalog\"; cursor?: string | undefined; } | { action: \"preview\"; target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; purpose?: \"publish\" | \"resolve\" | undefined; } | { action: \"publish\"; approval: { target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; itemId: string; localHash: string; candidateHash: string; expectedRevision?: string | undefined; scopeHash?: string | undefined; }; } | { action: \"publication-preview\"; cursor?: string | undefined; } | { action: \"publish-batch\"; approvals: { target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; itemId: string; localHash: string; candidateHash: string; candidate: { isDeleted: true; } | { isDeleted: false; snapshot: { metadata: Record<string, unknown>; files: { path: string; isExecutable: boolean; contentHash: string; byteLength: number; contentBase64: string; }[]; }; }; expectedRevision?: string | undefined; scopeHash?: string | undefined; baseRevision?: string | undefined; remoteHash?: string | undefined; }[]; } | { action: \"follow\"; enabled: boolean; item: { category: ConfigItemCategory; itemId: string; source?: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | undefined; pin?: string | undefined; }; } | { action: \"pull\"; } | { action: \"history\"; itemId: string; beforeRevision?: string | undefined; } | { action: \"revision\"; revision: string; itemId: string; } | { action: \"restore\"; expectedRevision: string; itemId: string; sourceRevision: string; snapshotHash: string; scopeHash?: string | undefined; } | { action: \"remove\"; expectedRevision: string; itemId: string; snapshotHash: string; scopeHash?: string | undefined; } | { action: \"resolve\"; resolution: { kind: \"local\"; } | { kind: \"remote\"; } | { kind: \"edited\"; snapshot: { isDeleted: true; } | { isDeleted: false; snapshot: { metadata: Record<string, unknown>; files: { path: string; isExecutable: boolean; contentHash: string; byteLength: number; contentBase64: string; }[]; }; }; }; expectedRevision: string; itemId: string; localHash: string; scopeHash?: string | undefined; pin?: string | undefined; } | { action: \"identity\"; sourceId: string; itemId?: string | undefined; expectedItemId?: string | undefined; previousPath?: string | undefined; }; level: \"project\" | \"user\"; }, signal?: AbortSignal | undefined)"
       },
       "readOnly": false,
-      "destructive": false,
+      "destructive": true,
       "secret": false
     },
     {
@@ -1619,7 +1619,7 @@
         "description": "(params: { action: \"add\" | \"disable\" | \"enable\" | \"remove\"; serverNames: string[]; serverConfig?: { disabled: boolean; type: \"stdio\"; command: string; args: string[]; env?: Record<string, string> | undefined; } | { disabled: boolean; type: \"http\"; url: string; headers?: Record<string, string> | undefined; oauth?: { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { disabled: boolean; type: \"sse\"; url: string; headers?: Record<string, string> | undefined; oauth?: { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | undefined; })"
       },
       "readOnly": false,
-      "destructive": false,
+      "destructive": true,
       "secret": false
     },
     {
@@ -1691,18 +1691,6 @@
         "description": "(params: { workingDirectory: string; })"
       },
       "readOnly": true,
-      "destructive": false,
-      "secret": false
-    },
-    {
-      "id": "daemon.wait_for_config_pull",
-      "source": "daemon",
-      "name": "waitForConfigPull",
-      "summary": "Await startup configuration independently of the session initialization request.",
-      "params": {
-        "description": "(timeoutMs: number, signal?: AbortSignal | undefined)"
-      },
-      "readOnly": false,
       "destructive": false,
       "secret": false
     },
