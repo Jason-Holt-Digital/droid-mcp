@@ -77,7 +77,9 @@ test('Computers caches for 30 s, marks this machine from computer.json, and requ
 
     await assert.rejects(computers.require('dead-box'), (err: Error) => {
       assert.ok(err instanceof Refused);
-      assert.equal(err.message, 'computer dead-box is offline (daemon last seen 2026-11-13T11:50:00Z); start its daemon or pick another computer');
+      assert.equal(err.code, 'computer_offline');
+      assert.equal(err.message, 'computer dead-box is offline (daemon last seen 2026-11-13T11:50:00Z)');
+      assert.equal(err.fix, 'Start its daemon, or pick another computer from droid_computers.');
       return true;
     });
     assert.equal((await computers.require('nap')).state, 'paused', 'paused cloud computers may be named');

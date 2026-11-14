@@ -21,7 +21,7 @@ import {
   type Workstream,
 } from './catalog.ts';
 import { isoSeconds, offlineError, ONLINE_WINDOW_MS, type Computer, type Computers } from './computers.ts';
-import { allowedDecisions, autonomyCap, checkCwd, Refused, resolveAutonomy, type Autonomy } from './config.ts';
+import { allowedDecisions, API_KEY_FIX, autonomyCap, checkCwd, Refused, resolveAutonomy, ToolError, type Autonomy } from './config.ts';
 import { EVENT_KINDS, type DroidEvent, type EventLog, type Forwarder } from './events.ts';
 import { loadCatalog, type ModelCatalog } from './models.ts';
 import type { Rest } from './rest.ts';
@@ -101,9 +101,15 @@ function reply(value: unknown) {
   return { content: [{ type: 'text' as const, text }] };
 }
 
+const INTERNAL_FIX = 'Retry the call; if it fails again, report this message.';
+
 function failure(err: unknown) {
-  const msg = preview((err instanceof Error ? err.message : String(err)).replace(/\s+/g, ' ').trim(), 1000);
-  return { isError: true, content: [{ type: 'text' as const, text: msg }] };
+  const { code, message, fix } =
+    err instanceof ToolError
+      ? err
+      : { code: 'internal', message: err instanceof Error ? err.message : String(err), fix: INTERNAL_FIX };
+  const text = JSON.stringify({ code, message: preview(message.replace(/\s+/g, ' ').trim(), 1000), fix });
+  return { isError: true, content: [{ type: 'text' as const, text }] };
 }
 
 function handle<A>(fn: (args: A) => Promise<unknown>) {
@@ -155,6 +161,8 @@ const MODEL_HELP =
 const USAGE =
   'Pass any id as model/specModel/workerModel/validatorModel to droid_start or droid_send; custom ids are BYOK models from ~/.factory/settings.json customModels';
 
+const SESSION_ID_FIX = 'Pass a session id from droid_find.';
+
 const COMPUTER = z
   .string()
   .optional()
@@ -188,7 +196,8 @@ async function locate(ctx: Ctx, session: string, computer?: string, sending = fa
   if (computer !== undefined) {
     // A failed computer list is Refused so droid_send's idempotency key is not left pending.
     const c = await ctx.computers.require(computer).catch((err) => {
-      throw err instanceof Refused ? err : new Refused(`could not list computers: ${err instanceof Error ? err.message : String(err)}`);
+      if (err instanceof Refused) throw err;
+      throw new Refused('internal', `could not list computers: ${err instanceof Error ? err.message : String(err)}`, INTERNAL_FIX);
     });
     return c.thisMachine ? { remote: false } : { computerId: c.id, remote: true };
   }
@@ -208,7 +217,7 @@ async function locate(ctx: Ctx, session: string, computer?: string, sending = fa
 async function resolveTarget(ctx: Ctx, id: string, opts: { sending?: boolean; where?: Where } = {}): Promise<Target> {
   const run = ctx.runs.get(id);
   if (run && !(opts.sending && run.state === 'closed')) return { kind: 'own', run };
-  if (!isSessionId(id)) throw new Refused(`invalid session id: ${id}`);
+  if (!isSessionId(id)) throw new Refused('invalid', `invalid session id: ${id}`, SESSION_ID_FIX);
   if (opts.where?.remote) return { kind: 'unknown', id };
   const record = await findSession(ctx.sessionsRoot, id);
   return record ? { kind: 'local', record } : { kind: 'unknown', id };
@@ -221,7 +230,7 @@ function viaRest(ctx: Ctx, target: Target): Rest | undefined {
 }
 
 function needRest(ctx: Ctx, what: string): Rest {
-  if (!ctx.rest) throw new Error(`${what} for sessions this server did not start needs FACTORY_API_KEY`);
+  if (!ctx.rest) throw new ToolError('needs_api_key', `${what} for sessions this server did not start needs FACTORY_API_KEY`, API_KEY_FIX);
   return ctx.rest;
 }
 
@@ -339,7 +348,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     },
     handle(async (a) => {
       const only = a.computer === undefined ? undefined : await ctx.computers.require(a.computer);
-      if (only && !only.thisMachine && a.content) throw new Refused('content search covers this machine only');
+      if (only && !only.thisMachine && a.content) throw new Refused('invalid', 'content search covers this machine only', 'Drop computer, or drop content to search titles there.');
       const report: FanOutReport = { searched: [], skipped: [], failed: [], truncated: [] };
       let records: Listing[] = [];
       let query = a.query;
@@ -382,7 +391,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         for (const g of catalog.standalone) for (const r of g.sessions) items.push({ group: g, r });
       }
       const start = a.cursor === undefined ? 0 : Number.parseInt(a.cursor, 10);
-      if (!Number.isInteger(start) || start < 0) throw new Error(`invalid cursor: ${a.cursor}`);
+      if (!Number.isInteger(start) || start < 0) throw new ToolError('invalid', `invalid cursor: ${a.cursor}`, 'Pass nextCursor from the previous droid_find result, or omit cursor.');
       const page = items.slice(start, start + (a.limit ?? 40));
       const orchestrators = new Map(records.filter((r) => r.workstream?.role === 'orchestrator').map((r) => [r.id, r]));
 
@@ -539,11 +548,17 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         const cwd = checkCwd(a.cwd, ctx.roots);
         const autonomy = resolveAutonomy(a.autonomy, ctx.env);
         if (a.fork !== undefined) {
-          if (!isSessionId(a.fork)) throw new Refused(`invalid session id: ${a.fork}`);
-          if (a.appendSystemPrompt !== undefined) throw new Refused('appendSystemPrompt cannot be combined with fork');
+          if (!isSessionId(a.fork)) throw new Refused('invalid', `invalid session id: ${a.fork}`, SESSION_ID_FIX);
+          if (a.appendSystemPrompt !== undefined) {
+            throw new Refused('invalid', 'appendSystemPrompt cannot be combined with fork', 'Pass only one of appendSystemPrompt and fork.');
+          }
           const live = runs.get(a.fork);
-          if (live && live.state !== 'closed') throw new Refused('fork source is open in this server; close it first');
-          if (!(await findSession(ctx.sessionsRoot, a.fork))) throw new Refused(`fork source ${a.fork} is not on this machine`);
+          if (live && live.state !== 'closed') {
+            throw new Refused('invalid', 'fork source is open in this server', 'Close it with droid_cancel scope "session", then fork it.');
+          }
+          if (!(await findSession(ctx.sessionsRoot, a.fork))) {
+            throw new Refused('not_found', `fork source ${a.fork} is not on this machine`, 'Fork a session that droid_find lists on this machine.');
+          }
         }
         validateSettings(a, autonomy, await catalog());
         const run = await runs.start({ cwd, prompt: a.prompt, autonomy, settings: a });
@@ -580,7 +595,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           now: Date.now(),
           cap: autonomyCap(ctx.env),
         });
-        if ('refused' in route) throw new Refused(`refused: ${route.refused}`);
+        if ('refused' in route) throw route.refused;
         const autonomy: Autonomy | undefined = a.autonomy && resolveAutonomy(a.autonomy, ctx.env);
         const current =
           target.kind === 'own' ? target.run.session.settings.autonomyLevel : target.kind === 'local' ? target.record.autonomy : undefined;
@@ -684,7 +699,9 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         }));
       }
 
-      if (target.kind === 'unknown') throw new Error(`session ${a.session} is not on this machine; following it needs FACTORY_API_KEY`);
+      if (target.kind === 'unknown') {
+        throw new ToolError('needs_api_key', `session ${a.session} is not on this machine; following it needs FACTORY_API_KEY`, API_KEY_FIX);
+      }
       const record = target.record;
       const deadline = Date.now() + waitMs;
       let entries: TranscriptEntry[];
@@ -737,13 +754,13 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       }
       const rest = needRest(ctx, 'answering prompts');
       const pending = (await rest.elicitations(a.session)).find((e) => e.requestId === a.requestId);
-      if (!pending) throw new Error(`no pending request ${a.requestId}`);
+      if (!pending) throw new ToolError('not_found', `no pending request ${a.requestId}`, 'Call droid_wait to see the pending requests and their ids.');
       let body: AnswerSessionElicitationRequestBody;
       if (pending.type === 'permission') {
         const options = allowedDecisions(pending.options ?? [], autonomyCap(ctx.env));
         if (a.cancel) body = { selectedOption: 'cancel' };
         else if (!a.decision || !options.includes(a.decision)) {
-          throw new Error(`decision must be one of: ${options.join(', ')}`);
+          throw new ToolError('invalid', `decision must be one of: ${options.join(', ')}`, 'Pass one of those options as decision, or cancel: true.');
         } else {
           body = { selectedOption: a.decision as 'proceed_once', comment: a.comment };
         }
@@ -753,7 +770,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         const questions = pending.questions ?? [];
         const answers = a.answers ?? [];
         if (answers.length !== questions.length) {
-          throw new Error(`answers must have exactly ${questions.length} entries, one per question`);
+          throw new ToolError('invalid', `answers must have exactly ${questions.length} entries, one per question`, 'Pass one answer per question, in order.');
         }
         body = { answers: questions.map((q, i) => ({ index: q.index, question: q.question, answer: answers[i] })) };
       }
@@ -776,7 +793,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         await runs.cancel(target.run, a.scope);
         return { sessionId: a.session, state: target.run.state };
       }
-      if (a.scope === 'session') throw new Error("only sessions this server started can be closed; use scope 'turn'");
+      if (a.scope === 'session') throw new ToolError('invalid', 'only sessions this server started can be closed', "Use scope 'turn' to stop its running turn.");
       await needRest(ctx, 'cancelling').interrupt(a.session);
       return { sessionId: a.session, via: 'rest', interrupted: true };
     }),
@@ -807,7 +824,9 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           body = await resultText(ctx, target, where.computerId);
         } else {
           const cwd = target.kind === 'own' ? target.run.cwd : target.kind === 'local' ? target.record.cwd : undefined;
-          if (!cwd) throw new Error('diff needs a session whose working directory is on this machine');
+          if (!cwd) {
+            throw new ToolError('invalid', 'diff needs a session whose working directory is on this machine', "Pass include ['text'], or ask the session's own computer for the diff.");
+          }
           body = await gitDiff(checkCwd(cwd, ctx.roots));
         }
         parts.push(include.length > 1 ? `## ${part}\n${body}` : body);

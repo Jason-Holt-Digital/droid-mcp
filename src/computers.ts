@@ -48,14 +48,22 @@ export function pickComputer(list: Computer[], nameOrId: string): Computer {
   const named = list.filter((c) => c.name.toLowerCase() === wanted);
   if (named.length === 1) return named[0];
   if (named.length > 1) {
-    throw new Refused(`computer name ${nameOrId} is ambiguous; pass one of these ids: ${named.map((c) => `${c.id} (${c.state})`).join(', ')}`);
+    throw new Refused(
+      'invalid',
+      `computer name ${nameOrId} is ambiguous; pass one of these ids: ${named.map((c) => `${c.id} (${c.state})`).join(', ')}`,
+      'Pass the computer id instead of its name.',
+    );
   }
-  throw new Refused(`no computer named ${nameOrId}; known computers: ${list.map((c) => c.name).join(', ') || 'none'}`);
+  throw new Refused(
+    'not_found',
+    `no computer named ${nameOrId}; known computers: ${list.map((c) => c.name).join(', ') || 'none'}`,
+    'Pass a computer name or id from droid_computers.',
+  );
 }
 
 export function offlineError(c: Computer): Refused {
   const seen = c.lastSeenAt === undefined ? 'never seen' : `daemon last seen ${isoSeconds(c.lastSeenAt)}`;
-  return new Refused(`computer ${c.name} is offline (${seen}); start its daemon or pick another computer`);
+  return new Refused('computer_offline', `computer ${c.name} is offline (${seen})`, 'Start its daemon, or pick another computer from droid_computers.');
 }
 
 export class Computers {

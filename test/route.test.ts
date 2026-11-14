@@ -19,9 +19,11 @@ const base: SessionRecord = {
 const local = (patch: Partial<SessionRecord>): Target => ({ kind: 'local', record: { ...base, ...patch } });
 const route = (target: Target, restEnabled: boolean, allowLocalResume = true) =>
   routeSend(target, { restEnabled, allowLocalResume, now: NOW, cap: 'medium' });
-const refusedWith = (r: ReturnType<typeof routeSend>, text: RegExp) => {
+const refusedWith = (r: ReturnType<typeof routeSend>, text: RegExp, code = 'invalid') => {
   assert.ok('refused' in r, `expected a refusal, got ${JSON.stringify(r)}`);
-  assert.match(r.refused, text);
+  assert.match(r.refused.message, text);
+  assert.equal(r.refused.code, code);
+  assert.ok(r.refused.fix);
 };
 
 test('own runs always route to the own session', () => {
@@ -34,14 +36,14 @@ test('workstream sessions use REST or are refused, never resumed locally', () =>
   for (const role of ['orchestrator', 'agent'] as const) {
     const ws = local({ workstream: { id: 'm', role } });
     assert.deepEqual(route(ws, true), { via: 'rest' });
-    refusedWith(route(ws, false, true), /workstream sessions need FACTORY_API_KEY; never loaded locally/);
+    refusedWith(route(ws, false, true), /workstream sessions need FACTORY_API_KEY; never loaded locally/, 'needs_api_key');
   }
 });
 
 test('sessions not on this disk use REST or are refused', () => {
   const unknown: Target = { kind: 'unknown', id: 'elsewhere' };
   assert.deepEqual(route(unknown, true), { via: 'rest' });
-  refusedWith(route(unknown, false), /not on this machine.*FACTORY_API_KEY/);
+  refusedWith(route(unknown, false), /not on this machine.*FACTORY_API_KEY/, 'needs_api_key');
 });
 
 test('standalone local sessions prefer REST when it is enabled', () => {
@@ -51,12 +53,12 @@ test('standalone local sessions prefer REST when it is enabled', () => {
 
 test('standalone local sessions resume locally only when allowed, live, top-level and idle for 30 min', () => {
   assert.deepEqual(route(local({}), false, true), { via: 'local-resume' });
-  refusedWith(route(local({}), false, false), /allowLocalResume/);
+  refusedWith(route(local({}), false, false), /without FACTORY_API_KEY resumes it/);
   refusedWith(route(local({ archived: true }), false), /archived/);
   refusedWith(route(local({ parentId: 'p' }), false), /subagent/);
   refusedWith(route(local({ tags: ['mission-v2-subagent'] }), false), /subagent/);
-  refusedWith(route(local({ updatedAt: NOW - RECENT_MS + 1000 }), false), /last 30 minutes/);
-  refusedWith(route(local({ classified: false }), false), /may be a workstream/);
+  refusedWith(route(local({ updatedAt: NOW - RECENT_MS + 1000 }), false), /last 30 minutes/, 'busy');
+  refusedWith(route(local({ classified: false }), false), /may be a workstream/, 'needs_api_key');
   refusedWith(route(local({ autonomy: 'high' }), false), /exceeds the cap 'medium'/);
   assert.deepEqual(route(local({ autonomy: 'medium' }), false), { via: 'local-resume' });
   refusedWith(route(local({ autonomy: undefined }), false), /'unknown' exceeds the cap/);
