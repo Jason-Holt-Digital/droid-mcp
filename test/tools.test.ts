@@ -1049,7 +1049,7 @@ test('droid_sessions marks subscribed sessions and omits the field on others', a
 test('sessionState maps Factory and local statuses onto the shared run states', () => {
   const table: Array<[string | undefined, string]> = [
     ['running', 'working'],
-    ['pending', 'needs_you'],
+    ['pending', 'working'],
     ['idle', 'idle'],
     ['something-new', 'idle'],
     ['', 'idle'],

@@ -379,7 +379,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - `query` matches title, id prefix or cwd. With `content: true` it searches transcripts with `rg -F` (40 s timeout) on this machine only, and other computers are not searched.
   - Hidden by default: archived sessions and subagents.
   - With a key, each listed workstream gets a `children` summary from REST, including agents on other computers.
-  - Each session has one `state`: `working`, `needs_you`, `idle`, `dead` or `closed`. An own session reports its run state. Any other session maps its Factory status: `running` is `working`, `pending` is `needs_you`, and `idle`, an unknown status or none (local files) is `idle`.
+  - Each session has one `state`: `working`, `needs_you`, `idle`, `dead` or `closed`. An own session reports its run state. Any other session maps its Factory status: `running` and `pending` (a queued message) are `working`, and `idle`, an unknown status or none (local files) is `idle`.
   - Subscribed sessions carry `subscribed: true`.
 
 #### droid_status

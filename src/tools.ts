@@ -159,15 +159,12 @@ const USAGE =
 
 const COMPUTER = z.string().optional().describe('Computer name or id from droid_status; defaults to this machine, or to where droid_sessions saw the session');
 
-const STATUS_STATES = new Map<string, RunState>([
-  ['running', 'working'],
-  ['pending', 'needs_you'],
-  ['idle', 'idle'],
-]);
+// Factory's REST status is idle, pending or running; pending is a queued message about to run (POST /messages returns it).
+// It does not report waiting prompts, so sessions this server does not run never show needs_you.
+const WORKING_STATUSES = new Set(['running', 'pending']);
 
-// Maps a Factory or local session status onto the run states this server reports for its own sessions.
 export function sessionState(status: string | undefined): RunState {
-  return STATUS_STATES.get(status ?? '') ?? 'idle';
+  return status !== undefined && WORKING_STATUSES.has(status) ? 'working' : 'idle';
 }
 
 function entry(r: Listing, ctx: Ctx) {
