@@ -61,12 +61,11 @@ async function serve(eventsToken: string | null = EVENTS_TOKEN): Promise<string>
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-const post = (url: string, token: string | undefined, body: unknown) =>
-  fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: typeof body === 'string' ? body : JSON.stringify(body),
-  });
+const post = (url: string, token: string | undefined, body: unknown) => {
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (token) headers.set('authorization', `Bearer ${token}`);
+  return fetch(url, { method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body) });
+};
 
 test('POST /events needs the events token, and the MCP bearer is not accepted there', async () => {
   const base = await serve();

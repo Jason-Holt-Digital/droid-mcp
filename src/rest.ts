@@ -22,12 +22,12 @@ import type { RestSessionSettings } from './settings.ts';
 type ApiResult<T> = { data?: T; error?: unknown; response?: Response };
 
 const KEY_FIX = 'Check that FACTORY_API_KEY is valid and its account can use the Factory sessions API.';
-const BY_STATUS: Record<number, [ErrorCode, string]> = {
-  401: ['needs_api_key', KEY_FIX],
-  403: ['needs_api_key', KEY_FIX],
-  404: ['not_found', 'Check the id with droid_sessions or droid_status.'],
-  409: ['busy', 'Check the session with droid_wait, then retry.'],
-};
+const BY_STATUS = new Map<number, [ErrorCode, string]>([
+  [401, ['needs_api_key', KEY_FIX]],
+  [403, ['needs_api_key', KEY_FIX]],
+  [404, ['not_found', 'Check the id with droid_sessions or droid_status.']],
+  [409, ['busy', 'Check the session with droid_wait, then retry.']],
+]);
 
 function unwrap<T>(r: ApiResult<T>, op: string): T {
   if (r.error !== undefined || r.data === undefined) {
@@ -35,17 +35,14 @@ function unwrap<T>(r: ApiResult<T>, op: string): T {
     const status = e.status ?? r.response?.status ?? 'error';
     const title = e.title ?? r.response?.statusText ?? 'request failed';
     const message = `Factory API ${op} ${status} ${title}${e.detail ? `: ${e.detail}` : ''}`;
-    const known = typeof status === 'number' ? BY_STATUS[status] : undefined;
+    const known = typeof status === 'number' ? BY_STATUS.get(status) : undefined;
     throw known ? new ToolError(known[0], message, known[1]) : new Error(message);
   }
   return r.data;
 }
 
 function textOf(content: Array<{ type: string; text?: string }>): string {
-  return content
-    .filter((b) => b.type === 'text' && typeof b.text === 'string')
-    .map((b) => b.text)
-    .join('\n');
+  return content.flatMap((b) => (b.type === 'text' && typeof b.text === 'string' ? [b.text] : [])).join('\n');
 }
 
 export type Elicitation = {

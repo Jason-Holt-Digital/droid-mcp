@@ -230,7 +230,7 @@ export type FilterOptions = { query?: string; cwd?: string; includeArchived?: bo
 export function filterRecords<T extends Listing>(records: T[], opts: FilterOptions): T[] {
   const q = opts.query?.trim().toLowerCase();
   const matches = (r: T) => !q || r.title.toLowerCase().includes(q) || r.id.startsWith(q) || Boolean(r.cwd?.toLowerCase().includes(q));
-  const matchedWorkstreams = new Set(records.filter((r) => r.workstream?.role === 'orchestrator' && matches(r)).map((r) => r.workstream!.id));
+  const matchedWorkstreams = new Set(records.flatMap((r) => (r.workstream?.role === 'orchestrator' && matches(r) ? [r.workstream.id] : [])));
   const cwd = opts.cwd?.replace(/\/+$/, '');
   return records.filter(
     (r) =>

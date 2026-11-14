@@ -121,8 +121,10 @@ function tokens(id: string): string[] {
 function closeMatches(id: string, known: string[]): string[] {
   const want = new Set(tokens(id));
   return known
-    .map((k) => ({ k, score: tokens(k).filter((t) => want.has(t)).length }))
-    .filter((x) => x.score > 0)
+    .flatMap((k) => {
+      const score = tokens(k).filter((t) => want.has(t)).length;
+      return score > 0 ? [{ k, score }] : [];
+    })
     .sort((a, b) => b.score - a.score || a.k.length - b.k.length)
     .slice(0, 5)
     .map((x) => x.k);

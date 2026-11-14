@@ -80,7 +80,7 @@ export class EventLog {
   }
 
   // Without `after`, returns the latest `limit` events.
-  since(after: number | undefined, limit: number, kinds?: readonly EventKind[]): { events: DroidEvent[]; nextAfter: number; missed: boolean } {
+  since(after: number | undefined, limit: number, kinds?: readonly EventKind[]) {
     const newest = this.#next - 1;
     const want = (e: DroidEvent) => !kinds?.length || kinds.includes(e.kind);
     if (after === undefined) {

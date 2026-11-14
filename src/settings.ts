@@ -97,7 +97,7 @@ export function toUpdate(s: RunSettings): SettingsUpdate | undefined {
   });
 }
 
-export function toRestSettings(s: RunSettings): { sessionSettings: RestSessionSettings; ignored: string[] } {
+export function toRestSettings(s: RunSettings) {
   const sessionSettings: RestSessionSettings =
     defined({
       model: s.model,
@@ -115,5 +115,5 @@ export function toRestSettings(s: RunSettings): { sessionSettings: RestSessionSe
 // Adds tag names without dropping the metadata of tags the session already has.
 export function addTags(existing: SettingsUpdate['tags'] = [], names: string[]): NonNullable<SettingsUpdate['tags']> {
   const have = new Set(existing.map((t) => t.name));
-  return [...existing, ...[...new Set(names)].filter((n) => !have.has(n)).map((name) => ({ name }))];
+  return [...existing, ...[...new Set(names)].flatMap((name) => (have.has(name) ? [] : [{ name }]))];
 }

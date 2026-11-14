@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { resumeSession } from '@factory/droid-sdk/node';
@@ -7,6 +8,12 @@ import type { Elicitation } from '../src/rest.ts';
 import type { SetupRest } from '../src/setup.ts';
 
 export const FIXTURES = fileURLToPath(new URL('./fixtures/sessions', import.meta.url));
+
+// Skip reason when a command is missing locally. In CI (CI is set) the test runs anyway and fails loudly instead of skipping.
+export function needs(cmd: string, args: string[]): string | false {
+  if (process.env.CI) return false;
+  return spawnSync(cmd, args).error ? `${cmd} not found` : false;
+}
 
 export const IDS = {
   liveOrchestrator: '8ddbc264-6932-58f2-a1e8-323e4207e00d',
@@ -26,7 +33,7 @@ export const IDS = {
   archivedService: '07484013-afa4-57cb-82c0-16cbd16d6c2a',
 };
 
-const UPDATED: Record<string, number> = {
+const UPDATED = {
   [IDS.liveOrchestrator]: 1000,
   [IDS.liveAgentNewer]: 3000,
   [IDS.liveAgentOlder]: 2000,
