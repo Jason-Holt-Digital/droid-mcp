@@ -166,6 +166,13 @@ function checkSessionId(id: string): void {
   if (!isSessionId(id)) throw new Refused('invalid', `invalid session id: ${id}`, SESSION_ID_FIX);
 }
 
+const IDEMPOTENCY_KEY = z.string().min(1).max(200).optional().describe('Retry with the same key and arguments to get the first result instead of acting twice');
+
+// Without a key every call acts; with one, a retry of the same request replays its first result.
+function once<T>(ctx: Ctx, key: string | undefined, request: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+  return key === undefined ? fn() : ctx.keys.once(key, request, fn);
+}
+
 const COMPUTER = z.string().optional().describe('Computer name or id from droid_computers; defaults to this machine, or to where droid_find saw the session');
 
 const nonEmpty = (list: string[]) => (list.length ? list : undefined);
@@ -537,19 +544,20 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
   server.registerTool(
     'droid_start',
     {
-      description: `Start a new Droid session in cwd (must be inside the allowed roots) and send it the first prompt. Retrying with the same idempotencyKey returns the same session. You are subscribed to the new session's events (see droid_subscribe) unless subscribe is false. To let a session ask you something, tell it to end its reply with a line starting \`QUESTION:\`. ${MODEL_HELP}`,
+      description: `Start a new Droid session in cwd (must be inside the allowed roots) and send it the first prompt. Retrying with the same idempotencyKey and arguments returns the same session; without one, every call starts a new session. You are subscribed to the new session's events (see droid_subscribe) unless subscribe is false. To let a session ask you something, tell it to end its reply with a line starting \`QUESTION:\`. ${MODEL_HELP}`,
       inputSchema: {
         cwd: z.string(),
         prompt: z.string().min(1),
         autonomy: AUTONOMY.optional(),
-        idempotencyKey: z.string().min(1).max(200),
+        idempotencyKey: IDEMPOTENCY_KEY,
         subscribe: z.boolean().optional().describe("Wake you for this session's events (default true)"),
         ...runSettings,
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
-      const { sessionId, subscribe } = await ctx.keys.once(`start:${a.idempotencyKey}`, async () => {
+      const { idempotencyKey, subscribe: _subscribe, ...request } = a;
+      const { sessionId, subscribe } = await once(ctx, idempotencyKey && `start:${idempotencyKey}`, request, async () => {
         const cwd = checkCwd(a.cwd, ctx.roots);
         const autonomy = resolveAutonomy(a.autonomy, ctx.env);
         if (a.fork !== undefined) {
@@ -612,7 +620,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         session: z.string(),
         computer: COMPUTER,
         prompt: z.string().min(1),
-        idempotencyKey: z.string().min(1).max(200),
+        idempotencyKey: IDEMPOTENCY_KEY,
         mode: z.enum(['queue', 'interrupt']).optional(),
         allowLocalResume: z.boolean().optional(),
         autonomy: AUTONOMY.optional(),
@@ -622,7 +630,8 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     },
     handle(async (a) => {
       const mode = a.mode ?? 'queue';
-      return ctx.keys.once(`send:${a.session}:${a.idempotencyKey}`, async () => {
+      const { idempotencyKey, ...request } = a;
+      return once(ctx, idempotencyKey && `send:${a.session}:${idempotencyKey}`, request, async () => {
         const where = await locate(ctx, a.session, a.computer, true);
         const target = await resolveTarget(ctx, a.session, { sending: true, where });
         const route = routeSend(target, {
