@@ -20,6 +20,7 @@ const DAEMON_DESTRUCTIVE = [
   // Multi-action: some of their actions delete, remove or overwrite, so the whole operation counts as destructive.
   'automation_memory_edit',
   'config_items',
+  'resolve_queued_user_message',
   'update_mcp_config',
   'archive_session',
   'cancel_mcp_auth',
@@ -163,7 +164,9 @@ const { API, NodeBuilderFlags } = await import('typescript/unstable/sync');
 
 const soundsDestructive = (method: string) => method.split('_').some((w) => DESTRUCTIVE_WORDS.includes(w));
 const LITERAL_WORDS = [...DESTRUCTIVE_WORDS, 'replace', 'overwrite', 'disable', 'drop', 'unset'];
-const literalPattern = new RegExp(`["'](${LITERAL_WORDS.join('|')})["']`);
+const capitalized = LITERAL_WORDS.map((w) => w[0].toUpperCase() + w.slice(1));
+// A quoted action such as "delete", or an enum member such as ResolveQueuedUserMessageAction.Delete.
+const literalPattern = new RegExp(`["'](${LITERAL_WORDS.join('|')})["']|\\.(${capitalized.join('|')})\\b`);
 // Multi-action operations take an action such as "delete" in their params; those must be classified by hand too.
 const hasDestructiveAction = (params: Json) => literalPattern.test(JSON.stringify(params).replaceAll('\\"', '"'));
 function checkClassified(op: Operation, words: boolean): void {
