@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { capabilities, curlrcUrl, doctorReport, localOnly, pasteLine, type CapabilityInput } from '../src/capabilities.ts';
+import { capabilities, curlrcUrl, doctorReport, localOnly, pasteLine, reachesBind, resolveBind, type CapabilityInput } from '../src/capabilities.ts';
 import { API_KEY_FIX } from '../src/config.ts';
 
 const ALL: CapabilityInput = {
@@ -122,6 +122,8 @@ test('the curlrc check accepts any url that reaches the bind address', () => {
   assert.equal(ok('[::1]:37999', 'http://localhost:37999/events'), true, 'localhost reaches an IPv6 loopback bind');
   assert.equal(ok('0.0.0.0:37999', 'http://[::1]:37999/events'), false, 'an IPv4 wildcard takes no IPv6 address');
   assert.equal(ok('[::]:37999', 'http://127.0.0.1:37999/events'), true, 'an IPv6 wildcard takes IPv4 too');
+  assert.equal(reachesBind('http://[::1]:37999/events', { host: 'localhost', port: 37999 }, '::1'), true, 'the address localhost resolved to');
+  assert.equal(reachesBind('http://127.0.0.1:37999/events', { host: 'localhost', port: 37999 }, '::1'), false, 'not the other family');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:38000/events'), false, 'wrong port');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:37999/other'), false, 'wrong path');
   assert.equal(ok('0.0.0.0:37999', 'not a url'), false);
@@ -156,4 +158,17 @@ test('doctorReport prints one aligned line per check and fails only on api_key, 
   for (const broken of [{ apiKey: false }, { roots: [] }, { http: 'nonsense' }, { missingRoots: ['/home/dev/repos'] }]) {
     assert.equal(doctorReport(capabilities({ ...ALL, ...broken })).code, 1, JSON.stringify(broken));
   }
+});
+
+test('curlrcUrl reads the first active url and skips comments', () => {
+  assert.equal(curlrcUrl('# url = "http://old:37999/events"\nurl = "http://127.0.0.1:37999/events"\n'), 'http://127.0.0.1:37999/events');
+  assert.equal(curlrcUrl('  # url = "http://old/events"\n--url http://new:1/events\n'), 'http://new:1/events');
+  assert.equal(curlrcUrl('header = "x-droid-mcp-computer: c"\n# url = "http://old/events"\n'), undefined);
+  assert.equal(curlrcUrl('url = "http://a:1/events"\nheader = "x-droid-mcp-computer: c"\n'), 'http://a:1/events');
+});
+
+test('resolveBind resolves a hostname bind and leaves addresses alone', async () => {
+  assert.equal(await resolveBind('127.0.0.1:37999'), undefined);
+  assert.equal(await resolveBind(undefined), undefined);
+  assert.ok(['127.0.0.1', '::1'].includes((await resolveBind('localhost:37999')) ?? ''));
 });
