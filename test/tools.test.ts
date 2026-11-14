@@ -51,6 +51,7 @@ async function connect(ctx: Partial<Ctx>) {
       const text = (res.content as Array<{ type: string; text: string }>)[0].text;
       return { isError: Boolean(res.isError), text, json: res.isError ? undefined : JSON.parse(text) };
     },
+    listTools: () => client.listTools(),
     close: () => client.close(),
   };
 }
@@ -190,6 +191,34 @@ test('droid_models lists the injected catalog, filters it and never shows secret
     assert.equal(byProvider.json.aliases, undefined);
     const opus = await c.call('droid_models', { filter: 'opus 5.5', include: ['builtin'] });
     assert.deepEqual(opus.json.builtin.map((m: { id: string }) => m.id), ['claude-opus-5-5', 'claude-opus-5-5-fast']);
+  } finally {
+    await c.close();
+  }
+});
+
+test('every tool declares all four hints with the expected values', async () => {
+  const c = await connect({});
+  try {
+    const hints = (ro: boolean, destructive: boolean, idempotent: boolean, openWorld: boolean) => ({
+      readOnlyHint: ro,
+      destructiveHint: destructive,
+      idempotentHint: idempotent,
+      openWorldHint: openWorld,
+    });
+    const expected = {
+      droid_find: hints(true, false, true, true),
+      droid_computers: hints(true, false, true, true),
+      droid_events: hints(true, false, true, false),
+      droid_models: hints(true, false, true, false),
+      droid_start: hints(false, true, true, true),
+      droid_send: hints(false, true, true, true),
+      droid_wait: hints(true, false, true, true),
+      droid_respond: hints(false, true, true, true),
+      droid_cancel: hints(false, true, true, true),
+      droid_result: hints(true, false, true, true),
+    };
+    const { tools } = await c.listTools();
+    assert.deepEqual(Object.fromEntries(tools.map((t) => [t.name, t.annotations])), expected);
   } finally {
     await c.close();
   }

@@ -335,7 +335,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         limit: z.number().int().min(1).max(200).optional(),
         cursor: z.string().optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const only = a.computer === undefined ? undefined : await ctx.computers.require(a.computer);
@@ -449,7 +449,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     {
       description: `List the user's Factory Droid computers and whether each is reachable now: own computers are online when their daemon sent a heartbeat in the last ${ONLINE_WINDOW_MS / 60_000} minutes; cloud computers follow their sandbox state (paused ones may be resumed when named explicitly). Pass a name or id as \`computer\` to the other tools.`,
       inputSchema: {},
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     handle(async () => {
       const view = (c: Computer) => ({
@@ -480,7 +480,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         limit: z.number().int().min(1).max(200).optional(),
         kinds: z.array(z.enum(EVENT_KINDS)).optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     handle(async (a) => {
       const r = ctx.events.since(a.after, a.limit ?? 50, a.kinds);
@@ -503,7 +503,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         filter: z.string().optional(),
         include: z.array(z.enum(['builtin', 'custom', 'aliases'])).optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     handle(async (a) => {
       const c = await catalog();
@@ -532,6 +532,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         idempotencyKey: z.string().min(1).max(200),
         ...runSettings,
       },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const { sessionId } = await ctx.keys.once(`start:${a.idempotencyKey}`, async () => {
@@ -566,6 +567,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         autonomy: AUTONOMY.optional(),
         ...runSettings,
       },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const mode = a.mode ?? 'queue';
@@ -623,7 +625,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         waitMs: z.number().int().optional(),
         maxEvents: z.number().int().min(1).max(200).optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const waitMs = clampWait(a.waitMs);
@@ -725,6 +727,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         answers: z.array(z.string()).optional(),
         cancel: z.boolean().optional(),
       },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const target = await resolveTarget(ctx, a.session, { where: await locate(ctx, a.session, a.computer) });
@@ -765,6 +768,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       description:
         "Cancel a session's running turn (scope 'turn'), or close a session this server started (scope 'session').",
       inputSchema: { session: z.string(), computer: COMPUTER, scope: z.enum(['turn', 'session']) },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const target = await resolveTarget(ctx, a.session, { where: await locate(ctx, a.session, a.computer) });
@@ -790,7 +794,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         offset: z.number().int().min(0).optional(),
         maxBytes: z.number().int().min(1).max(32768).optional(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
       const include = a.include?.length ? [...new Set(a.include)] : ['text'];
