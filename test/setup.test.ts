@@ -236,3 +236,15 @@ test('a stalled interrupt is bounded: the job still returns and the session is s
   assert.match(job.detail, /timed out/);
   assert.deepEqual(calls.archived, ['setup-session']);
 });
+
+test('close() splits its budget so a stalled interrupt still leaves time to archive', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  rest.interrupt = () => new Promise(() => {});
+  const setup = new Setup({ rest, pollMs: 1 });
+  const job = await setup.start('c', CMDS);
+  const t = Date.now();
+  await setup.close(40);
+  assert.ok(Date.now() - t < 1000, 'close stays within its budget, not the 10 s default per call');
+  assert.equal(job.state, 'failed');
+  assert.deepEqual(calls.archived, ['setup-session']);
+});

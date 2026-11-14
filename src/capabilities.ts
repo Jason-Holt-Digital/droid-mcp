@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -75,8 +76,9 @@ function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'
 const isLoopback = (host: string) => host === 'localhost' || host === '::1' || host.startsWith('127.');
 const isWildcard = (host: string) => host === '0.0.0.0' || host === '::';
 
-// Whether a curlrc url on this machine reaches a server bound to `bind`: the exact address, a loopback
-// address when bound to loopback, or any host on the port when bound to every interface.
+// Whether a curlrc url on this machine reaches a server bound to `bind`. Each loopback address is its own
+// listener (127.0.0.2 and ::1 do not reach 127.0.0.1); only the name localhost reaches a 127.0.0.1 or ::1
+// bind, since curl tries both. 0.0.0.0 takes any IPv4 address or name, :: takes anything.
 export function reachesBind(url: string, bind: { host: string; port: number }): boolean {
   let u: URL;
   try {
@@ -86,7 +88,9 @@ export function reachesBind(url: string, bind: { host: string; port: number }): 
   }
   const host = u.hostname.replace(/^\[(.*)\]$/, '$1');
   if (u.protocol !== 'http:' || u.pathname !== '/events' || Number(u.port || 80) !== bind.port) return false;
-  return host === bind.host || isWildcard(bind.host) || (isLoopback(bind.host) && isLoopback(host));
+  if (host === bind.host || bind.host === '::') return true;
+  if (bind.host === '0.0.0.0') return isIP(host) !== 6;
+  return host === 'localhost' && (bind.host === '127.0.0.1' || bind.host === '::1');
 }
 
 // The configured URL (what droid_setup writes, e.g. a reverse proxy) or any url that reaches the --http bind.
