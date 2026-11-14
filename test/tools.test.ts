@@ -822,7 +822,7 @@ test('droid_status reports checks and, per computer, when its plugin rang or the
   ]);
   const doorbell = { seenAt: (k: string) => seen.get(k) } as unknown as Doorbell;
   const probe = async () => ({ curlrcUrl: 'http://127.0.0.1:37999/events', pluginInstalled: true });
-  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false };
+  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true };
   const { c } = await fleet({ ctx: { doorbell, probe, status } });
   try {
     const res = await c.call('droid_status', {});

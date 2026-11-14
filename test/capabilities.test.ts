@@ -11,6 +11,7 @@ const ALL: CapabilityInput = {
   apiKey: true,
   webhook: true,
   eventsToken: false,
+  httpToken: true,
   http: '127.0.0.1:37999',
   roots: ['/home/dev/repos'],
   missingRoots: [],
@@ -107,6 +108,14 @@ test('roots fail when none exists, and the detail names the missing ones', () =>
   const some = byName({ ...ALL, roots: ['/a', '/b'], missingRoots: ['/a'] }).roots;
   assert.equal(some.ok, true);
   assert.match(some.detail, /missing: \/a$/);
+});
+
+test('--http without DROID_MCP_TOKEN fails the http check and the doctor', () => {
+  const c = byName({ ...ALL, httpToken: false }).http;
+  assert.equal(c.ok, false);
+  assert.match(c.detail, /DROID_MCP_TOKEN is not set/);
+  assert.equal(doctorReport(capabilities({ ...ALL, httpToken: false })).code, 1);
+  assert.equal(byName({ ...ALL, http: undefined, httpToken: false }).http.ok, true, 'stdio needs no token');
 });
 
 test('an out-of-range port is not a valid --http value', () => {

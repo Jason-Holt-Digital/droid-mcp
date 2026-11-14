@@ -23,7 +23,7 @@ async function lookupConfig(http: string | undefined) {
     lookupSecret('DROID_MCP_WEBHOOK_URL', 'WEBHOOK_URL'),
     lookupSecret('DROID_MCP_WEBHOOK_KEY', 'WEBHOOK_KEY'),
   ]);
-  const status = { http, webhook: Boolean(webhookUrl && webhookKey), eventsToken: Boolean(eventsToken) };
+  const status = { http, webhook: Boolean(webhookUrl && webhookKey), eventsToken: Boolean(eventsToken), httpToken: Boolean(process.env.DROID_MCP_TOKEN) };
   return { apiKey, eventsToken, webhookUrl, webhookKey, status };
 }
 
