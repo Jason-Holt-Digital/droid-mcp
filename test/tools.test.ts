@@ -882,7 +882,7 @@ test('droid_status keeps its checks when the computer list fails, and tells stdi
 });
 
 test('droid_setup without a key refuses with the paste line for that computer', async () => {
-  const c = await connect({ status: { http: '100.73.48.66:37999', webhook: false, eventsToken: false } });
+  const c = await connect({ status: { http: '100.73.48.66:37999', webhook: false, eventsToken: false, httpToken: true } });
   try {
     const res = await c.call('droid_setup', { computer: 'test-host' });
     assert.equal(res.error?.code, 'needs_api_key', res.text);
@@ -897,7 +897,7 @@ test('droid_setup without a key refuses with the paste line for that computer', 
 test('droid_setup refuses a loopback url for another computer and an offline computer, with the paste line', async () => {
   const { rest } = fakeSetupRest([{ status: 'running' }]);
   const setup = new Setup({ rest });
-  const { c } = await fleet({ ctx: { setup, status: { http: '127.0.0.1:37999', webhook: false, eventsToken: false } } });
+  const { c } = await fleet({ ctx: { setup, status: { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true } } });
   try {
     const loop = await c.call('droid_setup', { computer: 'laptop' });
     assert.equal(loop.error?.code, 'invalid', loop.text);
@@ -915,7 +915,7 @@ test('droid_setup starts a job with the env url and plugin source, and droid_sta
   const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
   const setup = new Setup({ rest, pollMs: 20, timeoutMs: 1000 });
   const env = { DROID_MCP_EVENTS_URL: 'http://mac-mini.tail.ts.net:37999/events', DROID_MCP_PLUGIN_SOURCE: 'Jason-Holt-Digital/droid-mcp#slice-10-setup' };
-  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false };
+  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true };
   const { c } = await fleet({ ctx: { setup, env, status, probe: async () => ({}) } });
   try {
     const res = await c.call('droid_setup', { computer: 'laptop' });

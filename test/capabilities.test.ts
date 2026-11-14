@@ -110,6 +110,16 @@ test('roots fail when none exists, and the detail names the missing ones', () =>
   assert.match(some.detail, /missing: \/a$/);
 });
 
+test('the curlrc may point at the configured events URL or the --http address', () => {
+  const eventsUrl = 'https://droid.example.ts.net/events';
+  assert.equal(byName({ ...ALL, eventsUrl, curlrcUrl: eventsUrl }).curlrc.ok, true);
+  assert.equal(byName({ ...ALL, eventsUrl, curlrcUrl: 'http://127.0.0.1:37999/events' }).curlrc.ok, true);
+  const wrong = byName({ ...ALL, eventsUrl, curlrcUrl: 'http://old:1/events' }).curlrc;
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.fix ?? '', /url = "https:\/\/droid\.example\.ts\.net\/events"/);
+  assert.equal(byName({ ...ALL, http: undefined, eventsUrl, curlrcUrl: eventsUrl }).curlrc.ok, true, 'a configured URL works without --http');
+});
+
 test('--http without DROID_MCP_TOKEN fails the http check and the doctor', () => {
   const c = byName({ ...ALL, httpToken: false }).http;
   assert.equal(c.ok, false);

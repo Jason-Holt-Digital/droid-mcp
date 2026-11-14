@@ -503,6 +503,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     },
     handle(async () => {
       const http = ctx.status?.http;
+      const env = ctx.env ?? process.env;
       const checks = capabilities({
         apiKey: Boolean(ctx.rest),
         webhook: ctx.status?.webhook ?? false,
@@ -512,9 +513,9 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         roots: ctx.roots,
         missingRoots: missingRoots(ctx.roots),
         cap: autonomyCap(ctx.env),
+        eventsUrl: env.DROID_MCP_EVENTS_URL || undefined,
         ...(await (ctx.probe ?? probeThisMachine)()),
       });
-      const env = ctx.env ?? process.env;
       const url = configuredEventsUrl(env, http);
       const pluginFix = (c: Computer) => {
         if (!url) return 'This server has no events URL; run it with --http <host:port>, or set DROID_MCP_EVENTS_URL.';

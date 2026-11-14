@@ -35,6 +35,7 @@ async function doctor(http: string | undefined): Promise<number> {
     roots: allowedRoots(),
     missingRoots: missingRoots(allowedRoots()),
     cap: autonomyCap(),
+    eventsUrl: process.env.DROID_MCP_EVENTS_URL || undefined,
     ...(await probeThisMachine()),
   });
   const { lines, code } = doctorReport(checks);

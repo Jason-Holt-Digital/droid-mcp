@@ -14,6 +14,8 @@ export type CapabilityInput = ThisMachine & {
   eventsToken: boolean;
   // Whether DROID_MCP_TOKEN is set; --http refuses to start without it.
   httpToken: boolean;
+  // DROID_MCP_EVENTS_URL, when set: the URL droid_setup writes, e.g. behind a proxy.
+  eventsUrl?: string;
   http?: string;
   roots: string[];
   // Roots that do not exist; checkCwd skips them, so droid_start works only under the others.
@@ -70,12 +72,14 @@ function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'
   return check('plugin', installed === true, `this machine: ${detail}`, 'rings from this machine', fix);
 }
 
-function curlrcCheck(http: string | undefined, url: string | undefined): Check {
+// Either URL reaches this server from this machine: the configured one droid_setup writes, or the --http address.
+function curlrcCheck(http: string | undefined, configured: string | undefined, url: string | undefined): Check {
   const unlocks = 'rings from this machine reaching this server';
-  if (http === undefined || !hostPort(http)) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
-  const want = eventsUrl(http);
-  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : url === want ? `url is ${url}` : `url is ${url}, expected ${want}`;
-  return check('curlrc', url === want, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${want}"`);
+  const accepted = [configured, http && hostPort(http) ? eventsUrl(http) : undefined].filter((u) => u !== undefined);
+  if (!accepted.length) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
+  const ok = url !== undefined && accepted.includes(url);
+  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : ok ? `url is ${url}` : `url is ${url}, expected ${accepted.join(' or ')}`;
+  return check('curlrc', ok, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${accepted[0]}"`);
 }
 
 export function capabilities(input: CapabilityInput): Check[] {
@@ -104,7 +108,7 @@ export function capabilities(input: CapabilityInput): Check[] {
     ),
     check('autonomy_cap', true, `cap is ${input.cap} (DROID_MCP_MAX_AUTONOMY)`, `autonomy up to ${input.cap}`, ''),
     pluginCheck(input.pluginInstalled, input.pluginError),
-    curlrcCheck(input.http, input.curlrcUrl),
+    curlrcCheck(input.http, input.eventsUrl, input.curlrcUrl),
     check(
       'events_token',
       true,
