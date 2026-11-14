@@ -3,12 +3,20 @@ import { isIP } from 'node:net';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { API_KEY_FIX, type Autonomy } from './config.ts';
 
 export type Check = { name: string; ok: boolean; detail: string; unlocks: string; fix?: string };
-export type ThisMachine = { curlrcUrl?: string; pluginInstalled?: boolean; pluginError?: string };
+export type ThisMachine = {
+  curlrcUrl?: string;
+  // The addresses the curlrc url's host resolves to, and this machine's interface addresses: a wildcard
+  // bind is reached only at an address of this machine.
+  curlrcAddresses?: string[];
+  localAddresses?: string[];
+  pluginInstalled?: boolean;
+  pluginError?: string;
+};
 export type CapabilityInput = ThisMachine & {
   apiKey: boolean;
   webhook: boolean;
@@ -66,10 +74,14 @@ function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'
 const isLoopback = (host: string) => host === 'localhost' || host === '::1' || host.startsWith('127.');
 const isWildcard = (host: string) => host === '0.0.0.0' || host === '::';
 
+// Where the server listens and which addresses belong to this machine, for reachesBind.
+export type Here = { bindAddress?: string; curlrcAddresses?: string[]; localAddresses?: string[] };
+
 // Whether a curlrc url on this machine reaches a server bound to `bind`. Each loopback address is its own
 // listener (127.0.0.2 and ::1 do not reach 127.0.0.1); only the name localhost reaches a 127.0.0.1 or ::1
-// bind, since curl tries both. 0.0.0.0 takes any IPv4 address or name, :: takes anything.
-export function reachesBind(url: string, bind: { host: string; port: number }, bindAddress?: string): boolean {
+// bind, since curl tries both. A wildcard bind takes an address of this machine only: a loopback or an
+// interface address, IPv4 only for 0.0.0.0. A name counts by the addresses it resolves to.
+export function reachesBind(url: string, bind: { host: string; port: number }, here: Here = {}): boolean {
   let u: URL;
   try {
     u = new URL(url);
@@ -78,17 +90,21 @@ export function reachesBind(url: string, bind: { host: string; port: number }, b
   }
   const host = u.hostname.replace(/^\[(.*)\]$/, '$1');
   if (u.protocol !== 'http:' || u.pathname !== '/events' || Number(u.port || 80) !== bind.port) return false;
-  if (host === bind.host || host === bindAddress || bind.host === '::') return true;
-  if (bind.host === '0.0.0.0') return isIP(host) !== 6;
+  if (host === bind.host || host === here.bindAddress) return true;
+  if (isWildcard(bind.host)) {
+    const targets = isIP(host) ? [host] : (here.curlrcAddresses ?? (host === 'localhost' ? ['127.0.0.1', '::1'] : []));
+    const local = (a: string) => isLoopback(a) || (here.localAddresses ?? []).includes(a);
+    return targets.some((a) => local(a) && (bind.host === '::' || isIP(a) === 4));
+  }
   return host === 'localhost' && (bind.host === '127.0.0.1' || bind.host === '::1');
 }
 
-function curlrcCheck(http: string | undefined, url: string | undefined, bindAddress?: string): Check {
+function curlrcCheck(http: string | undefined, url: string | undefined, here: Here): Check {
   const unlocks = 'rings from this machine reaching this server';
   const bind = http === undefined ? undefined : hostPort(http);
   if (!bind) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
   const want = isWildcard(bind.host) ? `http://127.0.0.1:${bind.port}/events` : eventsUrl(http!);
-  const ok = url !== undefined && reachesBind(url, bind, bindAddress);
+  const ok = url !== undefined && reachesBind(url, bind, here);
   const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : ok ? `url is ${url}` : `url is ${url}, which does not reach ${http}`;
   return check('curlrc', ok, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${want}"`);
 }
@@ -119,7 +135,7 @@ export function capabilities(input: CapabilityInput): Check[] {
     ),
     check('autonomy_cap', true, `cap is ${input.cap} (DROID_MCP_MAX_AUTONOMY)`, `autonomy up to ${input.cap}`, ''),
     pluginCheck(input.pluginInstalled, input.pluginError),
-    curlrcCheck(input.http, input.curlrcUrl, input.bindAddress),
+    curlrcCheck(input.http, input.curlrcUrl, input),
     check(
       'events_token',
       true,
@@ -157,6 +173,23 @@ export async function resolveBind(http: string | undefined): Promise<string | un
   );
 }
 
+// The addresses a url's host resolves to; an IP literal or an unparsable url resolves to nothing here.
+async function urlAddresses(url: string | undefined): Promise<string[] | undefined> {
+  let host: string;
+  try {
+    host = new URL(url ?? '').hostname;
+  } catch {
+    return undefined;
+  }
+  if (isIP(host.replace(/^\[(.*)\]$/, '$1'))) return undefined;
+  return lookup(host, { all: true }).then(
+    (all) => all.map((a) => a.address),
+    () => [],
+  );
+}
+
+export const interfaceAddresses = () => Object.values(networkInterfaces()).flatMap((list) => (list ?? []).map((i) => i.address));
+
 export async function probeThisMachine(): Promise<ThisMachine> {
   const [url, plugin] = await Promise.all([
     readFile(join(homedir(), '.factory', 'droid-mcp.curlrc'), 'utf8').then(curlrcUrl, () => undefined),
@@ -168,5 +201,5 @@ export async function probeThisMachine(): Promise<ThisMachine> {
       }),
     ),
   ]);
-  return { curlrcUrl: url, ...plugin };
+  return { curlrcUrl: url, curlrcAddresses: await urlAddresses(url), localAddresses: interfaceAddresses(), ...plugin };
 }

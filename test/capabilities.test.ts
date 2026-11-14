@@ -111,7 +111,7 @@ test('roots fail when none exists, and the detail names the missing ones', () =>
 });
 
 test('the curlrc check accepts any url that reaches the bind address', () => {
-  const ok = (http: string, curlrcUrl: string) => byName({ ...ALL, http, curlrcUrl }).curlrc.ok;
+  const ok = (http: string, curlrcUrl: string) => byName({ ...ALL, http, curlrcUrl, localAddresses: ['100.73.48.66', 'fd7a::1'] }).curlrc.ok;
   assert.equal(ok('127.0.0.1:37999', 'http://localhost:37999/events'), true, 'loopback alias');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:37999/events'), true, 'wildcard bind, loopback url');
   assert.equal(ok('0.0.0.0:37999', 'http://100.73.48.66:37999/events'), true, 'wildcard bind, tailnet url');
@@ -122,12 +122,25 @@ test('the curlrc check accepts any url that reaches the bind address', () => {
   assert.equal(ok('[::1]:37999', 'http://localhost:37999/events'), true, 'localhost reaches an IPv6 loopback bind');
   assert.equal(ok('0.0.0.0:37999', 'http://[::1]:37999/events'), false, 'an IPv4 wildcard takes no IPv6 address');
   assert.equal(ok('[::]:37999', 'http://127.0.0.1:37999/events'), true, 'an IPv6 wildcard takes IPv4 too');
-  assert.equal(reachesBind('http://[::1]:37999/events', { host: 'localhost', port: 37999 }, '::1'), true, 'the address localhost resolved to');
-  assert.equal(reachesBind('http://127.0.0.1:37999/events', { host: 'localhost', port: 37999 }, '::1'), false, 'not the other family');
+  assert.equal(reachesBind('http://[::1]:37999/events', { host: 'localhost', port: 37999 }, { bindAddress: '::1' }), true, 'the address localhost resolved to');
+  assert.equal(reachesBind('http://127.0.0.1:37999/events', { host: 'localhost', port: 37999 }, { bindAddress: '::1' }), false, 'not the other family');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:38000/events'), false, 'wrong port');
   assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:37999/other'), false, 'wrong path');
   assert.equal(ok('0.0.0.0:37999', 'not a url'), false);
   assert.match(byName({ ...ALL, http: '0.0.0.0:37999', curlrcUrl: undefined }).curlrc.fix ?? '', /url = "http:\/\/127\.0\.0\.1:37999\/events"/);
+});
+
+test('a wildcard bind is reached only at an address of this machine', () => {
+  const ok = (http: string, curlrcUrl: string, curlrcAddresses?: string[]) =>
+    byName({ ...ALL, http, curlrcUrl, curlrcAddresses, localAddresses: ['100.73.48.66', 'fd7a::1'] }).curlrc.ok;
+  assert.equal(ok('0.0.0.0:37999', 'http://192.0.2.123:37999/events'), false, 'a stale url pointing at another machine');
+  assert.equal(ok('[::]:37999', 'http://192.0.2.123:37999/events'), false, 'the same under an IPv6 wildcard');
+  assert.equal(ok('[::]:37999', 'http://[fd7a::1]:37999/events'), true, 'an IPv6 interface address');
+  assert.equal(ok('0.0.0.0:37999', 'http://[fd7a::1]:37999/events'), false, 'but not under an IPv4 wildcard');
+  assert.equal(ok('0.0.0.0:37999', 'http://mini.tail:37999/events', ['100.73.48.66']), true, 'a name resolving to this machine');
+  assert.equal(ok('0.0.0.0:37999', 'http://other.tail:37999/events', ['100.64.0.9']), false, 'a name resolving elsewhere');
+  assert.equal(ok('0.0.0.0:37999', 'http://other.tail:37999/events'), false, 'a name that did not resolve');
+  assert.equal(ok('0.0.0.0:37999', 'http://localhost:37999/events'), true, 'localhost');
 });
 
 test('--http without DROID_MCP_TOKEN fails the http check and the doctor', () => {
