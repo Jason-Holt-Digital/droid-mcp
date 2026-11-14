@@ -11,6 +11,8 @@ export type CapabilityInput = ThisMachine & {
   apiKey: boolean;
   webhook: boolean;
   eventsToken: boolean;
+  // Whether DROID_MCP_TOKEN is set; --http refuses to start without it.
+  httpToken: boolean;
   http?: string;
   roots: string[];
   // Roots that do not exist; checkCwd skips them, so droid_start works only under the others.
@@ -44,11 +46,11 @@ function check(name: string, ok: boolean, detail: string, unlocks: string, fix: 
   return ok ? { name, ok, detail, unlocks } : { name, ok, detail, unlocks, fix };
 }
 
-function httpCheck(http: string | undefined): Check {
+function httpCheck(http: string | undefined, token: boolean): Check {
   const unlocks = 'rings from the plugin';
   if (http === undefined) return check('http', true, 'stdio: there is no /events endpoint, so plugin rings cannot reach this server', unlocks, '');
-  const ok = hostPort(http) !== undefined;
-  return check('http', ok, ok ? `events URL is ${eventsUrl(http)}` : `${http} is not host:port`, unlocks, HTTP_FIX);
+  if (hostPort(http) === undefined) return check('http', false, `${http} is not host:port`, unlocks, HTTP_FIX);
+  return check('http', token, token ? `events URL is ${eventsUrl(http)}` : 'DROID_MCP_TOKEN is not set, so --http will not start', unlocks, HTTP_FIX);
 }
 
 function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'): Check {
@@ -81,7 +83,7 @@ export function capabilities(input: CapabilityInput): Check[] {
       'waking the agent',
       'Set DROID_MCP_WEBHOOK_URL and DROID_MCP_WEBHOOK_KEY (or Keychain accounts WEBHOOK_URL and WEBHOOK_KEY), then restart.',
     ),
-    httpCheck(input.http),
+    httpCheck(input.http, input.httpToken),
     check(
       'roots',
       input.roots.some((r) => !input.missingRoots.includes(r)),

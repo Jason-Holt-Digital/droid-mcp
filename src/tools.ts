@@ -48,7 +48,7 @@ export type Ctx = {
   env?: NodeJS.ProcessEnv;
   catalog?: () => Promise<ModelCatalog>;
   doorbell?: Doorbell;
-  status?: { http?: string; webhook: boolean; eventsToken: boolean };
+  status?: { http?: string; webhook: boolean; eventsToken: boolean; httpToken: boolean };
   probe?: () => Promise<ThisMachine>;
 };
 
@@ -505,6 +505,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         apiKey: Boolean(ctx.rest),
         webhook: ctx.status?.webhook ?? false,
         eventsToken: ctx.status?.eventsToken ?? false,
+        httpToken: ctx.status?.httpToken ?? false,
         http,
         roots: ctx.roots,
         missingRoots: missingRoots(ctx.roots),
