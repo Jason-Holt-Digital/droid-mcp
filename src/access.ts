@@ -11,7 +11,7 @@ import { startOnly, toRestSettings, validateSettings, type RunSettings } from '.
 import type { Ctx } from './tools.ts';
 
 const EVENT_TEXT_MAX = 4000;
-const SESSION_ID_FIX = 'Pass a session id from droid_find.';
+const SESSION_ID_FIX = 'Pass a session id from droid_sessions.';
 
 export type FollowEvent = { seq: number; kind: string; text: string; truncated?: true };
 // droid_wait fits the events into its byte budget, then builds the reply from what is left with page().
@@ -35,7 +35,7 @@ export function checkSessionId(id: string): void {
 
 type Where = { computerId?: string; remote: boolean };
 
-// Fails fast on an offline computer, whether it was named or remembered from droid_find.
+// Fails fast on an offline computer, whether it was named or remembered from droid_sessions.
 // Runs this server owns are SDK processes on this machine, whatever computer is named or remembered.
 export async function locate(ctx: Ctx, session: string, computer?: string, sending = false): Promise<Where> {
   const run = ctx.runs.get(session);
@@ -202,11 +202,11 @@ function remote(ctx: Ctx, sessionId: string, computerId?: string): Access {
       return { sessionId, requestId, via: 'rest' };
     },
     async interrupt() {
-      await needRest(ctx, 'cancelling').interrupt(sessionId);
+      await needRest(ctx, 'interrupting').interrupt(sessionId);
       return { sessionId, via: 'rest', interrupted: true };
     },
     async close() {
-      throw new ToolError('invalid', 'only sessions this server started can be closed', "Use scope 'turn' to stop its running turn.");
+      throw new ToolError('invalid', 'only sessions this server started can be closed', 'Use droid_interrupt to stop its running turn.');
     },
     async result() {
       const { messages } = await needRest(ctx, 'reading results').messages(sessionId, { role: 'assistant', limit: 100, computerId });

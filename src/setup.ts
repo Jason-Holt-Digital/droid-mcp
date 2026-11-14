@@ -30,7 +30,7 @@ export function validateSetup(source: string, url: string, computerId?: string):
     throw new Refused('invalid', `invalid events url: ${url}`, 'Pass an http(s) URL without quotes, spaces or shell metacharacters.');
   }
   if (computerId !== undefined && !COMPUTER_ID.test(computerId)) {
-    throw new Refused('invalid', `invalid computer id: ${computerId}`, 'Pass a computer id from droid_computers.');
+    throw new Refused('invalid', `invalid computer id: ${computerId}`, 'Pass a computer id from droid_status.');
   }
 }
 
