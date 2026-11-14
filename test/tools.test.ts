@@ -322,9 +322,11 @@ test('every tool declares all four hints with the expected values', async () => 
       droid_close: hints(false, true, true, true),
       droid_inbox: hints(true, false, true, false),
       droid_models: hints(true, false, true, false),
+      droid_ops: hints(true, false, true, false),
+      droid_call: hints(false, true, false, true),
     };
     const { tools } = await c.listTools();
-    assert.deepEqual(tools.map((t) => t.name).sort(), Object.keys(expected).sort(), 'the registered tools are exactly these 14');
+    assert.deepEqual(tools.map((t) => t.name).sort(), Object.keys(expected).sort(), 'the registered tools are exactly these 16');
     assert.deepEqual(Object.fromEntries(tools.map((t) => [t.name, t.annotations])), expected);
   } finally {
     await c.close();

@@ -47,6 +47,16 @@ Installing the plugin, changing settings, storing keys and restarting services n
 - `droid_sessions` marks the sessions you are subscribed to with `subscribed: true`. Keep that list short.
 - Send into a session the user runs only when they asked you to.
 
+## Rare operations
+
+For a Factory API endpoint or Droid daemon method that no other tool covers, such as listing environments or a computer's metrics:
+
+1. Search with `droid_ops` and a `query`, then call it with the `id` you picked to read its params.
+2. Run it with `droid_call`. A REST request body goes in `params.body`. Daemon operations run only on the computer that runs droid-mcp.
+3. A destructive operation needs the user's OK first. Ask, then pass `confirm: true`. Never pass it on your own judgment.
+
+With `DROID_MCP_MAX_AUTONOMY` at `off` or `low`, only read-only operations run.
+
 ## When a call fails
 
 Every failure has a `code`, a `message` and a `fix`. Do what `fix` says, or tell the user. The codes:

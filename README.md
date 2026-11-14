@@ -15,6 +15,7 @@ droid-mcp is an MCP server. It runs on one computer. Your agent (Grok Bot, Claud
 - Read the result and the git diff.
 - Interrupt a turn or close a session.
 - Watch the sessions you run yourself and step in when you ask it to.
+- Search and run rare operations with `droid_ops` and `droid_call`. Destructive ones need your OK.
 
 ## What to set up
 

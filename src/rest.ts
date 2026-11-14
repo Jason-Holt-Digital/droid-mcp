@@ -2,6 +2,7 @@ import {
   answerSessionElicitation,
   createFactoryClient,
   createSession,
+  getComputer,
   getMessages,
   getSession,
   interruptSession,
@@ -12,6 +13,7 @@ import {
   postMessage,
   updateSession,
   type AnswerSessionElicitationRequestBody,
+  type Client,
   type CreateSessionRequestBody,
 } from '@factory/droid-sdk/api';
 import type { RemoteSession } from './catalog.ts';
@@ -20,6 +22,8 @@ import type { RawComputer } from './computers.ts';
 import type { RestSessionSettings } from './settings.ts';
 
 type ApiResult<T> = { data?: T; error?: unknown; response?: Response };
+export type HttpMethod = Parameters<Client['request']>[0]['method'];
+export type RestRequest = { path: Record<string, unknown>; query: Record<string, unknown>; body?: unknown };
 
 const KEY_FIX = 'Check that FACTORY_API_KEY is valid and its account can use the Factory sessions API.';
 const BY_STATUS = new Map<number, [ErrorCode, string]>([
@@ -97,6 +101,17 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
         providerStatus: c.providerStatus ?? undefined,
         lastSeenAt: c.lastSeenAt,
       }));
+    },
+
+    async computer(computerId: string) {
+      const c = unwrap(await getComputer({ client, path: { computerId } }), 'getComputer');
+      return { providerType: c.providerType, relayClientUrl: c.relayClientUrl };
+    },
+
+    // Raw requests carry no security by default, so the bearer scheme is named to send the key.
+    async call(method: HttpMethod, url: string, req: RestRequest): Promise<unknown> {
+      const r = await client.request({ method, url, ...req, security: [{ type: 'http', scheme: 'bearer' }] });
+      return unwrap({ ...r, data: r.data ?? null }, `${method} ${url}`);
     },
 
     async sessions(
