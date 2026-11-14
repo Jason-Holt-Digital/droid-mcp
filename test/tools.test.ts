@@ -651,11 +651,13 @@ test('droid_send on a closed owned run follows the named computer instead of tre
   }
 });
 
-test('a failed computer lookup in droid_send leaves the idempotencyKey free for a retry', async () => {
+test('a failed computer lookup in droid_send keeps a known API code and leaves the idempotencyKey free for a retry', async () => {
   let computerCalls = 0;
   const api = fakeApi((call) => {
     if (call.method === 'GET' && call.path === '/api/v0/computers') {
-      if (computerCalls++ === 0) return Response.json({ status: 503, title: 'Unavailable' }, { status: 503 });
+      const n = computerCalls++;
+      if (n === 0) return Response.json({ status: 503, title: 'Unavailable' }, { status: 503 });
+      if (n === 1) return Response.json({ status: 401, title: 'Unauthorized' }, { status: 401 });
       return { computers: [{ ...FLEET.cloudA, lastSeenAt: Date.now() }] };
     }
     if (call.method === 'POST' && call.path.endsWith('/messages')) return { messageId: 'm1', status: 'running' };
@@ -668,6 +670,8 @@ test('a failed computer lookup in droid_send leaves the idempotencyKey free for 
     const first = await c.call('droid_send', args);
     assert.equal(first.error?.code, 'internal');
     assert.match(first.error!.message, /could not list computers: .*503/);
+    const denied = await c.call('droid_send', args);
+    assert.equal(denied.error?.code, 'needs_api_key', 'a known API error keeps its code');
     const retry = await c.call('droid_send', args);
     assert.equal(retry.isError, false, retry.text);
     assert.equal(retry.json.messageId, 'm1');
@@ -675,6 +679,7 @@ test('a failed computer lookup in droid_send leaves the idempotencyKey free for 
     await c.close();
   }
 });
+
 test('a run this server owns is read and closed locally even when its session is remembered on an offline computer', async () => {
   let closed = false;
   const run = {

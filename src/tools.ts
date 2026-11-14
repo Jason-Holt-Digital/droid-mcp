@@ -197,7 +197,8 @@ async function locate(ctx: Ctx, session: string, computer?: string, sending = fa
     // A failed computer list is Refused so droid_send's idempotency key is not left pending.
     const c = await ctx.computers.require(computer).catch((err) => {
       if (err instanceof Refused) throw err;
-      throw new Refused('internal', `could not list computers: ${err instanceof Error ? err.message : String(err)}`, INTERNAL_FIX);
+      const message = `could not list computers: ${err instanceof Error ? err.message : String(err)}`;
+      throw err instanceof ToolError ? new Refused(err.code, message, err.fix) : new Refused('internal', message, INTERNAL_FIX);
     });
     return c.thisMachine ? { remote: false } : { computerId: c.id, remote: true };
   }
