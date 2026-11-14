@@ -13,7 +13,7 @@ What each part needs:
 - **The plugin and a curlrc on each computer.** `droid_setup` installs both.
 - **A URL each computer can reach.** A loopback address works only on the computer that runs droid-mcp. For other computers, set `DROID_MCP_EVENTS_URL`, for example to a tailnet address.
 - **`FACTORY_API_KEY`**, to check rings for sessions droid-mcp does not run itself. Without it, those rings are logged but never forwarded.
-- **`DROID_MCP_WEBHOOK_URL` and `DROID_MCP_WEBHOOK_KEY`**, for push. Without them, poll with `droid_inbox`.
+- **`DROID_MCP_WEBHOOK_URL` and `DROID_MCP_WEBHOOK_KEY`**, for push. Without them, poll with `droid_inbox`. Without HTTP mode or the plugin there are no rings, so `droid_inbox` stays empty; follow sessions with `droid_wait` and `afterSeq` instead.
 
 ## Subscriptions
 
