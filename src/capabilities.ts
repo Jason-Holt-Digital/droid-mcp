@@ -217,36 +217,54 @@ const TAILSCALE = [
   '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
 ];
 
-type ServeStatus = { Web?: { [hostPort: string]: { Handlers?: { [path: string]: { Proxy?: string } } } } };
+type ServeStatus = {
+  TCP?: { [port: string]: { HTTP?: boolean; HTTPS?: boolean } };
+  Web?: { [hostPort: string]: { Handlers?: { [path: string]: { Proxy?: string } } } };
+};
 
 const runFile = (file: string, args: string[]) =>
   new Promise<string>((resolve, reject) => execFile(file, args, { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
 
-// A serve Proxy is http://host:port, with or without a trailing slash, or a bare port on 127.0.0.1.
-function proxyTarget(proxy: string): { host: string; port: number } | undefined {
-  if (/^\d+$/.test(proxy)) return { host: '127.0.0.1', port: Number(proxy) };
+// Whether a serve Proxy (http://host:port[/path] or a bare port on 127.0.0.1) delivers `path` to droid-mcp's
+// /events on the bind. Serve strips the mount point, so a /events mount must proxy to .../events and a / mount
+// to the root. The proxy is a client on this machine, so reachesBind decides which listener it reaches.
+function deliversEvents(proxy: string | undefined, mount: string, bind: { host: string; port: number }, bindAddress?: string): boolean {
+  if (proxy === undefined) return false;
+  let u: URL;
   try {
-    const u = new URL(proxy);
-    return u.protocol === 'http:' ? { host: u.hostname.replace(/^\[(.*)\]$/, '$1'), port: Number(u.port || 80) } : undefined;
+    u = new URL(/^\d+$/.test(proxy) ? `http://127.0.0.1:${proxy}` : proxy);
   } catch {
-    return undefined;
+    return false;
   }
+  const path = u.pathname.replace(/\/$/, '');
+  if (u.protocol !== 'http:' || path !== (mount === '/events' ? '/events' : '')) return false;
+  return reachesBind(`http://${u.host}/events`, bind, { bindAddress, localAddresses: interfaceAddresses() });
 }
 
-function proxiesTo(proxy: string | undefined, bind: { host: string; port: number }): boolean {
-  const t = proxy === undefined ? undefined : proxyTarget(proxy);
-  if (t?.port !== bind.port) return false;
-  return t.host === bind.host || (isLoopback(t.host) && isLoopback(bind.host)) || isWildcard(bind.host);
+// The tailnet URL of a serve host whose /events reaches this server: Serve uses the exact /events handler
+// when there is one, else /. The scheme follows the TCP listener; a port with neither HTTP nor HTTPS is skipped.
+function serveEventsUrl(status: ServeStatus, bind: { host: string; port: number }, bindAddress?: string): string | undefined {
+  for (const [key, web] of Object.entries(status.Web ?? {})) {
+    const port = key.slice(key.lastIndexOf(':') + 1);
+    const tcp = status.TCP?.[port];
+    const scheme = tcp?.HTTPS ? 'https' : tcp?.HTTP ? 'http' : undefined;
+    const mount = web.Handlers?.['/events'] ? '/events' : '/';
+    if (!scheme || !deliversEvents(web.Handlers?.[mount]?.Proxy, mount, bind, bindAddress)) continue;
+    const defaultPort = scheme === 'https' ? '443' : '80';
+    return `${scheme}://${port === defaultPort ? key.slice(0, -port.length - 1) : key}/events`;
+  }
+  return undefined;
 }
 
-// The https address `tailscale serve` gives this server on the tailnet, when it proxies / or /events to the --http bind.
+// The address `tailscale serve` gives this server on the tailnet, when its /events reaches the --http bind.
 export async function tailnetEventsUrl(
   http: string | undefined,
-  deps: { run?: (file: string, args: string[]) => Promise<string> } = {},
+  deps: { run?: (file: string, args: string[]) => Promise<string>; bindAddress?: string } = {},
 ): Promise<string | undefined> {
   const bind = http === undefined ? undefined : hostPort(http);
   if (!bind) return undefined;
   const run = deps.run ?? runFile;
+  const bindAddress = 'bindAddress' in deps ? deps.bindAddress : await resolveBind(http);
   for (const file of TAILSCALE) {
     let out: string;
     try {
@@ -255,9 +273,7 @@ export async function tailnetEventsUrl(
       continue;
     }
     try {
-      const status: ServeStatus = JSON.parse(out);
-      const key = Object.entries(status.Web ?? {}).find(([, web]) => ['/', '/events'].some((path) => proxiesTo(web.Handlers?.[path]?.Proxy, bind)))?.[0];
-      return key === undefined ? undefined : `https://${key.replace(/:443$/, '')}/events`;
+      return serveEventsUrl(JSON.parse(out) as ServeStatus, bind, bindAddress);
     } catch {
       return undefined;
     }
