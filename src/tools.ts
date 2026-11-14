@@ -251,7 +251,7 @@ function lastAssistantText(entries: TranscriptEntry[]): string {
   return entries.findLast((e) => e.role === 'assistant')?.text ?? '';
 }
 
-async function resultText(ctx: Ctx, target: Target, computerId?: string): Promise<string> {
+export async function resultText(ctx: Ctx, target: Target, computerId?: string): Promise<string> {
   if (target.kind === 'own') {
     return target.run.lastResult ?? target.run.events.findLast((e) => e.kind === 'assistant')?.text ?? '';
   }

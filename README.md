@@ -235,7 +235,7 @@ security add-generic-password -s droid-mcp -a EVENTS_TOKEN -w "$(openssl rand -h
 security find-generic-password -s droid-mcp -a EVENTS_TOKEN -w   # prints it, for the installers below
 ```
 
-Elsewhere, or instead, set `DROID_MCP_EVENTS_TOKEN=<token>` in the server's environment (for example in `~/.droid-mcp/run.sh` or `~/.droid-mcp/env`). Restart the server. Until the token is set, `POST /events` answers 404.
+Elsewhere, or instead, set `DROID_MCP_EVENTS_TOKEN=<token>` in the server's environment (for example in `~/.droid-mcp/run.sh` or `~/.droid-mcp/env`). Restart the server. Until the token is set, a `POST /events` that carries a token answers 404. Tokenless posts from the [doorbell plugin](#doorbell-plugin) do not need it.
 
 Then install the hook on every computer that runs Droid sessions, with the same token. Run the installer from a clone of this repo on that computer.
 
@@ -294,7 +294,7 @@ url = "http://<server>:<port>/events"
 
 Check it with `droid plugin list --scope user`, which shows `droid-mcp@droid-mcp` as `Enabled`. New sessions pick the hooks up. The hook waits at most 3 s, prints nothing and always exits 0, so a missing curlrc or a down server does not show in the session.
 
-The server does not accept these tokenless posts yet. Until it does and the plugin is rolled out, the token-based hooks and installers from step 7 stay. Windows is unverified: which shell Droid uses for hook commands there is not documented, and in Windows PowerShell 5.1 `curl` is an alias for `Invoke-WebRequest`.
+The server accepts these tokenless posts and checks each one with Factory before it forwards anything; see [Callbacks](#callbacks). Until the plugin is rolled out, the token-based hooks and installers from step 7 stay. Windows is unverified: which shell Droid uses for hook commands there is not documented, and in Windows PowerShell 5.1 `curl` is an alias for `Invoke-WebRequest`.
 
 ## Configuration
 
@@ -302,7 +302,7 @@ The server does not accept these tokenless posts yet. Until it does and the plug
 - `DROID_MCP_ROOTS` (default `~/repos`): colon-separated directories a session cwd must resolve inside.
 - `DROID_MCP_MAX_AUTONOMY` (default `high`): autonomy cap, one of `off`, `low`, `medium`, `high`; any other value means `off`.
 - `DROID_MCP_TOKEN` (default unset): bearer token for the MCP endpoint; required with `--http`.
-- `DROID_MCP_EVENTS_TOKEN` (default unset): bearer token for `POST /events`; enables callbacks in HTTP mode. On macOS, falls back to Keychain account `EVENTS_TOKEN` (step 7).
+- `DROID_MCP_EVENTS_TOKEN` (default unset): bearer token for the token hooks' `POST /events`; the doorbell plugin does not use it. On macOS, falls back to Keychain account `EVENTS_TOKEN` (step 7).
 - `DROID_MCP_WEBHOOK_URL` (default unset): webhook that receives forwarded events. Falls back to Keychain account `WEBHOOK_URL`.
 - `DROID_MCP_WEBHOOK_KEY` (default unset): key sent to the webhook; forwarding needs both URL and key. Falls back to Keychain account `WEBHOOK_KEY`.
 
@@ -386,15 +386,16 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 
 ![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![HTTP mode](https://img.shields.io/badge/needs-HTTP%20mode-lightgrey)
 
-- Reads: the last 500 events that hooks posted to `POST /events`. Changes nothing.
+- Reads: the last 500 events from hooks and doorbell rings posted to `POST /events`. Changes nothing.
 - Backend: in-memory event ring.
-- Credential: none for the tool; hooks post with `DROID_MCP_EVENTS_TOKEN`.
+- Credential: none for the tool; token hooks post with `DROID_MCP_EVENTS_TOKEN`, doorbell rings with no token.
 - Parameters: `after`, `limit` (1-200, default 50), `kinds` (`finished`, `question`, `permission`, `ended`).
 - Notes:
   - Without `after`, returns the latest events. With it, returns events after that `seq`, oldest first. It does not wait; pass `nextAfter` back as `after`.
   - Each event has `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text`, `cwd`, `tags` and `forwarded`.
   - `missed: true` means events after `after` already dropped out of the ring; an `after` ahead of the log (after a server restart) restarts from the oldest kept event and sets `missed`. `forwarding` says whether a webhook is configured.
-  - Event text is untrusted session content. See [Callbacks](#callbacks).
+  - Anyone who can reach `/events` can ring. A ring for an unsubscribed session costs no Factory call and only adds an unforwarded line to `droid_events`; for a subscribed one, the server forwards only what Factory or its own run confirms.
+- Event text is untrusted session content. See [Callbacks](#callbacks).
 
 #### droid_subscribe and droid_unsubscribe
 
@@ -521,29 +522,44 @@ Factory's own `status` field says `active` even when an own computer's daemon is
 
 ## Callbacks
 
-A hook on each computer reports session events to the server. Your agent reads them with `droid_events`, or a webhook wakes it, and it answers with `droid_send` or `droid_respond`.
+Each computer reports session events to the server. Your agent reads them with `droid_events`, or a webhook wakes it, and it answers with `droid_send` or `droid_respond`. There are two ways in: the doorbell plugin, and the older token hooks from step 7, which stay until the plugin is rolled out everywhere.
+
+### Doorbell plugin: tokenless rings
+
+The [doorbell plugin](#doorbell-plugin) posts each hook's stdin JSON to `POST /events` with no `Authorization` header. The server calls that a ring and treats it only as a claim: it never forwards what a ring says. Rings work whether or not `DROID_MCP_EVENTS_TOKEN` is set.
 
 ```mermaid
 sequenceDiagram
   participant D as Droid session (any computer)
-  participant H as Hook script
   participant S as droid-mcp
+  participant F as Factory REST, or this server's own run
   participant W as Webhook (optional)
-  participant C as CTO agent (MCP client)
-  D->>H: Stop, Notification or SessionEnd
-  H-->>D: exits 0 at once, no output
-  H->>S: POST /events (events token, 3 s timeout)
-  S->>S: keep in a ring of 500 events (droid_events)
-  opt forwarding rule matches and a webhook is set
+  D->>S: POST /events (hook stdin, no token, 3 s timeout)
+  S-->>D: 202 at once
+  alt session not subscribed
+    S->>S: log the ring (droid_events, forwarded false), no Factory call
+  else subscribed
+    S->>F: what is true now? (status, pending prompts, last reply)
+    S->>S: add the confirmed event (30 s debounce)
     S->>W: POST event (8 s timeout, one try)
-    W->>C: wake
   end
-  C->>S: droid_events
-  C->>S: droid_send or droid_respond
-  S->>D: prompt or answer over REST
 ```
 
-Event kinds (`hooks/droid_mcp_hook.py`):
+From a ring the server reads only `session_id`, `hook_event_name` and `notification_type`; everything else, such as `transcript_path` or the notification message, is dropped. For a subscribed session it asks the session's source of truth: its own run state when this server started the session, and Factory REST otherwise. Without `FACTORY_API_KEY`, a ring for a session this server does not run is only logged, and the server log says why.
+
+| Hook                                                       | What the server checks                                                                                                                                                               | Event                                                                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Stop`                                                     | The session is no longer running. Factory can report `running` for a moment after the hook fires, so it checks again every second, up to 5 times. Still running after that: nothing. | `finished` with the end of the last reply (up to 300 characters), or `question` if the reply has a line starting `QUESTION:` (text runs from that line) |
+| `Notification` (`permission_prompt`, `elicitation_dialog`) | A prompt is actually pending. None pending: nothing.                                                                                                                                 | `permission` for a permission prompt, `question` for an AskUser prompt; text describes the prompt                                                       |
+| `SessionEnd`                                               | The session exists (REST answers, or this server runs it).                                                                                                                           | `ended`                                                                                                                                                 |
+
+Other hook events and other notification types (`idle_prompt`, `auth_success`) get a 202 and are ignored. The event's computer is the session's computer from REST, or this machine for sessions this server runs. Each source address may ring 60 times a minute; beyond that the server answers 429 and does nothing else. Bad JSON or a bad shape gets a 400. Verification errors go to the server log and never affect the reply.
+
+A forged ring can at most repeat a real event for a subscribed session, which the debounce limits, or add an unverified line to `droid_events` for an unsubscribed one.
+
+### Token hooks
+
+A request with an `Authorization` header takes the old path: the events token from step 7 is checked (401 if wrong, 404 if no token is set), and the hook's own event body is recorded and forwarded as sent. The hook script (`hooks/droid_mcp_hook.py`) maps events like this:
 
 - `finished`: a `Stop` hook. Text is the end of the last reply (up to 300 characters).
 - `question`: a `Stop` whose last reply has a line starting `QUESTION:` (text runs from that line), or a `Notification` of type `elicitation_dialog`.
@@ -551,9 +567,13 @@ Event kinds (`hooks/droid_mcp_hook.py`):
 - `ended`: a `SessionEnd` hook. Text is the reason.
 - Ignored: the `idle_prompt` and `auth_success` notifications.
 
+On macOS and Linux the hook forks, posts in the background with a 3 s timeout, and the parent exits at once. On Windows it posts synchronously with a 3 s timeout. Either way it always exits 0 and prints nothing, so a down server does not show up in the session.
+
+### Forwarding
+
 To get a question back from a session, tell it to end its reply with a line starting `QUESTION:`.
 
-Forwarding rule (`src/http.ts`, `src/events.ts`):
+Forwarding rule (`src/ring.ts`, `src/events.ts`), the same for both paths:
 
 - An event is forwarded only if its session is subscribed, whatever its kind. Tags and which process started the session do not matter.
 - `droid_start` subscribes to the sessions it starts (unless `subscribe: false`). For other sessions, the agent calls `droid_subscribe` when you ask it to, and `droid_unsubscribe` to stop.
@@ -562,8 +582,6 @@ Forwarding rule (`src/http.ts`, `src/events.ts`):
 - The webhook gets `source: "droid-mcp"`, `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text` and `cwd`.
 
 Every event is kept for `droid_events`, forwarded or not. Events live in memory only and are lost when the server restarts.
-
-The hook never blocks Droid. On macOS and Linux it forks, posts in the background with a 3 s timeout, and the parent exits at once. On Windows it posts synchronously with a 3 s timeout. Either way it always exits 0 and prints nothing, so a down server does not show up in the session.
 
 ## What the agent can and cannot touch
 
@@ -650,11 +668,12 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 
 ### HTTP mode
 
-- `--http <host:port>` requires `DROID_MCP_TOKEN`. Every request must send `Authorization: Bearer <token>`, compared with `timingSafeEqual` (`src/main.ts`).
+- `--http <host:port>` requires `DROID_MCP_TOKEN`. Every MCP request must send `Authorization: Bearer <token>`, compared with `timingSafeEqual` (`src/main.ts`).
 - Any request with an `Origin` header is rejected with 403, so browsers cannot call the server (`src/main.ts`).
 - `DROID_MCP_TOKEN`, `DROID_MCP_EVENTS_TOKEN` and `DROID_MCP_WEBHOOK_KEY` are deleted from the process environment at startup, so spawned sessions do not inherit them (`src/main.ts`).
 - Each request gets a fresh, stateless MCP server; sessions and runs are shared across requests (`src/main.ts`).
-- `POST /events` takes only `DROID_MCP_EVENTS_TOKEN`, and the MCP endpoint takes only `DROID_MCP_TOKEN` (`src/http.ts`). Without an events token, `/events` answers 404. Bodies over 16 KB get 413; invalid events get 400; accepted ones get 202 with `seq` and `forwarded`.
+- A `POST /events` with an `Authorization` header takes only `DROID_MCP_EVENTS_TOKEN`, and the MCP endpoint takes only `DROID_MCP_TOKEN` (`src/http.ts`). Without an events token, token posts to `/events` answer 404. Bodies over 16 KB get 413; invalid events get 400; accepted ones get 202 with `seq` and `forwarded`.
+- A `POST /events` without an `Authorization` header is a doorbell ring (`src/ring.ts`): 60 per minute per source address (then 429), 202 before any check, and forwarded only after Factory or this server's own run confirms it.
 
 ### What it never does
 
