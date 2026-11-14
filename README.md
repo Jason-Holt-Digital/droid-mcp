@@ -275,6 +275,27 @@ Optionally, forward events to a webhook, for example a Grok Bot webhook routine.
 
 Each forward has an 8 s timeout and one try. Failures go to the server log. Restart the server after changing either value.
 
+## Doorbell plugin
+
+This repo is also a Factory plugin marketplace with one plugin, `droid-mcp` (in `plugin/`). It hooks `Stop`, `Notification` and `SessionEnd`, and each hook runs one `curl` call that posts the hook's stdin JSON, unchanged, to the server's `/events`. It sends no token and runs no script.
+
+Install it on each computer:
+
+```sh
+droid plugin marketplace add Jason-Holt-Digital/droid-mcp
+droid plugin install droid-mcp@droid-mcp --scope user
+```
+
+Then write the server URL to `~/.factory/droid-mcp.curlrc`, a curl config file with one line:
+
+```text
+url = "http://<server>:<port>/events"
+```
+
+Check it with `droid plugin list --scope user`, which shows `droid-mcp@droid-mcp` as `Enabled`. New sessions pick the hooks up. The hook waits at most 3 s, prints nothing and always exits 0, so a missing curlrc or a down server does not show in the session.
+
+The server does not accept these tokenless posts yet. Until it does and the plugin is rolled out, the token-based hooks and installers from step 7 stay. Windows is unverified: which shell Droid uses for hook commands there is not documented, and in Windows PowerShell 5.1 `curl` is an alias for `Invoke-WebRequest`.
+
 ## Configuration
 
 - `FACTORY_API_KEY` (default unset): enables the REST backend (other computers, workstream children), and is used for spawned sessions instead of the CLI login. On macOS, the server falls back to the Keychain (step 3).

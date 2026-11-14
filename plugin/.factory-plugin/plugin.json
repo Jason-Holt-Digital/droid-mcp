@@ -1,0 +1,8 @@
+{
+  "name": "droid-mcp",
+  "description": "Rings droid-mcp when a session stops, notifies or ends",
+  "version": "0.1.0",
+  "author": { "name": "Jason Holt" },
+  "repository": "https://github.com/Jason-Holt-Digital/droid-mcp",
+  "license": "MIT"
+}

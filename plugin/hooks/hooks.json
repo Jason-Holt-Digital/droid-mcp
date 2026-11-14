@@ -1,0 +1,35 @@
+{
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "curl -s -m 3 -o /dev/null -K \"$HOME/.factory/droid-mcp.curlrc\" -H 'content-type: application/json' --data-binary @- 2>/dev/null || true",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Notification": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "curl -s -m 3 -o /dev/null -K \"$HOME/.factory/droid-mcp.curlrc\" -H 'content-type: application/json' --data-binary @- 2>/dev/null || true",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "SessionEnd": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "curl -s -m 3 -o /dev/null -K \"$HOME/.factory/droid-mcp.curlrc\" -H 'content-type: application/json' --data-binary @- 2>/dev/null || true",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}
