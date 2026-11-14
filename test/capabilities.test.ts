@@ -45,7 +45,7 @@ test('each missing capability fails with a fix', () => {
   );
   assert.equal(c.api_key.fix, API_KEY_FIX);
   assert.match(c.plugin.fix ?? '', /droid plugin install droid-mcp@droid-mcp --scope user/);
-  assert.equal(c.curlrc.detail, 'this machine: url is http://old:1/events, expected http://127.0.0.1:37999/events');
+  assert.equal(c.curlrc.detail, 'this machine: url is http://old:1/events, which does not reach 127.0.0.1:37999');
   assert.equal(c.curlrc.fix, 'Write this one line to ~/.factory/droid-mcp.curlrc: url = "http://127.0.0.1:37999/events"');
   assert.equal(byName({ ...ALL, curlrcUrl: undefined }).curlrc.ok, false);
 });
@@ -118,6 +118,19 @@ test('the curlrc may point at the configured events URL or the --http address', 
   assert.equal(wrong.ok, false);
   assert.match(wrong.fix ?? '', /url = "https:\/\/droid\.example\.ts\.net\/events"/);
   assert.equal(byName({ ...ALL, http: undefined, eventsUrl, curlrcUrl: eventsUrl }).curlrc.ok, true, 'a configured URL works without --http');
+});
+
+test('the curlrc check accepts any url that reaches the bind address', () => {
+  const ok = (http: string, curlrcUrl: string) => byName({ ...ALL, http, curlrcUrl }).curlrc.ok;
+  assert.equal(ok('127.0.0.1:37999', 'http://localhost:37999/events'), true, 'loopback alias');
+  assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:37999/events'), true, 'wildcard bind, loopback url');
+  assert.equal(ok('0.0.0.0:37999', 'http://100.73.48.66:37999/events'), true, 'wildcard bind, tailnet url');
+  assert.equal(ok('[::]:37999', 'http://[::1]:37999/events'), true, 'IPv6 wildcard');
+  assert.equal(ok('100.73.48.66:37999', 'http://127.0.0.1:37999/events'), false, 'loopback does not reach a tailnet bind');
+  assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:38000/events'), false, 'wrong port');
+  assert.equal(ok('0.0.0.0:37999', 'http://127.0.0.1:37999/other'), false, 'wrong path');
+  assert.equal(ok('0.0.0.0:37999', 'not a url'), false);
+  assert.match(byName({ ...ALL, http: '0.0.0.0:37999', curlrcUrl: undefined }).curlrc.fix ?? '', /url = "http:\/\/127\.0\.0\.1:37999\/events"/);
 });
 
 test('--http without DROID_MCP_TOKEN fails the http check and the doctor', () => {
