@@ -158,6 +158,16 @@ test('idle before the first reply keeps waiting', async () => {
   assert.match((await settled(setup, 'c')).detail, /timed out/);
 });
 
+test('a REST call that never answers still times out, interrupts and archives', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  rest.status = () => new Promise(() => {});
+  const setup = new Setup({ rest, pollMs: 1, timeoutMs: 10 });
+  await setup.start('c', CMDS);
+  assert.match((await settled(setup, 'c')).detail, /timed out/);
+  assert.deepEqual(calls.interrupted, ['setup-session']);
+  assert.deepEqual(calls.archived, ['setup-session']);
+});
+
 test('a second start while the job works returns the same job; a failed create is recorded, not thrown', async () => {
   const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
   const setup = new Setup({ rest, pollMs: 1, timeoutMs: 30 });

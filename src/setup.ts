@@ -88,8 +88,20 @@ export class Setup {
   }
 
   async #watch(job: Job, sessionId: string, computerId: string, commands: string[]): Promise<void> {
-    const rest = this.#rest;
     const deadline = this.#now() + this.#timeoutMs;
+    const timedOut = `timed out after ${Math.round(this.#timeoutMs / 1000)} s`;
+    // A stalled REST call must not outlive the deadline: every call races it, and a late reply is ignored.
+    let timer: NodeJS.Timeout | undefined;
+    const expired = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(timedOut)), this.#timeoutMs);
+    });
+    expired.catch(() => {});
+    const within = <T>(p: Promise<T>) => Promise.race([expired, p]);
+    const rest = {
+      status: (...a: Parameters<SetupRest['status']>) => within(this.#rest.status(...a)),
+      answer: (...a: Parameters<SetupRest['answer']>) => within(this.#rest.answer(...a)),
+      messages: (...a: Parameters<SetupRest['messages']>) => within(this.#rest.messages(...a)),
+    };
     let approved = 0;
     try {
       while (this.#now() < deadline) {
@@ -121,11 +133,13 @@ export class Setup {
             return await this.#finish(job, 'failed', detail.slice(0, DETAIL_MAX) || 'the Droid stopped without SETUP-OK');
           }
         }
-        await sleep(this.#pollMs);
+        await within(sleep(this.#pollMs));
       }
-      await this.#finish(job, 'failed', `timed out after ${Math.round(this.#timeoutMs / 1000)} s`);
+      await this.#finish(job, 'failed', timedOut);
     } catch (err) {
       await this.#finish(job, 'failed', message(err));
+    } finally {
+      clearTimeout(timer);
     }
   }
 
