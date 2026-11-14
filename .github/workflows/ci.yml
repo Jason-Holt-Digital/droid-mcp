@@ -23,4 +23,5 @@ jobs:
       - run: npm run lint
       - run: npm run fmt:check
       - run: npm run typecheck
+      - run: npm run codegen:check
       - run: npm test
