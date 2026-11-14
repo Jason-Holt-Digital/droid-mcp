@@ -4,7 +4,17 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { capabilities, curlrcUrl, doctorReport, localOnly, pasteLine, reachesBind, resolveBind, type CapabilityInput } from '../src/capabilities.ts';
+import {
+  capabilities,
+  curlrcUrl,
+  doctorReport,
+  localOnly,
+  pasteLine,
+  reachesBind,
+  resolveBind,
+  tailnetEventsUrl,
+  type CapabilityInput,
+} from '../src/capabilities.ts';
 import { API_KEY_FIX } from '../src/config.ts';
 
 const ALL: CapabilityInput = {
@@ -194,4 +204,101 @@ test('resolveBind resolves a hostname bind and leaves addresses alone', async ()
   assert.equal(await resolveBind('127.0.0.1:37999'), undefined);
   assert.equal(await resolveBind(undefined), undefined);
   assert.ok(['127.0.0.1', '::1'].includes((await resolveBind('localhost:37999')) ?? ''));
+});
+
+const SERVE = JSON.stringify({
+  TCP: { 8443: { HTTPS: true } },
+  Web: { 'jasons-mac-mini.tail57dad6.ts.net:8443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999' } } } },
+});
+const serve =
+  (web: unknown, tcp: unknown = { 443: { HTTPS: true }, 8443: { HTTPS: true } }) =>
+  async () =>
+    JSON.stringify({ TCP: tcp, Web: web });
+const at = (http: string, run: () => Promise<string>, bindAddress?: string) => tailnetEventsUrl(http, { run, bindAddress });
+
+test('tailnetEventsUrl finds the tailscale serve address that proxies to the bind', async () => {
+  const url = 'https://jasons-mac-mini.tail57dad6.ts.net:8443/events';
+  const mini = async () => SERVE;
+  assert.equal(await at('127.0.0.1:37999', mini), url);
+  assert.equal(await at('localhost:37999', mini, '127.0.0.1'), url, 'localhost resolved to 127.0.0.1');
+  assert.equal(await at('localhost:37999', mini, '::1'), undefined, 'localhost resolved to ::1 is another listener');
+  assert.equal(await at('0.0.0.0:37999', mini), url, 'wildcard bind');
+  assert.equal(await at('127.0.0.1:38000', mini), undefined, 'wrong port');
+  assert.equal(await at('100.73.48.66:37999', mini), undefined, 'another host');
+  assert.equal(await tailnetEventsUrl(undefined, { run: mini }), undefined);
+  assert.equal(await tailnetEventsUrl('nope', { run: mini }), undefined);
+  const slash = serve({ 'a.ts.net:443': { Handlers: { '/': { Text: 'hi' } } }, 'b.ts.net:8443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999/' } } } });
+  assert.equal(await at('127.0.0.1:37999', slash), 'https://b.ts.net:8443/events', 'trailing slash; Text skipped');
+  const bare = serve({ 'box.ts.net:443': { Handlers: { '/': { Proxy: '37999' } } } });
+  assert.equal(await at('127.0.0.1:37999', bare), 'https://box.ts.net/events', 'bare port, :443 dropped');
+  const other = serve({ 'c.ts.net:443': { Handlers: { '/api': { Proxy: 'http://127.0.0.1:37999' } } } });
+  assert.equal(await at('127.0.0.1:37999', other), undefined, 'other paths do not count');
+});
+
+test('tailnetEventsUrl checks the listener a serve proxy reaches', async () => {
+  for (const proxy of ['http://[::1]:37999', 'http://127.0.0.2:37999']) {
+    const run = serve({ 'x.ts.net:443': { Handlers: { '/': { Proxy: proxy } } } });
+    assert.equal(await at('127.0.0.1:37999', run), undefined, proxy);
+  }
+  const v6 = serve({ 'x.ts.net:443': { Handlers: { '/': { Proxy: 'http://[::1]:37999' } } } });
+  assert.equal(await at('0.0.0.0:37999', v6), undefined, 'an IPv4 wildcard takes no IPv6 target');
+  assert.equal(await at('[::]:37999', v6), 'https://x.ts.net/events', 'an IPv6 wildcard does');
+});
+
+test('tailnetEventsUrl uses the scheme of the serve listener', async () => {
+  const web = { 'box.ts.net:80': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999' } } } };
+  assert.equal(await at('127.0.0.1:37999', serve(web, { 80: { HTTP: true } })), 'http://box.ts.net/events');
+  const odd = { 'box.ts.net:8080': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999' } } } };
+  assert.equal(await at('127.0.0.1:37999', serve(odd, { 8080: { HTTP: true } })), 'http://box.ts.net:8080/events');
+  assert.equal(await at('127.0.0.1:37999', serve(web, {})), undefined, 'no listener on that port');
+});
+
+test('tailnetEventsUrl follows the /events handler before /', async () => {
+  const root = { Proxy: 'http://127.0.0.1:37999' };
+  const text = serve({ 'x.ts.net:443': { Handlers: { '/': root, '/events': { Text: 'no' } } } });
+  assert.equal(await at('127.0.0.1:37999', text), undefined, 'an explicit /events Text handler wins');
+  const elsewhere = serve({ 'x.ts.net:443': { Handlers: { '/': root, '/events': { Proxy: 'http://127.0.0.1:9999/events' } } } });
+  assert.equal(await at('127.0.0.1:37999', elsewhere), undefined, 'an explicit /events proxy elsewhere wins');
+  const mounted = serve({ 'x.ts.net:443': { Handlers: { '/events': { Proxy: 'http://127.0.0.1:37999/events' } } } });
+  assert.equal(await at('127.0.0.1:37999', mounted), 'https://x.ts.net/events', 'a /events mount that keeps the path');
+  const stripped = serve({ 'x.ts.net:443': { Handlers: { '/events': { Proxy: 'http://127.0.0.1:37999' } } } });
+  assert.equal(await at('127.0.0.1:37999', stripped), undefined, 'serve strips the mount, so this reaches /');
+  const slashed = serve({ 'x.ts.net:443': { Handlers: { '/events': { Proxy: 'http://127.0.0.1:37999/events/' } } } });
+  assert.equal(await at('127.0.0.1:37999', slashed), undefined, 'a /events/ proxy path reaches /events/, not /events');
+  const dir = serve({ 'x.ts.net:443': { Handlers: { '/': root, '/events/': { Text: 'no' } } } });
+  assert.equal(await at('127.0.0.1:37999', dir), undefined, 'a /events/ handler comes before /');
+  const dirProxy = serve({ 'x.ts.net:443': { Handlers: { '/events/': { Proxy: 'http://127.0.0.1:37999/events' } } } });
+  assert.equal(await at('127.0.0.1:37999', dirProxy), 'https://x.ts.net/events', 'a /events/ mount that proxies to /events');
+  const under = serve({ 'x.ts.net:443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999/api' } } } });
+  assert.equal(await at('127.0.0.1:37999', under), undefined, 'a / proxy with a path reaches /api/events');
+});
+
+test('tailnetEventsUrl reads foreground serve configs', async () => {
+  const fg = {
+    Foreground: {
+      session1: {
+        TCP: { 443: { HTTPS: true } },
+        Web: { 'fg.ts.net:443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999' } } } },
+      },
+    },
+  };
+  assert.equal(await at('127.0.0.1:37999', async () => JSON.stringify(fg)), 'https://fg.ts.net/events');
+});
+
+test('tailnetEventsUrl tries each tailscale binary and never throws', async () => {
+  const files: string[] = [];
+  const second = async (file: string) => {
+    files.push(file);
+    if (files.length === 1) throw new Error('ENOENT');
+    return SERVE;
+  };
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: second }), 'https://jasons-mac-mini.tail57dad6.ts.net:8443/events');
+  assert.equal(files[0], 'tailscale');
+  assert.equal(files.length, 2);
+  const failing = async () => {
+    throw new Error('not running');
+  };
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: failing }), undefined);
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: async () => 'not json' }), undefined);
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: async () => 'null' }), undefined);
 });

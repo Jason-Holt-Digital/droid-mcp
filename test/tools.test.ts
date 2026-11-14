@@ -49,6 +49,7 @@ async function connect(ctx: Partial<Ctx>) {
     catalog: async () => catalog(),
     computers: new Computers({ rest: ctx.rest, file: join(dir, 'no-computer.json'), hostname: 'test-host' }),
     events: new EventLog(),
+    tailnetUrl: async () => undefined,
     ...ctx,
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -928,6 +929,37 @@ test('droid_setup refuses a loopback url for another computer and an offline com
     assert.equal(setup.get(FLEET.laptop.id), undefined);
   } finally {
     await c.close();
+  }
+});
+
+test('droid_status and droid_setup give other computers the tailscale serve address of a loopback bind', async () => {
+  const tailnetUrl = async () => 'https://this-box.tail.ts.net:8443/events';
+  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true };
+  const probe = async () => ({});
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  const setup = new Setup({ rest, pollMs: 20, timeoutMs: 1000 });
+  const { c } = await fleet({ ctx: { probe, status, tailnetUrl, setup } });
+  try {
+    const res = await c.call('droid_status', {});
+    const cloud = res.json.computers.find((x: { name: string }) => x.name === 'cloud-a');
+    assert.equal(cloud.plugin.fix, `On cloud-a, run: ${pasteLine('https://this-box.tail.ts.net:8443/events', FLEET.cloudA.id)}`);
+    assert.doesNotMatch(cloud.plugin.fix, /replaced by/);
+    const self = res.json.computers.find((x: { thisMachine: boolean }) => x.thisMachine);
+    assert.equal(self.plugin.fix, `On this-box, run: ${pasteLine('http://127.0.0.1:37999/events', FLEET.self.id)}`);
+    const started = await c.call('droid_setup', { computer: 'laptop' });
+    assert.equal(started.isError, false, started.text);
+    assert.equal(started.json.pasteLine, pasteLine('https://this-box.tail.ts.net:8443/events', FLEET.laptop.id));
+    assert.equal(calls.created.length, 1);
+  } finally {
+    await c.close();
+  }
+  const none = await fleet({ ctx: { probe, status, tailnetUrl: async () => undefined } });
+  try {
+    const res = await none.c.call('droid_status', {});
+    const cloud = res.json.computers.find((x: { name: string }) => x.name === 'cloud-a');
+    assert.match(cloud.plugin.fix, /^On cloud-a, run this with http:\/\/127\.0\.0\.1:37999\/events replaced by/);
+  } finally {
+    await none.c.close();
   }
 });
 

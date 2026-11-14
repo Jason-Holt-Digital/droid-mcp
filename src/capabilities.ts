@@ -209,6 +209,86 @@ async function urlAddresses(url: string | undefined): Promise<string[] | undefin
 
 export const interfaceAddresses = () => Object.values(networkInterfaces()).flatMap((list) => (list ?? []).map((i) => i.address));
 
+const TAILSCALE = [
+  'tailscale',
+  join(homedir(), '.local', 'bin', 'tailscale'),
+  '/opt/homebrew/bin/tailscale',
+  '/usr/local/bin/tailscale',
+  '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+];
+
+type ServeConfig = {
+  TCP?: { [port: string]: { HTTP?: boolean; HTTPS?: boolean } };
+  Web?: { [hostPort: string]: { Handlers?: { [path: string]: { Proxy?: string } } } };
+};
+// `tailscale serve` without --bg keeps its config under Foreground, one per CLI session.
+type ServeStatus = ServeConfig & { Foreground?: { [session: string]: ServeConfig } };
+
+const runFile = (file: string, args: string[]) =>
+  new Promise<string>((resolve, reject) => execFile(file, args, { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
+
+// Serve picks the handler for /events in this order (getServeHandler in tailscale's ipnlocal/serve.go).
+const EVENTS_MOUNTS = ['/events', '/events/', '/'];
+
+// Whether a serve Proxy (http://host:port[/path] or a bare port on 127.0.0.1) mounted at `mount` delivers a
+// request for /events to droid-mcp's /events on the bind. Serve strips the mount point: under /events or
+// /events/ the request reaches the proxy path itself, which must be exactly /events; under / it reaches the
+// proxy path joined with /events, so the proxy path must be the root. The proxy is a client on this machine,
+// so reachesBind decides which listener it reaches.
+function deliversEvents(proxy: string | undefined, mount: string, bind: { host: string; port: number }, bindAddress?: string): boolean {
+  if (proxy === undefined) return false;
+  let u: URL;
+  try {
+    u = new URL(/^\d+$/.test(proxy) ? `http://127.0.0.1:${proxy}` : proxy);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:' || u.pathname !== (mount === '/' ? '/' : '/events')) return false;
+  return reachesBind(`http://${u.host}/events`, bind, { bindAddress, localAddresses: interfaceAddresses() });
+}
+
+// The tailnet URL of a serve host whose /events reaches this server, from the background config or any
+// foreground one. The scheme follows the TCP listener; a port with neither HTTP nor HTTPS is skipped.
+function serveEventsUrl(status: ServeStatus, bind: { host: string; port: number }, bindAddress?: string): string | undefined {
+  for (const config of [status, ...Object.values(status.Foreground ?? {})]) {
+    for (const [key, web] of Object.entries(config.Web ?? {})) {
+      const port = key.slice(key.lastIndexOf(':') + 1);
+      const tcp = config.TCP?.[port];
+      const scheme = tcp?.HTTPS ? 'https' : tcp?.HTTP ? 'http' : undefined;
+      const mount = EVENTS_MOUNTS.find((m) => web.Handlers?.[m]);
+      if (!scheme || !mount || !deliversEvents(web.Handlers?.[mount]?.Proxy, mount, bind, bindAddress)) continue;
+      const defaultPort = scheme === 'https' ? '443' : '80';
+      return `${scheme}://${port === defaultPort ? key.slice(0, -port.length - 1) : key}/events`;
+    }
+  }
+  return undefined;
+}
+
+// The address `tailscale serve` gives this server on the tailnet, when its /events reaches the --http bind.
+export async function tailnetEventsUrl(
+  http: string | undefined,
+  deps: { run?: (file: string, args: string[]) => Promise<string>; bindAddress?: string } = {},
+): Promise<string | undefined> {
+  const bind = http === undefined ? undefined : hostPort(http);
+  if (!bind) return undefined;
+  const run = deps.run ?? runFile;
+  const bindAddress = 'bindAddress' in deps ? deps.bindAddress : await resolveBind(http);
+  for (const file of TAILSCALE) {
+    let out: string;
+    try {
+      out = await run(file, ['serve', 'status', '--json']);
+    } catch {
+      continue;
+    }
+    try {
+      return serveEventsUrl(JSON.parse(out) as ServeStatus, bind, bindAddress);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 export async function probeThisMachine(): Promise<ThisMachine> {
   const [url, plugin] = await Promise.all([
     readFile(join(homedir(), '.factory', 'droid-mcp.curlrc'), 'utf8').then(curlrcUrl, () => undefined),
