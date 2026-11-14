@@ -4,7 +4,17 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { capabilities, curlrcUrl, doctorReport, localOnly, pasteLine, reachesBind, resolveBind, type CapabilityInput } from '../src/capabilities.ts';
+import {
+  capabilities,
+  curlrcUrl,
+  doctorReport,
+  localOnly,
+  pasteLine,
+  reachesBind,
+  resolveBind,
+  tailnetEventsUrl,
+  type CapabilityInput,
+} from '../src/capabilities.ts';
 import { API_KEY_FIX } from '../src/config.ts';
 
 const ALL: CapabilityInput = {
@@ -194,4 +204,45 @@ test('resolveBind resolves a hostname bind and leaves addresses alone', async ()
   assert.equal(await resolveBind('127.0.0.1:37999'), undefined);
   assert.equal(await resolveBind(undefined), undefined);
   assert.ok(['127.0.0.1', '::1'].includes((await resolveBind('localhost:37999')) ?? ''));
+});
+
+const SERVE = JSON.stringify({
+  TCP: { 8443: { HTTPS: true } },
+  Web: { 'jasons-mac-mini.tail57dad6.ts.net:8443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999' } } } },
+});
+const serve = (web: unknown) => async () => JSON.stringify({ Web: web });
+
+test('tailnetEventsUrl finds the tailscale serve address that proxies to the bind', async () => {
+  const url = 'https://jasons-mac-mini.tail57dad6.ts.net:8443/events';
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: async () => SERVE }), url);
+  assert.equal(await tailnetEventsUrl('localhost:37999', { run: async () => SERVE }), url, 'both loopback');
+  assert.equal(await tailnetEventsUrl('0.0.0.0:37999', { run: async () => SERVE }), url, 'wildcard bind');
+  assert.equal(await tailnetEventsUrl('127.0.0.1:38000', { run: async () => SERVE }), undefined, 'wrong port');
+  assert.equal(await tailnetEventsUrl('100.73.48.66:37999', { run: async () => SERVE }), undefined, 'another host');
+  assert.equal(await tailnetEventsUrl(undefined, { run: async () => SERVE }), undefined);
+  assert.equal(await tailnetEventsUrl('nope', { run: async () => SERVE }), undefined);
+  const bare = serve({ 'box.ts.net:443': { Handlers: { '/events': { Proxy: '37999' } } } });
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: bare }), 'https://box.ts.net/events');
+  const slash = serve({ 'a.ts.net:443': { Handlers: { '/': { Text: 'hi' } } }, 'b.ts.net:8443': { Handlers: { '/': { Proxy: 'http://127.0.0.1:37999/' } } } });
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: slash }), 'https://b.ts.net:8443/events');
+  const other = serve({ 'c.ts.net:443': { Handlers: { '/api': { Proxy: 'http://127.0.0.1:37999' } } } });
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: other }), undefined, 'other paths do not count');
+});
+
+test('tailnetEventsUrl tries each tailscale binary and never throws', async () => {
+  const files: string[] = [];
+  const second = async (file: string) => {
+    files.push(file);
+    if (files.length === 1) throw new Error('ENOENT');
+    return SERVE;
+  };
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: second }), 'https://jasons-mac-mini.tail57dad6.ts.net:8443/events');
+  assert.equal(files[0], 'tailscale');
+  assert.equal(files.length, 2);
+  const failing = async () => {
+    throw new Error('not running');
+  };
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: failing }), undefined);
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: async () => 'not json' }), undefined);
+  assert.equal(await tailnetEventsUrl('127.0.0.1:37999', { run: async () => 'null' }), undefined);
 });

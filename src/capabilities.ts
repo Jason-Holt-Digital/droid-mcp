@@ -209,6 +209,62 @@ async function urlAddresses(url: string | undefined): Promise<string[] | undefin
 
 export const interfaceAddresses = () => Object.values(networkInterfaces()).flatMap((list) => (list ?? []).map((i) => i.address));
 
+const TAILSCALE = [
+  'tailscale',
+  join(homedir(), '.local', 'bin', 'tailscale'),
+  '/opt/homebrew/bin/tailscale',
+  '/usr/local/bin/tailscale',
+  '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+];
+
+type ServeStatus = { Web?: { [hostPort: string]: { Handlers?: { [path: string]: { Proxy?: string } } } } };
+
+const runFile = (file: string, args: string[]) =>
+  new Promise<string>((resolve, reject) => execFile(file, args, { timeout: 5000 }, (err, stdout) => (err ? reject(err) : resolve(stdout))));
+
+// A serve Proxy is http://host:port, with or without a trailing slash, or a bare port on 127.0.0.1.
+function proxyTarget(proxy: string): { host: string; port: number } | undefined {
+  if (/^\d+$/.test(proxy)) return { host: '127.0.0.1', port: Number(proxy) };
+  try {
+    const u = new URL(proxy);
+    return u.protocol === 'http:' ? { host: u.hostname.replace(/^\[(.*)\]$/, '$1'), port: Number(u.port || 80) } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function proxiesTo(proxy: string | undefined, bind: { host: string; port: number }): boolean {
+  const t = proxy === undefined ? undefined : proxyTarget(proxy);
+  if (t?.port !== bind.port) return false;
+  return t.host === bind.host || (isLoopback(t.host) && isLoopback(bind.host)) || isWildcard(bind.host);
+}
+
+// The https address `tailscale serve` gives this server on the tailnet, when it proxies / or /events to the --http bind.
+export async function tailnetEventsUrl(
+  http: string | undefined,
+  deps: { run?: (file: string, args: string[]) => Promise<string> } = {},
+): Promise<string | undefined> {
+  const bind = http === undefined ? undefined : hostPort(http);
+  if (!bind) return undefined;
+  const run = deps.run ?? runFile;
+  for (const file of TAILSCALE) {
+    let out: string;
+    try {
+      out = await run(file, ['serve', 'status', '--json']);
+    } catch {
+      continue;
+    }
+    try {
+      const status: ServeStatus = JSON.parse(out);
+      const key = Object.entries(status.Web ?? {}).find(([, web]) => ['/', '/events'].some((path) => proxiesTo(web.Handlers?.[path]?.Proxy, bind)))?.[0];
+      return key === undefined ? undefined : `https://${key.replace(/:443$/, '')}/events`;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 export async function probeThisMachine(): Promise<ThisMachine> {
   const [url, plugin] = await Promise.all([
     readFile(join(homedir(), '.factory', 'droid-mcp.curlrc'), 'utf8').then(curlrcUrl, () => undefined),
