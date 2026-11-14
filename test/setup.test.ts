@@ -188,3 +188,40 @@ test('a second start while the job works returns the same job; a failed create i
   assert.deepEqual([job.state, job.detail, job.sessionId], ['failed', 'Factory API createSession 400 Bad Request', undefined]);
   assert.deepEqual(broken.calls.archived, []);
 });
+
+test('a create that never answers times out, and a session it makes later is still interrupted and archived', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  let land: (id: string) => void = () => {};
+  rest.create = () => new Promise((r) => (land = r));
+  const setup = new Setup({ rest, pollMs: 1, timeoutMs: 10 });
+  const job = await setup.start('c', CMDS);
+  assert.deepEqual([job.state, job.sessionId], ['failed', undefined]);
+  assert.match(job.detail, /timed out/);
+  land('late-session');
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(calls.interrupted, ['late-session']);
+  assert.deepEqual(calls.archived, ['late-session']);
+});
+
+test('a first send that never answers times out, interrupts and archives', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  rest.send = () => new Promise(() => {});
+  const setup = new Setup({ rest, pollMs: 1, timeoutMs: 10 });
+  const job = await setup.start('c', CMDS);
+  assert.equal(job.state, 'failed');
+  assert.match(job.detail, /timed out/);
+  assert.deepEqual(calls.interrupted, ['setup-session']);
+  assert.deepEqual(calls.archived, ['setup-session']);
+});
+
+test('close() ends a working job, interrupts and archives its session, and refuses new jobs', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  const setup = new Setup({ rest, pollMs: 1 });
+  const job = await setup.start('c', CMDS);
+  assert.equal(job.state, 'working');
+  await setup.close();
+  assert.deepEqual([job.state, job.detail], ['failed', 'the server shut down during setup']);
+  assert.deepEqual(calls.interrupted, ['setup-session']);
+  assert.deepEqual(calls.archived, ['setup-session']);
+  await assert.rejects(setup.start('d', CMDS), (err: Refused) => err instanceof Refused && err.code === 'invalid');
+});
