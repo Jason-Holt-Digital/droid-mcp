@@ -185,16 +185,17 @@ Sessions droid-mcp starts live in its memory. On SIGINT, SIGTERM, or when the st
 
 ### Operation catalog
 
-`src/generated/catalog.json` lists 229 Factory operations: 146 `DaemonClient` methods from `@factory/droid-sdk` and 83 REST operations from `catalog/factory-openapi.json`. `npm run codegen` builds it; CI runs `npm run codegen:check`, which fails when the file is stale. Each operation has `readOnly`, `destructive` and `secret`:
+`src/generated/catalog.json` lists 228 Factory operations: 145 `DaemonClient` methods from `@factory/droid-sdk` and 83 REST operations from `catalog/factory-openapi.json`. `npm run codegen` builds it; CI runs `npm run codegen:check`, which fails when the file is stale. Each operation has `readOnly`, `destructive` and `secret`:
 
 - `readOnly`: REST `GET`, or a daemon method on a hand-checked list. Methods that return keys or arbitrary file contents are not on it.
-- `destructive`: REST `DELETE`, or an id on a hand-checked list (35 in all). Names are not guessed from; a new daemon method whose name sounds destructive fails codegen until it is classified.
+- `destructive`: REST `DELETE`, or an id on a hand-checked list (38 in all). Multi-action operations, such as `daemon.update_mcp_config` with `action: 'remove'`, count as destructive as a whole. Names are not guessed from: a new operation whose name, or an action in its params, sounds destructive fails codegen until it is classified by hand.
 - `secret`: the operation returns a key or token (7, such as `daemon.get_proxy_token`).
 
 Left out on purpose:
 
 - `DaemonClient` connection plumbing, which is not an operation: `connect`, `disconnect`, `destroy`, `isConnected`, `holdRequestsDuringSetup`, `setBeforeRequest`, `setPendingSessionReady`, `getPendingCount`, `getConnectionId`, `getSilentSince`, `getLastRttMs`, `getLastInboundAt`, `getInboundFrameCount`, `getTracingMetadata`, `getClientSurface`, `currentRequestAttribution`, and the `on…` callbacks.
 - Methods whose name matches no daemon wire method, so codegen cannot pair them: `addUserMessageWithoutSessionLoadGuard`, `bindConfigurationControls`, `triggerUpdate`, `installSshKey`, `getDiskPressure`, `reclaimDisk`, `ensureRemoteDesktop`, `reportRemoteDesktopInput`, `startRelay`, `stopRelay`, `getRelayStatus`, `pushWorkspaceFileToUrl`, `pullUrlToWorkspaceFile`, `reportSessionPresence`, and the `send…Response` and `sendPickOptionsFailure` replies, which `droid_respond` covers.
+- `waitForConfigPull`, whose arguments are a number and an `AbortSignal`, which cannot be passed as JSON.
 
 codegen reads `DaemonClient` with `typescript/unstable`, so it runs only on TypeScript 7.0.2 and fails with a clear message on any other version.
 

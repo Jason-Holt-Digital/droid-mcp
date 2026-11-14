@@ -17,6 +17,10 @@ const REST_DESTRUCTIVE = [
   'updateOrganizationComputerSecrets',
 ];
 const DAEMON_DESTRUCTIVE = [
+  // Multi-action: some of their actions delete, remove or overwrite, so the whole operation counts as destructive.
+  'automation_memory_edit',
+  'config_items',
+  'update_mcp_config',
   'archive_session',
   'cancel_mcp_auth',
   'cleanup_worktree',
@@ -99,7 +103,11 @@ const SECRET = [
   'rest.createServiceAccountApiKey',
   'rest.rotateServiceAccountApiKey',
 ];
-// Not a classifier: a new daemon method whose name has one of these words must be put in a list above by hand.
+// Hand-checked: a destructive word in their params does not make them destructive (cancelling a prompt is droid_respond).
+const NOT_DESTRUCTIVE = ['rest.answerSessionElicitation'];
+// Left out: the first argument is not a JSON object (a number and an AbortSignal), so droid_call cannot pass it.
+const SKIP = ['wait_for_config_pull'];
+// Not a classifier: a new operation whose name, or a string literal in its params, has one of these words must be classified by hand.
 const DESTRUCTIVE_WORDS = [
   'delete',
   'remove',
@@ -154,6 +162,15 @@ const { isClassDeclaration, isEnumDeclaration, isIdentifier, isMethodDeclaration
 const { API, NodeBuilderFlags } = await import('typescript/unstable/sync');
 
 const soundsDestructive = (method: string) => method.split('_').some((w) => DESTRUCTIVE_WORDS.includes(w));
+const LITERAL_WORDS = [...DESTRUCTIVE_WORDS, 'replace', 'overwrite', 'disable', 'drop', 'unset'];
+const literalPattern = new RegExp(`["'](${LITERAL_WORDS.join('|')})["']`);
+// Multi-action operations take an action such as "delete" in their params; those must be classified by hand too.
+const hasDestructiveAction = (params: Json) => literalPattern.test(JSON.stringify(params).replaceAll('\\"', '"'));
+function checkClassified(op: Operation, words: boolean): void {
+  if (op.destructive || op.readOnly || NOT_DESTRUCTIVE.includes(op.id)) return;
+  if (words) fail(`${op.id} sounds destructive but is in no list. Classify it by hand.`);
+  if (hasDestructiveAction(op.params)) fail(`${op.id} takes a destructive-sounding action in its params but is in no list. Classify it by hand.`);
+}
 
 function firstParagraph(doc: string): string {
   return doc
@@ -205,11 +222,12 @@ function readDaemonOperations(): Operation[] {
       const symbol = checker.getSymbolAtLocation(m.name);
       const bare = method.replace(/^daemon\./, '');
       const id = `daemon.${bare}`;
-      const destructive = DAEMON_DESTRUCTIVE.includes(bare);
-      if (!destructive && !DAEMON_READ_ONLY.includes(bare) && soundsDestructive(bare)) {
-        fail(`${id} sounds destructive but is in neither DAEMON_DESTRUCTIVE nor DAEMON_READ_ONLY. Classify it by hand.`);
+      if (SKIP.includes(bare)) continue;
+      if (params[0] && !/^\w+\??: (\{|\(\{|Omit<|[A-Z])/.test(params[0])) {
+        fail(`${id} takes ${params[0]} first, not an object, so droid_call cannot pass it. Add it to SKIP or adapt droid_call.`);
       }
-      ops.set(method, {
+      const destructive = DAEMON_DESTRUCTIVE.includes(bare);
+      const op: Operation = {
         id,
         source: 'daemon',
         name: m.name.text,
@@ -218,7 +236,9 @@ function readDaemonOperations(): Operation[] {
         readOnly: DAEMON_READ_ONLY.includes(bare),
         destructive,
         secret: SECRET.includes(id),
-      });
+      };
+      checkClassified(op, soundsDestructive(bare));
+      ops.set(method, op);
     }
     return [...ops.values()];
   } finally {
@@ -264,18 +284,18 @@ function restOperations(doc: OpenApi): Operation[] {
       if (!op) return [];
       const name = `${method.toUpperCase()} ${path}`;
       const id = `rest.${op.operationId ?? name}`;
-      return [
-        {
-          id,
-          source: 'rest' as const,
-          name,
-          summary: op.summary ?? '',
-          params: restParams(op, schemas),
-          readOnly: method === 'get',
-          destructive: method === 'delete' || REST_DESTRUCTIVE.includes(op.operationId ?? ''),
-          secret: SECRET.includes(id),
-        },
-      ];
+      const entry: Operation = {
+        id,
+        source: 'rest',
+        name,
+        summary: op.summary ?? '',
+        params: restParams(op, schemas),
+        readOnly: method === 'get',
+        destructive: method === 'delete' || REST_DESTRUCTIVE.includes(op.operationId ?? ''),
+        secret: SECRET.includes(id),
+      };
+      checkClassified(entry, false);
+      return [entry];
     }),
   );
 }
