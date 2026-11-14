@@ -1,0 +1,31 @@
+stateDiagram-v2
+    direction TB
+    state "Working (never times out)" as Working
+    state "Needs you" as NeedsYou
+    state "Idle" as Idle
+    state "Dead" as Dead
+    state "Closed (resumable)" as Closed
+
+    [*] --> Working : droid_start (subscribes by default)
+    Working --> NeedsYou : asks permission or a question 🔔
+    NeedsYou --> Working : droid_respond
+    NeedsYou --> Working : 30 min unanswered, auto-cancelled
+    Working --> Idle : turn finished 🔔
+    Working --> Idle : droid_interrupt
+    Idle --> Working : droid_send
+    Working --> Dead : droid process exited
+    NeedsYou --> Dead : droid process exited
+    Idle --> Dead : droid process exited
+    Dead --> Working : droid_send resumes it
+    Working --> Closed : droid_close
+    NeedsYou --> Closed : droid_close
+    Idle --> Closed : droid_close, or 30 min idle (sessions droid_start started)
+    Dead --> Closed : droid_close
+    Closed --> Working : droid_send resumes it
+
+    note right of NeedsYou
+        🔔 a plugin ring. It wakes your agent
+        only for subscribed sessions.
+        droid_subscribe / droid_unsubscribe.
+        droid_inbox still lists every ring.
+    end note

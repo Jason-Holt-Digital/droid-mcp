@@ -1,0 +1,8 @@
+flowchart LR
+    H["You"] -->|message| A["Your agent<br/>(Grok Bot, Claude, ...)"]
+    A -->|MCP tools| M["droid-mcp<br/>(runs on one computer)"]
+    M -->|SDK| L["Droid sessions<br/>on that computer"]
+    M -->|Factory API| R["Droid sessions<br/>on your other computers"]
+    L -.->|hook: asks / finishes| M
+    R -.->|hook: asks / finishes| M
+    M -.->|webhook wake-up| A
