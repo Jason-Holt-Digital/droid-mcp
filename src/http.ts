@@ -74,7 +74,7 @@ async function handleRing(bell: Doorbell, req: IncomingMessage, res: ServerRespo
   const ring = await readJson(req, res, parseRing);
   if (!ring) return;
   json(res, 202, { accepted: true });
-  bell.ring(ring);
+  bell.ring(ring, { computer: req.headers['x-droid-mcp-computer'], address: req.socket.remoteAddress });
 }
 
 export function createHandler(ctx: Ctx, opts: { token: string; eventsToken?: string; doorbell?: Doorbell }) {

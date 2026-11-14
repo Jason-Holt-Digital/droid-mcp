@@ -212,7 +212,7 @@ From the repo directory, use the MCP Inspector CLI. List the tools:
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/list
 ```
 
-Expect 12 tools: `droid_find`, `droid_computers`, `droid_events`, `droid_subscribe`, `droid_unsubscribe`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
+Expect 13 tools: `droid_find`, `droid_computers`, `droid_status`, `droid_events`, `droid_subscribe`, `droid_unsubscribe`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
 
 Call three read-only tools:
 
@@ -223,6 +223,8 @@ npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/cal
 ```
 
 Then, from a connected client, ask it to call `droid_computers` and `droid_find`. Both are read-only and spend no model tokens.
+
+`node src/main.ts doctor [--http host:port]` prints each capability as `ok` or `FIX` with the fix, and exits 1 when the API key, the `--http` value or the roots need fixing. It shows only whether each secret is set. The `droid_status` tool returns the same checks plus, for each computer, when its doorbell plugin last rang or the one line to paste there to install it.
 
 ### 7. Optional: callbacks from every computer
 
