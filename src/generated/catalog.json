@@ -396,7 +396,7 @@
       },
       "readOnly": false,
       "destructive": true,
-      "secret": false
+      "secret": true
     },
     {
       "id": "daemon.delete_model_provider_entry",
@@ -408,7 +408,7 @@
       },
       "readOnly": false,
       "destructive": true,
-      "secret": false
+      "secret": true
     },
     {
       "id": "daemon.delete_shared_folder_entry",
@@ -756,7 +756,7 @@
       },
       "readOnly": false,
       "destructive": false,
-      "secret": false
+      "secret": true
     },
     {
       "id": "daemon.inspect_mission_readiness",
@@ -1092,7 +1092,7 @@
       },
       "readOnly": false,
       "destructive": false,
-      "secret": false
+      "secret": true
     },
     {
       "id": "daemon.logout",
@@ -1620,7 +1620,7 @@
       },
       "readOnly": false,
       "destructive": true,
-      "secret": false
+      "secret": true
     },
     {
       "id": "daemon.update_plugin",
@@ -1680,7 +1680,7 @@
       },
       "readOnly": false,
       "destructive": false,
-      "secret": false
+      "secret": true
     },
     {
       "id": "daemon.validate_working_directory",
@@ -4017,9 +4017,9 @@
           }
         }
       },
-      "readOnly": true,
+      "readOnly": false,
       "destructive": false,
-      "secret": false
+      "secret": true
     },
     {
       "id": "rest.listEnvironmentBuildStatuses",

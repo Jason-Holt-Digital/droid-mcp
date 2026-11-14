@@ -104,6 +104,9 @@ const SECRET = [
   'rest.createServiceAccountApiKey',
   'rest.rotateServiceAccountApiKey',
 ];
+// Hand-checked: a credential-looking field in their result is not a credential.
+// get_user_preferences_state: its token is a conflict-version token for preference sync.
+const NOT_SECRET = ['daemon.get_user_preferences_state'];
 // Hand-checked: a destructive word in their params does not make them destructive (cancelling a prompt is droid_respond).
 const NOT_DESTRUCTIVE = ['rest.answerSessionElicitation'];
 // Left out: the first argument is not a JSON object (a number and an AbortSignal), so droid_call cannot pass it.
@@ -126,6 +129,18 @@ const DESTRUCTIVE_WORDS = [
   'write',
   'rewind',
 ];
+// A response field with one of these names carries a credential, so its operation is secret.
+const SECRET_FIELD = /^(apiKey|api_key|secret|clientSecret|password|token|accessToken|refreshToken|privateKey|extraHeaders)$/;
+function hasSecretField(value: Json): boolean {
+  if (Array.isArray(value)) return value.some(hasSecretField);
+  if (value === null || typeof value !== 'object') return false;
+  const props = value.properties;
+  if (props && typeof props === 'object' && !Array.isArray(props) && Object.keys(props).some((k) => SECRET_FIELD.test(k))) return true;
+  return Object.values(value).some(hasSecretField);
+}
+const hasSecretMember = (typeText: string) =>
+  /\b(apiKey|api_key|secret|clientSecret|password|token|accessToken|refreshToken|privateKey|extraHeaders)\??:/.test(typeText);
+
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'options', 'head', 'trace'];
 const SCHEMA_REF = '#/components/schemas/';
 
@@ -146,6 +161,7 @@ type RestOperation = {
   summary?: string;
   parameters?: Parameter[];
   requestBody?: { required?: boolean; content?: Record<string, { schema?: Json }> };
+  responses?: Record<string, { content?: Record<string, { schema?: Json }> }>;
 };
 type OpenApi = { info: { version: string }; paths: Record<string, Record<string, RestOperation>>; components?: { schemas?: Record<string, Json> } };
 
@@ -223,6 +239,8 @@ function readDaemonOperations(): Operation[] {
         return `${isIdentifier(p.name) ? p.name.text : 'args'}${p.questionToken ? '?' : ''}: ${text}`;
       });
       const symbol = checker.getSymbolAtLocation(m.name);
+      const methodType = checker.getTypeAtLocation(m);
+      const returns = methodType ? checker.typeToString(methodType, undefined, NodeBuilderFlags.NoTruncation | NodeBuilderFlags.InTypeAlias) : '';
       const bare = method.replace(/^daemon\./, '');
       const id = `daemon.${bare}`;
       if (SKIP.includes(bare)) continue;
@@ -236,10 +254,12 @@ function readDaemonOperations(): Operation[] {
         name: m.name.text,
         summary: symbol ? firstParagraph(checker.getDocumentationCommentOfSymbol(symbol)) : '',
         params: { description: `(${params.join(', ')})` },
-        readOnly: DAEMON_READ_ONLY.includes(bare),
+        readOnly: false,
         destructive,
-        secret: SECRET.includes(id),
+        secret: SECRET.includes(id) || (hasSecretMember(returns.slice(returns.lastIndexOf('=>'))) && !NOT_SECRET.includes(id)),
       };
+      // A credential is never read-only for the autonomy cap.
+      op.readOnly = DAEMON_READ_ONLY.includes(bare) && !op.secret;
       checkClassified(op, soundsDestructive(bare));
       ops.set(method, op);
     }
@@ -260,6 +280,9 @@ function inlineRefs(value: Json, schemas: Record<string, Json>, seen: string[]):
   }
   return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, inlineRefs(v, schemas, seen)]));
 }
+
+const responseSchemas = (op: RestOperation): Json =>
+  Object.values(op.responses ?? {}).flatMap((r) => Object.values(r.content ?? {}).flatMap((c) => (c.schema === undefined ? [] : [c.schema])));
 
 function restParams(op: RestOperation, schemas: Record<string, Json>): Json {
   const properties: Record<string, Json> = {};
@@ -293,10 +316,11 @@ function restOperations(doc: OpenApi): Operation[] {
         name,
         summary: op.summary ?? '',
         params: restParams(op, schemas),
-        readOnly: method === 'get',
+        readOnly: false,
         destructive: method === 'delete' || REST_DESTRUCTIVE.includes(op.operationId ?? ''),
-        secret: SECRET.includes(id),
+        secret: SECRET.includes(id) || (hasSecretField(inlineRefs(responseSchemas(op), schemas, [])) && !NOT_SECRET.includes(id)),
       };
+      entry.readOnly = method === 'get' && !entry.secret;
       checkClassified(entry, false);
       return [entry];
     }),
