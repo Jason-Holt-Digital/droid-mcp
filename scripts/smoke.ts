@@ -64,6 +64,8 @@ try {
     'droid_result',
     'droid_send',
     'droid_start',
+    'droid_subscribe',
+    'droid_unsubscribe',
     'droid_wait',
   ]);
 
@@ -103,6 +105,7 @@ try {
     cwd: scratch,
     prompt: `Create the file ${file} containing the text OK using the Create tool, then reply with exactly: DONE`,
     autonomy: 'off',
+    subscribe: false,
     idempotencyKey: key,
   });
   const again = await call('droid_start', { cwd: scratch, prompt: 'ignored', idempotencyKey: key });

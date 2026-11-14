@@ -10,6 +10,7 @@ import { EventLog, Forwarder } from './events.ts';
 import { createHandler, newServer } from './http.ts';
 import { createRest } from './rest.ts';
 import { KeyStore, Runs } from './runs.ts';
+import { Subscriptions } from './subscriptions.ts';
 import type { Ctx } from './tools.ts';
 
 function serveHttp(ctx: Ctx, spec: string | undefined, eventsToken: string | undefined): void {
@@ -41,6 +42,7 @@ async function main(): Promise<void> {
     roots: allowedRoots(),
     runs: new Runs({ apiKey, repoOf: repoRoot, cap: autonomyCap() }),
     keys: new KeyStore(join(homedir(), '.droid-mcp', 'state.json')),
+    subscriptions: new Subscriptions(join(homedir(), '.droid-mcp', 'subscriptions.json')),
     rest,
     computers: new Computers({ rest, file: join(homedir(), '.factory', 'computer.json') }),
     events: new EventLog(),
@@ -53,7 +55,7 @@ async function main(): Promise<void> {
     if (closing) return;
     closing = true;
     await ctx.runs.closeAll();
-    await ctx.keys.flush();
+    await Promise.all([ctx.keys.flush(), ctx.subscriptions.flush()]);
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

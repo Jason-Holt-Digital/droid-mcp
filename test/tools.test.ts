@@ -10,6 +10,7 @@ import { Computers } from '../src/computers.ts';
 import { EventLog } from '../src/events.ts';
 import { createRest } from '../src/rest.ts';
 import { KeyStore, Runs, type OwnRun, type RunEvent } from '../src/runs.ts';
+import { Subscriptions } from '../src/subscriptions.ts';
 import { clampWait, DEFAULT_WAIT_MS, LIMIT_BYTES, MAX_WAIT_MS, pageBytes, registerTools, type Ctx } from '../src/tools.ts';
 import { catalog, fakeApi, FIXTURES, IDS, SECRET } from './helpers.ts';
 
@@ -30,6 +31,7 @@ const noSessions = {
 } as unknown as Runs;
 
 type ToolError = { code: string; message: string; fix: string };
+let connections = 0;
 
 async function connect(ctx: Partial<Ctx>) {
   const server = new McpServer({ name: 'droid-mcp', version: 'test' });
@@ -38,6 +40,7 @@ async function connect(ctx: Partial<Ctx>) {
     roots: [join(dir, 'repos')],
     runs: noSessions,
     keys: new KeyStore(join(dir, 'state.json')),
+    subscriptions: new Subscriptions(join(dir, `subscriptions-${++connections}.json`)),
     env: {},
     catalog: async () => catalog(),
     computers: new Computers({ rest: ctx.rest, file: join(dir, 'no-computer.json'), hostname: 'test-host' }),
@@ -285,6 +288,8 @@ test('every tool declares all four hints with the expected values', async () => 
       droid_events: hints(true, false, true, false),
       droid_models: hints(true, false, true, false),
       droid_start: hints(false, true, true, true),
+      droid_subscribe: hints(false, false, true, false),
+      droid_unsubscribe: hints(false, false, true, false),
       droid_send: hints(false, true, true, true),
       droid_wait: hints(true, false, true, true),
       droid_respond: hints(false, true, true, true),
@@ -788,7 +793,7 @@ test('droid_events pages the event log and says whether forwarding is on', async
   const c = await connect({ events });
   try {
     for (const kind of ['finished', 'question', 'ended'] as const) {
-      events.add({ sessionId: IDS.liveStandalone, kind, text: `${kind} text` }, { computer: 'laptop', watched: false, forwarding: false });
+      events.add({ sessionId: IDS.liveStandalone, kind, text: `${kind} text` }, { computer: 'laptop', forward: false });
     }
     const all = await c.call('droid_events', { after: 0 });
     assert.deepEqual(
@@ -807,6 +812,68 @@ test('droid_events pages the event log and says whether forwarding is on', async
     assert.equal(questions.json.nextAfter, 3);
     const page = await c.call('droid_events', { after: 0, limit: 2 });
     assert.equal(page.json.nextAfter, 2);
+  } finally {
+    await c.close();
+  }
+});
+test('droid_subscribe and droid_unsubscribe are idempotent, persist, and refuse an invalid id', async () => {
+  const path = join(dir, 'subs-tools.json');
+  const c = await connect({ subscriptions: new Subscriptions(path) });
+  try {
+    const sid = IDS.liveStandalone;
+    assert.deepEqual((await c.call('droid_subscribe', { session: sid })).json, { sessionId: sid, subscribed: true });
+    assert.deepEqual((await c.call('droid_subscribe', { session: sid })).json, { sessionId: sid, subscribed: true });
+    assert.equal(new Subscriptions(path).has(sid), true);
+    assert.deepEqual((await c.call('droid_unsubscribe', { session: sid })).json, { sessionId: sid, subscribed: false });
+    assert.deepEqual((await c.call('droid_unsubscribe', { session: sid })).json, { sessionId: sid, subscribed: false });
+    assert.equal(new Subscriptions(path).has(sid), false);
+    for (const tool of ['droid_subscribe', 'droid_unsubscribe']) {
+      const bad = await c.call(tool, { session: '../etc' });
+      assert.deepEqual(bad.error, { code: 'invalid', message: 'invalid session id: ../etc', fix: 'Pass a session id from droid_find.' });
+    }
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_start subscribes by default, not with subscribe: false, and a retry keeps the first choice', async () => {
+  const ids = ['1a2b3c4d-5e6f-5a7b-8c9d-0e1f2a3b4c5d', '2b3c4d5e-6f7a-5b8c-9d0e-1f2a3b4c5d6e'];
+  let n = 0;
+  const runs = { get: () => undefined, start: async () => ({ id: ids[n++], state: 'running' }) } as unknown as Runs;
+  const subscriptions = new Subscriptions(join(dir, 'subs-start.json'));
+  const c = await connect({ runs, subscriptions });
+  try {
+    const on = await c.call('droid_start', { cwd: project, prompt: 'hi', idempotencyKey: 'sub-on' });
+    assert.equal(on.json.sessionId, ids[0]);
+    assert.equal(subscriptions.has(ids[0]), true);
+    const off = await c.call('droid_start', { cwd: project, prompt: 'hi', idempotencyKey: 'sub-off', subscribe: false });
+    assert.equal(off.json.sessionId, ids[1]);
+    assert.equal(subscriptions.has(ids[1]), false);
+    await c.call('droid_start', { cwd: project, prompt: 'hi', idempotencyKey: 'sub-off' });
+    assert.equal(subscriptions.has(ids[1]), false, 'a retry replays subscribe: false');
+    await c.call('droid_unsubscribe', { session: ids[0] });
+    await c.call('droid_start', { cwd: project, prompt: 'hi', idempotencyKey: 'sub-on', subscribe: false });
+    assert.equal(n, 2, 'retries start nothing');
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_find marks subscribed sessions and omits the field on others', async () => {
+  const subscriptions = new Subscriptions(join(dir, 'subs-find.json'));
+  await subscriptions.set(IDS.liveAgentNewer, true);
+  await subscriptions.set(IDS.liveStandalone, true);
+  const c = await connect({ subscriptions });
+  try {
+    const res = await c.call('droid_find', {});
+    const [ws] = res.json.workstreams;
+    const byId = new Map<string, { subscribed?: boolean }>(
+      [ws.orchestrator, ...ws.agents, ...res.json.sessions.flatMap((g: { sessions: unknown[] }) => g.sessions)].map((e) => [e.id, e]),
+    );
+    assert.equal(byId.get(IDS.liveAgentNewer)?.subscribed, true);
+    assert.equal(byId.get(IDS.liveStandalone)?.subscribed, true);
+    assert.equal('subscribed' in byId.get(IDS.liveOrchestrator)!, false);
+    assert.equal('subscribed' in byId.get(IDS.liveAgentOlder)!, false);
   } finally {
     await c.close();
   }

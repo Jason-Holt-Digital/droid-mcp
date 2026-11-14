@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEBOUNCE_MS, EventLog, Forwarder, isWatched, parseEventBody, type DroidEvent } from '../src/events.ts';
+import { DEBOUNCE_MS, EventLog, Forwarder, parseEventBody, type DroidEvent } from '../src/events.ts';
 
 const SID = '4d3c2b1a-0f9e-5d8c-b7a6-123456789abc';
 const OTHER = '5e4d3c2b-1a0f-5e9d-c8b7-23456789abcd';
 
 test('EventLog keeps the newest events, numbers them from 1 and reports a missed range', () => {
   const log = new EventLog(3);
-  for (let i = 0; i < 5; i++) log.add({ sessionId: SID, kind: 'finished', text: `t${i}` }, { computer: 'box', watched: false, now: i });
+  for (let i = 0; i < 5; i++) log.add({ sessionId: SID, kind: 'finished', text: `t${i}` }, { computer: 'box', forward: false, now: i });
   const all = log.since(0, 50);
   assert.deepEqual(
     all.events.map((e) => e.seq),
@@ -29,7 +29,7 @@ test('EventLog keeps the newest events, numbers them from 1 and reports a missed
 
 test('EventLog treats a cursor ahead of the log as stale from before a restart', () => {
   const log = new EventLog();
-  for (let i = 0; i < 2; i++) log.add({ sessionId: SID, kind: 'finished' }, { computer: 'box', watched: false, now: i });
+  for (let i = 0; i < 2; i++) log.add({ sessionId: SID, kind: 'finished' }, { computer: 'box', forward: false, now: i });
   const res = log.since(100, 50);
   assert.deepEqual(
     res.events.map((e) => e.seq),
@@ -39,23 +39,18 @@ test('EventLog treats a cursor ahead of the log as stale from before a restart',
   assert.equal(res.missed, true);
 });
 
-test('questions and permission prompts always forward, others only when watched, never twice in 30 s', () => {
+test('an event forwards only when asked, and never twice in 30 s for the same session and kind', () => {
   const log = new EventLog();
-  const add = (kind: DroidEvent['kind'], now: number, watched = false, sessionId = SID) =>
-    log.add({ sessionId, kind }, { computer: 'box', watched, now }).forwarded;
+  const add = (kind: DroidEvent['kind'], now: number, sessionId = SID, forward = true) =>
+    log.add({ sessionId, kind }, { computer: 'box', forward, now }).forwarded;
   assert.equal(add('question', 0), true);
   assert.equal(add('question', 10_000), false, 'debounced');
   assert.equal(add('permission', 10_000), true, 'another kind is not debounced');
-  assert.equal(add('question', 10_000, false, OTHER), true, 'another session is not debounced');
+  assert.equal(add('question', 10_000, OTHER), true, 'another session is not debounced');
   assert.equal(add('question', DEBOUNCE_MS), true, '30 s after the last forward');
-  assert.equal(add('finished', 0), false, 'an unwatched finish is only logged');
-  assert.equal(add('finished', 1, true), true, 'a watched finish forwards');
+  assert.equal(add('finished', 0, SID, false), false, 'not asked to forward');
+  assert.equal(add('finished', 1), true, 'an event that was not forwarded does not start the debounce');
   assert.equal(log.since(0, 50).events.length, 7, 'every event is logged, forwarded or not');
-  assert.equal(log.add({ sessionId: OTHER, kind: 'permission' }, { computer: 'box', watched: true, now: 1e9, forwarding: false }).forwarded, false);
-
-  assert.equal(isWatched(['x', 'cto'], false), true);
-  assert.equal(isWatched(undefined, true), true, 'sessions this server started are watched');
-  assert.equal(isWatched(['x'], false), false);
 });
 
 test('parseEventBody validates the session id and field sizes and drops unknown fields', () => {
