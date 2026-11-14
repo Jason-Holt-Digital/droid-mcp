@@ -9,7 +9,7 @@ import { Computers } from '../src/computers.ts';
 import { EventLog, Forwarder } from '../src/events.ts';
 import { createHandler } from '../src/http.ts';
 import { createRest } from '../src/rest.ts';
-import { Doorbell, seenKey } from '../src/ring.ts';
+import { Doorbell, recordEvent, seenKey } from '../src/ring.ts';
 import { KeyStore, type Runs } from '../src/runs.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
 import type { Ctx } from '../src/tools.ts';
@@ -330,4 +330,25 @@ test('a request with an Authorization header still takes the token path', async 
   const ok = await post(EVENTS_TOKEN);
   assert.equal(ok.status, 202);
   assert.equal((await ok.json()).forwarded, false);
+});
+
+test('a forwarded event records whether the webhook took it', async () => {
+  for (const [status, delivery] of [
+    [204, 'delivered'],
+    [503, 'failed'],
+  ] as const) {
+    let answer: (r: Response) => void = () => {};
+    const fetch = (() => new Promise<Response>((r) => (answer = r))) as typeof globalThis.fetch;
+    const ctx = {
+      computers: { list: async () => [] },
+      events: new EventLog(),
+      subscriptions: { has: () => true },
+      forwarder: new Forwarder({ url: 'https://hooks.example.test/wake', key: 'wh', fetch, log: () => {} }),
+    } as unknown as Ctx;
+    const event = await recordEvent(ctx, { sessionId: '8be9cbce-2437-4995-9d5c-eba2353744ee', kind: 'finished' });
+    assert.deepEqual([event.forwarded, event.delivery], [true, 'sending']);
+    answer(new Response(null, { status }));
+    await new Promise((r) => setTimeout(r, 5));
+    assert.equal(ctx.events.since(0, 5).events[0].delivery, delivery);
+  }
 });
