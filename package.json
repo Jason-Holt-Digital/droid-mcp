@@ -25,7 +25,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "fmt": "oxfmt --write .",
-    "fmt:check": "oxfmt --check ."
+    "fmt:check": "oxfmt --check .",
+    "codegen": "node scripts/codegen.ts",
+    "codegen:check": "node scripts/codegen.ts --check"
   },
   "type": "module",
   "dependencies": {

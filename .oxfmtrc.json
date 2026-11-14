@@ -4,5 +4,5 @@
   "semi": true,
   "trailingComma": "all",
   "printWidth": 160,
-  "ignorePatterns": ["node_modules/**", "package.json", "package-lock.json", "test/fixtures/**", "tools/oxlint/anti-slop/**"]
+  "ignorePatterns": ["node_modules/**", "package.json", "package-lock.json", "test/fixtures/**", "tools/oxlint/anti-slop/**", "catalog/**", "src/generated/**"]
 }

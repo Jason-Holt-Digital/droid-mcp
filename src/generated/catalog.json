@@ -1,0 +1,4978 @@
+{
+  "sdkVersion": "0.11.0",
+  "openapiVersion": "0.1.0",
+  "operations": [
+    {
+      "id": "daemon.acknowledge_mission_readiness_warning",
+      "source": "daemon",
+      "name": "acknowledgeMissionReadinessWarning",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.add_marketplace",
+      "source": "daemon",
+      "name": "addMarketplace",
+      "summary": "",
+      "params": {
+        "description": "(params: { source: { source: \"github\"; repo: string; ref?: string | undefined; sha?: string | undefined; } | { url: string; source: \"url\"; ref?: string | undefined; sha?: string | undefined; } | { path: string; source: \"local\"; } | { path: string; url: string; source: \"git-subdir\"; ref?: string | undefined; sha?: string | undefined; }; sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.add_mcp_server",
+      "source": "daemon",
+      "name": "addMcpServer",
+      "summary": "",
+      "params": {
+        "description": "(params: { type: \"http\" | \"sse\" | \"stdio\"; name: string; sessionId: string; url?: string | undefined; command?: string | undefined; args?: string[] | undefined; env?: Record<string, string> | undefined; headers?: Record<string, string> | undefined; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.add_user_message",
+      "source": "daemon",
+      "name": "addUserMessage",
+      "summary": "",
+      "params": {
+        "description": "(params: { text: string; sessionId: string; content?: ({ text: string; type: MessageContentBlockType.Text; id?: string | undefined; } | { type: MessageContentBlockType.Image; source: { type: \"base64\"; data: string; mediaType: \"image/gif\" | \"image/jpeg\" | \"image/png\" | \"image/webp\"; }; id?: string | undefined; elided?: { bytes: number; lines?: number | undefined; width?: number | undefined; height?: number | undefined; preview?: string | undefined; } | undefined; generated?: boolean | undefined; })[] | undefined; role?: MessageRole | undefined; userMessageSource?: SessionOrigin | undefined; sender?: { kind: MissionV2SessionKind.Orchestrator; sessionId: string; } | { kind: MissionV2SessionKind.Agent; sessionId: string; title: string; } | undefined; author?: { userId: string; source?: SessionOrigin | undefined; name?: string | undefined; receipt?: string | undefined; } | undefined; visibility?: MessageVisibility | undefined; messageId?: string | undefined; queuePlacement?: QueuePlacement | undefined; files?: ({ type: DocumentSourceType.Base64; data: string; mediaType: \"application/pdf\"; path?: string | undefined; name?: string | undefined; parsedData?: string | undefined; } | { type: DocumentSourceType.Text; data: string; mediaType: \"text/plain\"; name?: string | undefined; mime?: string | undefined; })[] | undefined; images?: { type: \"base64\"; data: string; mediaType: \"image/gif\" | \"image/jpeg\" | \"image/png\" | \"image/webp\"; }[] | undefined; imagePaths?: string[] | undefined; outputFormat?: { type: \"json_schema\"; schema: Record<string, unknown>; } | undefined; skipAgentLoop?: boolean | undefined; chatSettingsCatalog?: { kind: \"account\" | \"resource\" | \"setting\"; description: string; inputSchema: { type: \"object\"; properties: Record<string, unknown>; required?: string[] | undefined; additionalProperties?: boolean | undefined; }; label: string; operationId: string; pageId: string; section: string; riskLevel: RiskLevel; }[] | undefined; activeFile?: { path: string; } | undefined; pullFromOrigin?: boolean | undefined; }, requestId?: string | undefined, options?: (DispatchAdmission & { timeout?: number | undefined; onResponse?: (() => void) | undefined; }) | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.answer_elicitation",
+      "source": "daemon",
+      "name": "answerElicitation",
+      "summary": "Answers a pending permission or ask-user request and learns whether the answer settled it. For a client that does not listen to the session; a listener answers with sendPermissionResponse or sendAskUserResponse. A daemon that predates the method fails with `DaemonMethodUnsupportedError`.",
+      "params": {
+        "description": "(params: { method: DaemonDroidEvent.REQUEST_PERMISSION; result: { selectedOption: ToolConfirmationOutcome; respondedBy?: { userId: string; source?: SessionOrigin | undefined; name?: string | undefined; receipt?: string | undefined; } | undefined; specHandoffId?: string | undefined; comment?: string | undefined; editedSpecContent?: string | undefined; clientStartsHandoffSession?: boolean | undefined; }; requestId: string; sessionId: string; } | { method: DaemonDroidEvent.ASK_USER; result: { answers: { index: number; question: string; answer: string; }[]; cancelled?: boolean | undefined; respondedBy?: { userId: string; source?: SessionOrigin | undefined; name?: string | undefined; receipt?: string | undefined; } | undefined; }; requestId: string; sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.apply_automation_config",
+      "source": "daemon",
+      "name": "applyAutomationConfig",
+      "summary": "",
+      "params": {
+        "description": "(params: { name: string; automationId: string; prompt: string; schedule: string; paused?: boolean | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; privacyLevel?: AutomationPrivacyLevel | undefined; workingDirectory?: string | undefined; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; workstreamId?: string | undefined; basePath?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.apply_user_preferences",
+      "source": "daemon",
+      "name": "applyUserPreferences",
+      "summary": "Explicitly publish the daemon's raw user preferences, never a client payload.",
+      "params": {
+        "description": "(params?: { conflict?: { updatedAt: string | null; scope: string; } | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.archive_session",
+      "source": "daemon",
+      "name": "archiveSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; force?: boolean | undefined; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.authenticate",
+      "source": "daemon",
+      "name": "authenticate",
+      "summary": "",
+      "params": {
+        "description": "(params: { caller: string; apiKey?: string | undefined; metadata?: { sdk?: { version: string; language: \"python\" | \"typescript\"; } | undefined; tracing?: { app?: string | undefined; machineType?: string | undefined; machineProvider?: string | undefined; daemonTransport?: string | undefined; connectAttemptId?: string | undefined; connectAttemptTrigger?: string | undefined; } | undefined; } | undefined; token?: string | undefined; activeOrganizationId?: string | undefined; actAsGrant?: string | undefined; sharedSessionGrant?: string | undefined; attribution?: string | undefined; connectionId?: string | undefined; stampsRequestAttribution?: boolean | undefined; acceptEncodings?: string[] | undefined; pipeline?: { type: \"request\"; id: string; method: string; jsonrpc: \"2.0\"; factoryApiVersion: \"1.0.0\"; params?: unknown; _meta?: { traceparent?: string | undefined; tracestate?: string | undefined; requestAttribution?: { sdk: { version: string; language: \"python\" | \"typescript\"; }; client: ClientType.SDK; requestSurface?: \"daemon-direct\" | SessionOrigin | undefined; execOutputFormat?: ExecOutputFormat | undefined; execInputFormat?: ExecInputFormat | undefined; } | { client: ClientType.WebDesktop | ClientType.WebApp | ClientType.WebWorkspace | ClientType.Daemon | ClientType.CLI | ClientType.Backend; requestSurface?: \"daemon-direct\" | SessionOrigin | undefined; execOutputFormat?: ExecOutputFormat | undefined; execInputFormat?: ExecInputFormat | undefined; } | undefined; } | undefined; factoryProtocolVersion?: string | undefined; }[] | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.authenticate_mcp_server",
+      "source": "daemon",
+      "name": "authenticateMcpServer",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; serverName: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.automation_memory_edit",
+      "source": "daemon",
+      "name": "automationMemoryEdit",
+      "summary": "Apply one edit to a memory file of a hosted automation through the daemon's locked disk store, under the store's rules (a whole-file write lands only on the sha256 it names). The caller owns version gating and the uncertain cases: a rejected request, a lost connection, or an answer the result schema cannot read leaves it unknown whether the edit landed.",
+      "params": {
+        "description": "(params: { edit: { kind: \"replace\"; oldText: string; newText: string; replaceAll?: boolean | undefined; } | { kind: \"write\"; content: string; baseSha256?: string | undefined; rewriteLargeFile?: boolean | undefined; } | { kind: \"append\"; content: string; } | { kind: \"delete\"; baseSha256: string; }; path: string; automationId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.automation_memory_list",
+      "source": "daemon",
+      "name": "automationMemoryList",
+      "summary": "List the memory files and sync-limit warnings of an automation hosted on this daemon. `automationId` is the cloud record id stamped in the automation's `memory/state.json`, never its directory slug. A directory whose listing would not fit the daemon's answer is refused as `too_large`.",
+      "params": {
+        "description": "(params: { automationId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.automation_memory_read",
+      "source": "daemon",
+      "name": "automationMemoryRead",
+      "summary": "Read one memory file of a hosted automation by its path under `memory/`, whole: a file that would not fit the daemon's answer is refused as `too_large`; no `file` when none exists at the path. Same `automationId` rule as automationMemoryList.",
+      "params": {
+        "description": "(params: { path: string; automationId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.automation_run_outcome_set",
+      "source": "daemon",
+      "name": "automationRunOutcomeSet",
+      "summary": "Set or clear a user's outcome override on one record of a hosted automation's `memory/runs.json`. The rewritten record is not returned; the caller keeps its own record of the run. As with automationMemoryEdit, a lost connection or an unreadable answer leaves it unknown whether the file was rewritten.",
+      "params": {
+        "description": "(params: { runId: string; automationId: string; changedBy: string; override: { status: \"failure\" | \"success\"; note?: string | undefined; } | null; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.cancel_mcp_auth",
+      "source": "daemon",
+      "name": "cancelMcpAuth",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; serverName: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.change_working_directory",
+      "source": "daemon",
+      "name": "changeWorkingDirectory",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; workingDirectory: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.check_folder_trust",
+      "source": "daemon",
+      "name": "checkFolderTrust",
+      "summary": "",
+      "params": {
+        "description": "(params: { path: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.check_session_copy",
+      "source": "daemon",
+      "name": "checkSessionCopy",
+      "summary": "A daemon that predates daemon-to-daemon session transfer raises DaemonMethodUnsupportedError. A check reads the session's repository, which runs several git commands.",
+      "params": {
+        "description": "(params: { sessionId: string; includeCode: boolean; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.checkout_git_branch",
+      "source": "daemon",
+      "name": "checkoutGitBranch",
+      "summary": "",
+      "params": {
+        "description": "(params: { branch: string; cwd: string; create?: boolean | undefined; resolution?: \"commit\" | \"stash\" | undefined; pullFromOrigin?: boolean | undefined; createFromOrigin?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.cleanup_worktree",
+      "source": "daemon",
+      "name": "cleanupWorktree",
+      "summary": "",
+      "params": {
+        "description": "(params: { worktreePath: string; deleteLocalBranch?: boolean | undefined; deleteRemoteBranch?: boolean | undefined; force?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.clear_mcp_auth",
+      "source": "daemon",
+      "name": "clearMcpAuth",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; serverName: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.close_session",
+      "source": "daemon",
+      "name": "closeSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; preserveEmptyDraft?: boolean | undefined; deleteBtwForkFiles?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.close_terminal",
+      "source": "daemon",
+      "name": "closeTerminal",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; terminalId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.compact_session",
+      "source": "daemon",
+      "name": "compactSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; mode?: \"handoff\" | undefined; customInstructions?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.config_items",
+      "source": "daemon",
+      "name": "configItems",
+      "summary": "Low-level RPC. Interactive review/confirmation flows should use bindConfigurationControls.",
+      "params": {
+        "description": "(params: { cwd: string; operation: { action: \"availability\"; } | { action: \"catalog\"; cursor?: string | undefined; } | { action: \"preview\"; target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; purpose?: \"publish\" | \"resolve\" | undefined; } | { action: \"publish\"; approval: { target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; itemId: string; localHash: string; candidateHash: string; expectedRevision?: string | undefined; scopeHash?: string | undefined; }; } | { action: \"publication-preview\"; cursor?: string | undefined; } | { action: \"publish-batch\"; approvals: { target: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | { kind: \"followed\"; itemId: string; }; itemId: string; localHash: string; candidateHash: string; candidate: { isDeleted: true; } | { isDeleted: false; snapshot: { metadata: Record<string, unknown>; files: { path: string; isExecutable: boolean; contentHash: string; byteLength: number; contentBase64: string; }[]; }; }; expectedRevision?: string | undefined; scopeHash?: string | undefined; baseRevision?: string | undefined; remoteHash?: string | undefined; }[]; } | { action: \"follow\"; enabled: boolean; item: { category: ConfigItemCategory; itemId: string; source?: { kind: \"source\"; supportingFiles: string[]; sourceId: string; } | undefined; pin?: string | undefined; }; } | { action: \"pull\"; } | { action: \"history\"; itemId: string; beforeRevision?: string | undefined; } | { action: \"revision\"; revision: string; itemId: string; } | { action: \"restore\"; expectedRevision: string; itemId: string; sourceRevision: string; snapshotHash: string; scopeHash?: string | undefined; } | { action: \"remove\"; expectedRevision: string; itemId: string; snapshotHash: string; scopeHash?: string | undefined; } | { action: \"resolve\"; resolution: { kind: \"local\"; } | { kind: \"remote\"; } | { kind: \"edited\"; snapshot: { isDeleted: true; } | { isDeleted: false; snapshot: { metadata: Record<string, unknown>; files: { path: string; isExecutable: boolean; contentHash: string; byteLength: number; contentBase64: string; }[]; }; }; }; expectedRevision: string; itemId: string; localHash: string; scopeHash?: string | undefined; pin?: string | undefined; } | { action: \"identity\"; sourceId: string; itemId?: string | undefined; expectedItemId?: string | undefined; previousPath?: string | undefined; }; level: \"project\" | \"user\"; }, signal?: AbortSignal | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.create_automation",
+      "source": "daemon",
+      "name": "createAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { id: string; name: string; schedule: string; paused?: boolean | undefined; skills?: { name: string; fingerprint: string; content?: string | undefined; supportingFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; }[] | undefined; instructions?: string | undefined; uuid?: string | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; privacyLevel?: AutomationPrivacyLevel | undefined; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; workstreamId?: string | undefined; basePath?: string | undefined; targetSessionId?: string | undefined; visualDescription?: string | undefined; memoryStrategy?: string | undefined; skipFirstRun?: boolean | undefined; creationSource?: AutomationCreationSource | undefined; creationSessionId?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.create_cron",
+      "source": "daemon",
+      "name": "createCron",
+      "summary": "",
+      "params": {
+        "description": "(params: { kind: \"session_prompt\"; source: \"automation\" | \"cron_tool\" | \"loop_command\" | \"migration\"; schedule: { expression: string; recurring: boolean; }; scope: { type: \"session\"; sessionId: string; sessionCwd: string; }; payload: { type: \"prompt\"; target: { type: \"same_session\"; }; prompt: string; }; runImmediately?: boolean | undefined; runPolicy?: { whenSessionInactive: \"hold\"; } | undefined; } | { kind: \"root_prompt\"; source: \"automation\" | \"cron_tool\" | \"loop_command\" | \"migration\"; schedule: { expression: string; recurring: boolean; }; scope: { type: \"root\"; }; payload: { type: \"prompt\"; target: { type: \"new_session\"; title?: string | undefined; cwd?: string | undefined; }; prompt: string; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; }; runImmediately?: boolean | undefined; runPolicy?: { whenSessionInactive: \"run_in_background\"; } | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.create_pr",
+      "source": "daemon",
+      "name": "createPR",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; title: string; baseBranch: string; draft?: boolean | undefined; body?: string | undefined; linkedTicketIds?: string[] | undefined; linkedTicketUrls?: string[] | undefined; jiraIssueKeys?: string[] | undefined; linearIssueIds?: string[] | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.create_terminal",
+      "source": "daemon",
+      "name": "createTerminal",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; terminalId: string; cwd?: string | undefined; rows?: number | undefined; env?: Record<string, string> | undefined; cols?: number | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.delete_automation",
+      "source": "daemon",
+      "name": "deleteAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.delete_cron",
+      "source": "daemon",
+      "name": "deleteCron",
+      "summary": "",
+      "params": {
+        "description": "(params: { cronId: string; sessionId?: string | undefined; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.delete_custom_model",
+      "source": "daemon",
+      "name": "deleteCustomModel",
+      "summary": "",
+      "params": {
+        "description": "(params: { rawIndex: number; expectedModel: string; expectedRevision?: string | undefined; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.delete_model_provider",
+      "source": "daemon",
+      "name": "deleteModelProvider",
+      "summary": "",
+      "params": {
+        "description": "(params: { id: string; expectedRevision: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.delete_model_provider_entry",
+      "source": "daemon",
+      "name": "deleteModelProviderEntry",
+      "summary": "",
+      "params": {
+        "description": "(params: { index: number; expectedRevision: string; expectedEntryFingerprint: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.delete_shared_folder_entry",
+      "source": "daemon",
+      "name": "deleteSharedFolderEntry",
+      "summary": "",
+      "params": {
+        "description": "(params: { path: string; sessionId: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.delete_worktree_setup_profile",
+      "source": "daemon",
+      "name": "deleteWorktreeSetupProfile",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; profileId: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.dispatch_automation_run",
+      "source": "daemon",
+      "name": "dispatchAutomationRun",
+      "summary": "Ask the daemon to start a run of an automation it hosts. The daemon answers only once the run's session is initialized, so the default timeout waits out its session-init budget; a caller working under a tighter deadline of its own passes `timeoutMs` to give up earlier.",
+      "params": {
+        "description": "(params: { automationId: string; basePath?: string | undefined; triggerSource?: \"automation\" | \"manual\" | undefined; sourceAutomationId?: string | undefined; sourceRunId?: string | undefined; triggerContext?: string | undefined; sourceAutomationName?: string | undefined; reservationId?: string | undefined; }, args?: { timeoutMs?: number | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.execute_rewind",
+      "source": "daemon",
+      "name": "executeRewind",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; messageId: string; filesToRestore: { filePath: string; contentHash: string; size: number; }[]; filesToDelete: { filePath: string; }[]; forkTitle: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.fork_automation",
+      "source": "daemon",
+      "name": "forkAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { name: string; automationId: string; prompt: string; schedule: string; forkedFrom: string; localDirName: string; skills?: { name: string; fingerprint: string; content?: string | undefined; supportingFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; }[] | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.fork_session",
+      "source": "daemon",
+      "name": "forkSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; title?: string | undefined; tags?: { name: string; metadata?: Record<string, string> | undefined; }[] | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.generate_semantic_diff",
+      "source": "daemon",
+      "name": "generateSemanticDiff",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; diff: string; currentBranch: string; baseBranch: string; modelId?: string | undefined; unstagedDiff?: string | undefined; commitHash?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_automation_history",
+      "source": "daemon",
+      "name": "getAutomationHistory",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; offset?: number | undefined; limit?: number | undefined; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_automation_visual",
+      "source": "daemon",
+      "name": "getAutomationVisual",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; sessionId?: string | undefined; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_checkout_metadata",
+      "source": "daemon",
+      "name": "getCheckoutMetadata",
+      "summary": "",
+      "params": {
+        "description": "(params: { directories: string[]; subscriptionId: string; includePullRequest?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_context_breakdown",
+      "source": "daemon",
+      "name": "getContextBreakdown",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_default_settings",
+      "source": "daemon",
+      "name": "getDefaultSettings",
+      "summary": "",
+      "params": {
+        "description": "(params?: { cwd?: string | undefined; } | undefined, signal?: AbortSignal | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_folder_starter_signals",
+      "source": "daemon",
+      "name": "getFolderStarterSignals",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_git_diff",
+      "source": "daemon",
+      "name": "getGitDiff",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; cwd?: string | undefined; baseBranch?: string | undefined; statsOnly?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_git_diff_file_contents",
+      "source": "daemon",
+      "name": "getGitDiffFileContents",
+      "summary": "",
+      "params": {
+        "description": "(params: { source: DaemonGitDiffSource; sessionId: string; filePath: string; cwd?: string | undefined; baseBranch?: string | undefined; prevFilePath?: string | undefined; diffCapturedAtMs?: number | undefined; diffHeadCommitSha?: string | undefined; diffBaseCommitSha?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_mcp_config",
+      "source": "daemon",
+      "name": "getMcpConfig",
+      "summary": "",
+      "params": {
+        "description": "()"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_message_blocks",
+      "source": "daemon",
+      "name": "getMessageBlocks",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; refs: { messageId: string; blockIndex: number; }[]; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_mission_agent_roster",
+      "source": "daemon",
+      "name": "getMissionAgentRoster",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_proxy_token",
+      "source": "daemon",
+      "name": "getProxyToken",
+      "summary": "",
+      "params": {
+        "description": "()"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_rewind_info",
+      "source": "daemon",
+      "name": "getRewindInfo",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; messageId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_semantic_diff_cache",
+      "source": "daemon",
+      "name": "getSemanticDiffCache",
+      "summary": "",
+      "params": {
+        "description": "(params: { currentBranch: string; baseBranch: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_session_messages",
+      "source": "daemon",
+      "name": "getSessionMessages",
+      "summary": "`options.skipBeforeRequest` bypasses the pre-request hook that loads an unloaded session first. The daemon serves this read from disk, so callers that must not load the session (such as an archived one, which the daemon refuses to load) can skip it. `options.timeout` replaces the default request timeout for this one call.",
+      "params": {
+        "description": "(params: { sessionId: string; limit: number; role?: MessageRoleNoSystem | undefined; display?: boolean | undefined; maxBytes?: number | undefined; cursor?: string | undefined; }, options?: { skipBeforeRequest?: boolean | undefined; timeout?: number | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_session_turn_outcome",
+      "source": "daemon",
+      "name": "getSessionTurnOutcome",
+      "summary": "Read one exact prompt turn's durable outcome from the daemon's copy of a session transcript. A read, never a lifecycle call: the daemon answers from disk and never creates, loads, or resumes the session.",
+      "params": {
+        "description": "(params: { sessionId: string; turnId: string; timeoutMs: number; }, options?: { signal?: AbortSignal | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_user_preferences_state",
+      "source": "daemon",
+      "name": "getUserPreferencesState",
+      "summary": "Read local reconciliation state, optionally awaiting a fresh cloud pull.",
+      "params": {
+        "description": "(params?: { cwd?: string | undefined; refresh?: boolean | undefined; includeSyncStatus?: boolean | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.get_workspace_file_content",
+      "source": "daemon",
+      "name": "getWorkspaceFileContent",
+      "summary": "`timeout` bounds the whole call, including waits for connect and auth before the request is sent.",
+      "params": {
+        "description": "(params: { sessionId: string; filePath: string; cwd?: string | undefined; encoding?: \"base64\" | \"utf8\" | undefined; metadataOnly?: boolean | undefined; allowDirectory?: boolean | undefined; }, options?: { timeout?: number | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.git_commit",
+      "source": "daemon",
+      "name": "gitCommit",
+      "summary": "",
+      "params": {
+        "description": "(params: { message: string; sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.git_push",
+      "source": "daemon",
+      "name": "gitPush",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.import_session",
+      "source": "daemon",
+      "name": "importSession",
+      "summary": "See sendSession for a daemon that predates it. The last piece answers once the session has started, which can include putting its code in a new worktree.",
+      "params": {
+        "description": "(params: { data: string; sessionId: string; sourceSessionId: string; pieceCount: number; pieceIndex: number; title?: string | undefined; header?: { historyPieceCount: number; code?: { manifest: { status: DaemonSessionCodeStatus.Ready; branch: string | null; repository: string; changedFileCount: number; headSha: string; workingTreeSha: string; indexTreeSha: string; prerequisiteShas: string[]; relativeCwd: string; unpushedCommitCount: number; emptySubmodules: string[]; }; pieceCount: number; } | undefined; } | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.initialize_session",
+      "source": "daemon",
+      "name": "initializeSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; machineId: string; token: string; systemPrompt?: string | { type: \"preset\"; preset: \"droid\"; append: string; } | undefined; blockOnMcpLoad?: boolean | undefined; blockOnStartupLoad?: boolean | undefined; sessionId?: string | undefined; title?: string | undefined; interactionMode?: DroidInteractionMode | undefined; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; tags?: { name: string; metadata?: Record<string, string> | undefined; }[] | undefined; autonomyMode?: AutonomyMode | undefined; autonomyLevel?: AutonomyLevel | undefined; specModeModelId?: string | undefined; specModeReasoningEffort?: ReasoningEffort | undefined; additionalToolIds?: string[] | undefined; enabledToolIds?: string[] | undefined; disabledToolIds?: string[] | undefined; restrictToolIds?: string[] | undefined; missionSettings?: { workerModel?: string | undefined; workerReasoningEffort?: ReasoningEffort | undefined; validationWorkerModel?: string | undefined; validationWorkerReasoningEffort?: ReasoningEffort | undefined; skipScrutiny?: boolean | undefined; skipUserTesting?: boolean | undefined; } | undefined; compactionThresholdCheckEnabled?: boolean | undefined; organizationId?: string | undefined; workspaceId?: string | undefined; mcpServers?: ({ name: string; command: string; args: string[]; env: Record<string, string>; } | { type: \"http\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { type: \"sse\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; })[] | undefined; systemPromptOverride?: string | undefined; decompSessionType?: DecompSessionType | undefined; decompMissionId?: string | undefined; skipPermissionsUnsafe?: boolean | undefined; sessionLocation?: string | undefined; sessionSource?: { platform: SessionPlatform.ReadinessRemediation; reportId: string; repoUrl: string; criterionId: string; } | { platform: SessionPlatform.ReadinessEvaluation; repoUrl: string; } | { platform: SessionPlatform.Automation; computerId: string; automationId: string; } | { platform: SessionPlatform.WikiGeneration; repoUrl: string; } | { platform: SessionPlatform.WikiCISetup; repoUrl: string; } | { platform: SessionPlatform.Tui; } | { platform: SessionPlatform.Desktop; } | { platform: SessionPlatform.Acp; } | { platform: SessionPlatform.Unknown; } | { platform: SessionPlatform.Slack; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; channel?: string | null | undefined; threadTs?: string | null | undefined; automationId?: string | null | undefined; } | { platform: SessionPlatform.Web; delegationSessionId: string; } | { platform: SessionPlatform.Api; delegationSessionId: string; } | { platform: SessionPlatform.SessionsApi; delegationSessionId: string; } | { platform: SessionPlatform.Linear; agentSessionId: string; delegationSessionId: string; userId?: string | null | undefined; issueId?: string | null | undefined; issueUrl?: string | null | undefined; issueIdentifier?: string | null | undefined; organizationId?: string | null | undefined; } | { platform: SessionPlatform.Jira; issueId: string; cloudId: string; delegationSessionId: string; userId?: string | null | undefined; issueKey?: string | null | undefined; siteId?: string | null | undefined; projectId?: string | null | undefined; commentId?: string | null | undefined; taskId?: string | null | undefined; } | { platform: SessionPlatform.MicrosoftTeams; tenantId: string; conversationId: string; serviceUrl: string; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; conversationType?: \"channel\" | \"groupChat\" | \"personal\" | null | undefined; rootMessageId?: string | null | undefined; channelId?: string | null | undefined; aadObjectId?: string | null | undefined; } | { platform: SessionPlatform.GoogleChat; customerId: string; spaceName: string; delegationSessionId: string; userId?: string | null | undefined; spaceType?: \"DIRECT_MESSAGE\" | \"GROUP_CHAT\" | \"SPACE\" | null | undefined; threadName?: string | null | undefined; } | undefined; sessionOriginHint?: SessionOrigin | undefined; privacyLevel?: \"organization\" | \"private\" | undefined; autoRejectPermissionRequests?: boolean | undefined; disableBuiltinSkills?: boolean | undefined; mcpOAuthCallbackUri?: string | undefined; worktree?: boolean | undefined; worktreeDir?: string | undefined; structuredOutputFormat?: { type: \"json_schema\"; schema: Record<string, unknown>; } | null | undefined; toolExecutionMode?: ToolExecutionMode | undefined; allowSubagentsInScripts?: boolean | undefined; worktreeLifecycle?: WorktreeLifecycle | undefined; worktreeBranchMode?: WorktreeBranchMode | undefined; worktreeBaseBranch?: string | undefined; worktreeBaseBranchFromOrigin?: boolean | undefined; worktreeNewBranch?: string | undefined; worktreePromptSlug?: string | undefined; worktreeSetupProfileId?: string | undefined; callingMetadata?: { callingSessionId: string; callingToolUseId: string; } | undefined; inactivityTimeoutMs?: number | undefined; disableInactivityTimeout?: boolean | undefined; runtimeSettingsPath?: string | undefined; pullFromOrigin?: boolean | undefined; }, options?: { timeout?: number | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.inspect_mission_readiness",
+      "source": "daemon",
+      "name": "inspectMissionReadiness",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.inspect_worktree_deletion",
+      "source": "daemon",
+      "name": "inspectWorktreeDeletion",
+      "summary": "",
+      "params": {
+        "description": "(params: { worktreePath: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.install_plugin",
+      "source": "daemon",
+      "name": "installPlugin",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; scope: string; marketplace: string; pluginName: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.interrupt_session",
+      "source": "daemon",
+      "name": "interruptSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.kill_background_process",
+      "source": "daemon",
+      "name": "killBackgroundProcess",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; processId: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.kill_worker_session",
+      "source": "daemon",
+      "name": "killWorkerSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; workerSessionId: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.list_automations",
+      "source": "daemon",
+      "name": "listAutomations",
+      "summary": "",
+      "params": {
+        "description": "(params: { basePath?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_available_plugins",
+      "source": "daemon",
+      "name": "listAvailablePlugins",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_available_sessions",
+      "source": "daemon",
+      "name": "listAvailableSessions",
+      "summary": "",
+      "params": {
+        "description": "(params: { limit: number; filter?: { missionSessions?: boolean | undefined; includeBtwForks?: boolean | undefined; missionVersion?: \"v1\" | \"v2\" | undefined; missionStates?: MissionState[] | undefined; } | undefined; includeArchived?: boolean | undefined; endBefore?: number | undefined; includeMissionMetadata?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_commands",
+      "source": "daemon",
+      "name": "listCommands",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_crons",
+      "source": "daemon",
+      "name": "listCrons",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId?: string | undefined; includeInactive?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_custom_models",
+      "source": "daemon",
+      "name": "listCustomModels",
+      "summary": "",
+      "params": {
+        "description": "()"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_files",
+      "source": "daemon",
+      "name": "listFiles",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; showHidden: boolean; path?: string | undefined; cwd?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_git_branches",
+      "source": "daemon",
+      "name": "listGitBranches",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; includeOriginBranches?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_installed_plugins",
+      "source": "daemon",
+      "name": "listInstalledPlugins",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; scope?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_managed_worktrees",
+      "source": "daemon",
+      "name": "listManagedWorktrees",
+      "summary": "",
+      "params": {
+        "description": "(params?: { includeSizes?: boolean | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_marketplaces",
+      "source": "daemon",
+      "name": "listMarketplaces",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_mcp_registry",
+      "source": "daemon",
+      "name": "listMcpRegistry",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_mcp_servers",
+      "source": "daemon",
+      "name": "listMcpServers",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_mcp_tools",
+      "source": "daemon",
+      "name": "listMcpTools",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_model_providers",
+      "source": "daemon",
+      "name": "listModelProviders",
+      "summary": "",
+      "params": {
+        "description": "(params?: {} | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_models",
+      "source": "daemon",
+      "name": "listModels",
+      "summary": "",
+      "params": {
+        "description": "(params?: { includeDisabled?: boolean | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_opened_sessions",
+      "source": "daemon",
+      "name": "listOpenedSessions",
+      "summary": "A daemon that predates shared-session member side chats refuses this on a member connection, raised as DaemonMethodUnsupportedError.",
+      "params": {
+        "description": "(params?: { filter?: { missionSessions?: boolean | undefined; includeBtwForks?: boolean | undefined; } | undefined; includeArchived?: boolean | undefined; } | undefined, options?: { timeout?: number | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_shared_folder",
+      "source": "daemon",
+      "name": "listSharedFolder",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; limit?: number | undefined; pathPrefix?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_skills",
+      "source": "daemon",
+      "name": "listSkills",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; skillName?: string | undefined; includeContent?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_terminals",
+      "source": "daemon",
+      "name": "listTerminals",
+      "summary": "A daemon that predates shared-session member terminals raises DaemonMethodUnsupportedError on a member connection.",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.list_worktree_setup_profiles",
+      "source": "daemon",
+      "name": "listWorktreeSetupProfiles",
+      "summary": "",
+      "params": {
+        "description": "(params: { cwd: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.load_session",
+      "source": "daemon",
+      "name": "loadSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; token: string; additionalToolIds?: string[] | undefined; enabledToolIds?: string[] | undefined; disabledToolIds?: string[] | undefined; mcpServers?: ({ name: string; command: string; args: string[]; env: Record<string, string>; } | { type: \"http\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { type: \"sse\"; url: string; name: string; headers: { value: string; name: string; }[]; oauth?: false | { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; })[] | undefined; skipPermissionsUnsafe?: boolean | undefined; sessionLocation?: SessionLocation | undefined; sessionSource?: { platform: SessionPlatform.ReadinessRemediation; reportId: string; repoUrl: string; criterionId: string; } | { platform: SessionPlatform.ReadinessEvaluation; repoUrl: string; } | { platform: SessionPlatform.Automation; computerId: string; automationId: string; } | { platform: SessionPlatform.WikiGeneration; repoUrl: string; } | { platform: SessionPlatform.WikiCISetup; repoUrl: string; } | { platform: SessionPlatform.Tui; } | { platform: SessionPlatform.Desktop; } | { platform: SessionPlatform.Acp; } | { platform: SessionPlatform.Unknown; } | { platform: SessionPlatform.Slack; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; channel?: string | null | undefined; threadTs?: string | null | undefined; automationId?: string | null | undefined; } | { platform: SessionPlatform.Web; delegationSessionId: string; } | { platform: SessionPlatform.Api; delegationSessionId: string; } | { platform: SessionPlatform.SessionsApi; delegationSessionId: string; } | { platform: SessionPlatform.Linear; agentSessionId: string; delegationSessionId: string; userId?: string | null | undefined; issueId?: string | null | undefined; issueUrl?: string | null | undefined; issueIdentifier?: string | null | undefined; organizationId?: string | null | undefined; } | { platform: SessionPlatform.Jira; issueId: string; cloudId: string; delegationSessionId: string; userId?: string | null | undefined; issueKey?: string | null | undefined; siteId?: string | null | undefined; projectId?: string | null | undefined; commentId?: string | null | undefined; taskId?: string | null | undefined; } | { platform: SessionPlatform.MicrosoftTeams; tenantId: string; conversationId: string; serviceUrl: string; delegationSessionId: string; userId?: string | null | undefined; teamId?: string | null | undefined; conversationType?: \"channel\" | \"groupChat\" | \"personal\" | null | undefined; rootMessageId?: string | null | undefined; channelId?: string | null | undefined; aadObjectId?: string | null | undefined; } | { platform: SessionPlatform.GoogleChat; customerId: string; spaceName: string; delegationSessionId: string; userId?: string | null | undefined; spaceType?: \"DIRECT_MESSAGE\" | \"GROUP_CHAT\" | \"SPACE\" | null | undefined; threadName?: string | null | undefined; } | undefined; sessionOriginHint?: SessionOrigin | undefined; autoRejectPermissionRequests?: boolean | undefined; disableBuiltinSkills?: boolean | undefined; mcpOAuthCallbackUri?: string | undefined; structuredOutputFormat?: { type: \"json_schema\"; schema: Record<string, unknown>; } | null | undefined; agentTurnOutcomeTurnId?: string | undefined; loadAllMessages?: boolean | undefined; messageLimit?: number | undefined; display?: boolean | undefined; maxBytes?: number | undefined; disableInactivityTimeout?: boolean | undefined; runtimeSettingsPath?: string | undefined; }, options?: DispatchAdmission | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.logout",
+      "source": "daemon",
+      "name": "logout",
+      "summary": "",
+      "params": {
+        "description": "()"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.pause_automation",
+      "source": "daemon",
+      "name": "pauseAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.preview_model_provider",
+      "source": "daemon",
+      "name": "previewModelProvider",
+      "summary": "",
+      "params": {
+        "description": "(params: { configuration: Record<string, unknown>; expectedRevision: string; preservedSecrets?: ([\"apiKey\"] | [\"apiKeyHelper\"] | [\"extraHeaders\"] | [\"bedrock\", \"awsAuthRefresh\"] | [\"bedrock\", \"awsCredentialExport\"] | [\"extraHeaders\", string])[] | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.pull_url_to_cwd_file",
+      "source": "daemon",
+      "name": "pullUrlToCwdFile",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; presignedGetUrl: string; destPath: string; expectedContentLength?: number | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.push_cwd_file_to_url",
+      "source": "daemon",
+      "name": "pushCwdFileToUrl",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; filePath: string; presignedPutUrl: string; cwd?: string | undefined; contentType?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.record_mission_agent_title",
+      "source": "daemon",
+      "name": "recordMissionAgentTitle",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; title: string; agentSessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.refresh_connector_tool_catalog",
+      "source": "daemon",
+      "name": "refreshConnectorToolCatalog",
+      "summary": "",
+      "params": {
+        "description": "()"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.remove_marketplace",
+      "source": "daemon",
+      "name": "removeMarketplace",
+      "summary": "",
+      "params": {
+        "description": "(params: { name: string; sessionId: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.remove_mcp_server",
+      "source": "daemon",
+      "name": "removeMcpServer",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; serverName: string; settingsLevel: SettingsLevel.User; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.rename_automation",
+      "source": "daemon",
+      "name": "renameAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; newName: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.rename_session",
+      "source": "daemon",
+      "name": "renameSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; title: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.resize_terminal",
+      "source": "daemon",
+      "name": "resizeTerminal",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; terminalId: string; rows: number; cols: number; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.resolve_file_links",
+      "source": "daemon",
+      "name": "resolveFileLinks",
+      "summary": "Decide which entry each chat file link opens. A peer that predates the method raises DaemonMethodUnsupportedError.",
+      "params": {
+        "description": "(params: { sessionId: string; messageId: string; tokens: string[]; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.resolve_pull_request_statuses",
+      "source": "daemon",
+      "name": "resolvePullRequestStatuses",
+      "summary": "",
+      "params": {
+        "description": "(params: { lookups: { subject: { kind: DaemonPullRequestSubjectKind.Branch; sessionId: string; cwd?: string | undefined; } | { kind: DaemonPullRequestSubjectKind.Url; url: string; sessionId: string; cwd?: string | undefined; }; reason?: DaemonPullRequestLookupReason | undefined; invalidate?: boolean | undefined; }[]; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.resolve_queued_user_message",
+      "source": "daemon",
+      "name": "resolveQueuedUserMessage",
+      "summary": "",
+      "params": {
+        "description": "(params: ({ requestId: string; action: ResolveQueuedUserMessageAction.UpdateQueue; queuePlacement: QueuePlacement; } | { requestId: string; action: ResolveQueuedUserMessageAction.Delete; }) & { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.resolve_user_preferences",
+      "source": "daemon",
+      "name": "resolveUserPreferences",
+      "summary": "Choose which displayed snapshot stays on this device; never publish it.",
+      "params": {
+        "description": "(params: { token: string; resolution: DaemonUserPreferencesResolution; cwd?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.resume_automation",
+      "source": "daemon",
+      "name": "resumeAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.run_automation",
+      "source": "daemon",
+      "name": "runAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; skills?: { name: string; fingerprint: string; content?: string | undefined; supportingFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; }[] | undefined; computerId?: string | undefined; basePath?: string | undefined; automationDirName?: string | undefined; memoryFiles?: { fileId: string; fingerprint: string; content?: string | undefined; }[] | undefined; executionTemplateBacked?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.save_semantic_diff_cache",
+      "source": "daemon",
+      "name": "saveSemanticDiffCache",
+      "summary": "",
+      "params": {
+        "description": "(params: { content: string; truncated: boolean; currentBranch: string; baseBranch: string; commitHash: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.save_worktree_setup_profile",
+      "source": "daemon",
+      "name": "saveWorktreeSetupProfile",
+      "summary": "",
+      "params": {
+        "description": "(params: { name: string; cwd: string; script?: string | undefined; initialPrompt?: string | undefined; cleanupScript?: string | undefined; profileId?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.search_files",
+      "source": "daemon",
+      "name": "searchFiles",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; query: string; showHidden: boolean; maxResults: number; cwd?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.search_sessions",
+      "source": "daemon",
+      "name": "searchSessions",
+      "summary": "Once `options.signal` aborts, the call rejects with `OperationCanceledError` and a daemon that can cancel the search stops it; an older daemon finishes it and its answer is discarded.",
+      "params": {
+        "description": "(params: { query: string; kind?: \"all\" | SessionSearchDocKind | undefined; limitSessions?: number | undefined; limitHitsPerSession?: number | undefined; contextChars?: number | undefined; updatedAfterMs?: number | undefined; updatedBeforeMs?: number | undefined; }, options?: { signal?: AbortSignal | undefined; } | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.send_session",
+      "source": "daemon",
+      "name": "sendSession",
+      "summary": "See checkSessionCopy for a daemon that predates it. A copy snapshots the session's repository first, which runs several git commands.",
+      "params": {
+        "description": "(params: { sessionId: string; title: string; includeCode: boolean; agentProfileId: string; copySessionId: string; history?: DaemonSessionTransferHistory | undefined; supersedesSessionId?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.set_plugin_enabled",
+      "source": "daemon",
+      "name": "setPluginEnabled",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; enabled: boolean; pluginId: string; scope: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.set_skill_disabled",
+      "source": "daemon",
+      "name": "setSkillDisabled",
+      "summary": "",
+      "params": {
+        "description": "(params: { disabled: boolean; sessionId: string; skillName: string; settingsLevel?: SettingsLevel.User | SettingsLevel.Project | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.start_pull_request_layer_manifest_generation",
+      "source": "daemon",
+      "name": "startPullRequestLayerManifestGeneration",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; operation: PullRequestLayerManifestOperation; prUrl: string; repoDir: string; baseSha: string; headSha: string; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.submit_bug_report",
+      "source": "daemon",
+      "name": "submitBugReport",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; userComment: string; source?: { surface: \"cli\" | \"desktop\" | \"web\"; runtime?: \"byom\" | \"cloud-workspace\" | \"droid-computer\" | \"local\" | undefined; version?: string | undefined; cliVersion?: string | undefined; platform?: string | undefined; arch?: string | undefined; osVersion?: string | undefined; } | undefined; clientLogs?: string | undefined; tuiLogs?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.submit_mcp_auth_code",
+      "source": "daemon",
+      "name": "submitMcpAuthCode",
+      "summary": "",
+      "params": {
+        "description": "(params: { code: string; sessionId: string; serverName: string; state: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.submit_mcp_auth_error",
+      "source": "daemon",
+      "name": "submitMcpAuthError",
+      "summary": "",
+      "params": {
+        "description": "(params: { error: string; sessionId: string; serverName: string; state: string; errorDescription?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.sync_connected_model_providers",
+      "source": "daemon",
+      "name": "syncConnectedModelProviders",
+      "summary": "",
+      "params": {
+        "description": "()"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.test_custom_model",
+      "source": "daemon",
+      "name": "testCustomModel",
+      "summary": "Sends one minimal request for a stored custom model through the daemon's session LLM client. A provider failure resolves with `ok: false` and a reason; a rejection means the entry could not be tested at all (missing, changed since `expectedRevision`, or invalid).",
+      "params": {
+        "description": "(params: { rawIndex: number; expectedModel: string; expectedRevision?: string | undefined; timeoutMs?: number | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.toggle_mcp_server",
+      "source": "daemon",
+      "name": "toggleMcpServer",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; serverName: string; enabled: boolean; settingsLevel: SettingsLevel.User; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.toggle_mcp_tool",
+      "source": "daemon",
+      "name": "toggleMcpTool",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; serverName: string; toolName: string; enabled: boolean; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.trust_folder",
+      "source": "daemon",
+      "name": "trustFolder",
+      "summary": "",
+      "params": {
+        "description": "(params: { path: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.unarchive_session",
+      "source": "daemon",
+      "name": "unarchiveSession",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.uninstall_plugin",
+      "source": "daemon",
+      "name": "uninstallPlugin",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; pluginId: string; scope: string; })"
+      },
+      "destructive": true
+    },
+    {
+      "id": "daemon.update_automation",
+      "source": "daemon",
+      "name": "updateAutomation",
+      "summary": "",
+      "params": {
+        "description": "(params: { name: string; automationId: string; prompt: string; schedule: string; paused?: boolean | undefined; reasoningEffort?: string | undefined; description?: string | undefined; model?: string | undefined; tags?: string[] | undefined; privacyLevel?: AutomationPrivacyLevel | undefined; workingDirectory?: string | undefined; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; workstreamId?: string | undefined; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_automation_model",
+      "source": "daemon",
+      "name": "updateAutomationModel",
+      "summary": "",
+      "params": {
+        "description": "(params: { model: string | null; automationId: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_automation_privacy",
+      "source": "daemon",
+      "name": "updateAutomationPrivacy",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; privacyLevel: AutomationPrivacyLevel; sessionPrivacy?: SlackAutomationSessionPrivacy | undefined; basePath?: string | undefined; createdBy?: { name: string; email?: string | undefined; avatarUrl?: string | undefined; } | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_automation_prompt",
+      "source": "daemon",
+      "name": "updateAutomationPrompt",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; prompt: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_automation_schedule",
+      "source": "daemon",
+      "name": "updateAutomationSchedule",
+      "summary": "",
+      "params": {
+        "description": "(params: { automationId: string; schedule: string; basePath?: string | undefined; automationDirName?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_cron",
+      "source": "daemon",
+      "name": "updateCron",
+      "summary": "",
+      "params": {
+        "description": "(params: { cronId: string; status?: \"active\" | \"paused\" | undefined; schedule?: { expression: string; recurring: boolean; } | undefined; payload?: { prompt?: string | undefined; } | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_marketplace",
+      "source": "daemon",
+      "name": "updateMarketplace",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; name?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_mcp_config",
+      "source": "daemon",
+      "name": "updateMcpConfig",
+      "summary": "",
+      "params": {
+        "description": "(params: { action: \"add\" | \"disable\" | \"enable\" | \"remove\"; serverNames: string[]; serverConfig?: { disabled: boolean; type: \"stdio\"; command: string; args: string[]; env?: Record<string, string> | undefined; } | { disabled: boolean; type: \"http\"; url: string; headers?: Record<string, string> | undefined; oauth?: { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | { disabled: boolean; type: \"sse\"; url: string; headers?: Record<string, string> | undefined; oauth?: { scopes?: string[] | undefined; resource?: string | false | undefined; authorizationServerIssuer?: string | undefined; clientMetadataUrl?: string | undefined; clientId?: string | undefined; clientSecret?: string | undefined; callbackPort?: number | undefined; tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod | undefined; } | undefined; } | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_plugin",
+      "source": "daemon",
+      "name": "updatePlugin",
+      "summary": "",
+      "params": {
+        "description": "(params: { sessionId: string; pluginId?: string | undefined; scope?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_session_defaults",
+      "source": "daemon",
+      "name": "updateSessionDefaults",
+      "summary": "",
+      "params": {
+        "description": "(params: { interactionMode?: DroidInteractionMode | undefined; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; autonomyLevel?: AutonomyLevel | undefined; specModeModelId?: string | null | undefined; specModeReasoningEffort?: ReasoningEffort | null | undefined; compactionThresholdCheckEnabled?: boolean | undefined; compactionTokenLimit?: number | undefined; compactionTokenLimitPerModel?: Record<string, number> | undefined; compactionModel?: string | undefined; enableOneHourAnthropicCaching?: boolean | undefined; cloudSessionSync?: boolean | undefined; cloudConfigSync?: boolean | undefined; cloudItemPull?: boolean | undefined; routedModelVisibilityEnabled?: boolean | undefined; subagentAutonomyLevel?: \"high\" | \"inherit\" | \"low\" | \"medium\" | \"off\" | null | undefined; specSaveDir?: string | null | undefined; missionOrchestratorModel?: string | null | undefined; missionOrchestratorReasoningEffort?: ReasoningEffort | null | undefined; imageGenerationModel?: string | null | undefined; worktreeDirectory?: string | null | undefined; worktreeAutoDeleteLimit?: number | null | undefined; compactionModelMode?: \"current-model\" | \"factory-default\" | undefined; runInWorktree?: boolean | null | undefined; includeCoAuthoredByDroid?: boolean | undefined; enableDroidShield?: boolean | undefined; hooksDisabled?: boolean | undefined; outputStyle?: string | undefined; acknowledgeLegacyModelId?: string | undefined; subagentModelSettings?: { lightModel?: string | undefined; lightReasoningEffort?: ReasoningEffort | undefined; mediumModel?: string | undefined; mediumReasoningEffort?: ReasoningEffort | undefined; heavyModel?: string | undefined; heavyReasoningEffort?: ReasoningEffort | undefined; } | undefined; subagentInheritTiers?: (\"heavy\" | \"light\" | \"medium\")[] | undefined; missionModelSettings?: { workerModel?: string | undefined; workerReasoningEffort?: ReasoningEffort | undefined; validationWorkerModel?: string | undefined; validationWorkerReasoningEffort?: ReasoningEffort | undefined; skipScrutiny?: boolean | undefined; skipUserTesting?: boolean | undefined; } | undefined; droidCoreModel?: string | null | undefined; modelProviderChoices?: Record<string, string | null> | undefined; }, signal?: AbortSignal | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.update_session_settings",
+      "source": "daemon",
+      "name": "updateSessionSettings",
+      "summary": "",
+      "params": {
+        "description": "(params: Omit<{ sessionId: string; interactionMode?: DroidInteractionMode | undefined; modelId?: string | undefined; reasoningEffort?: ReasoningEffort | undefined; tagPatch?: Record<string, Record<string, string | null> | null> | undefined; tags?: { name: string; metadata?: Record<string, string> | undefined; }[] | undefined; autonomyMode?: AutonomyMode | undefined; autonomyLevel?: AutonomyLevel | undefined; specModeModelId?: string | null | undefined; specModeReasoningEffort?: ReasoningEffort | null | undefined; additionalToolIds?: string[] | undefined; enabledToolIds?: string[] | undefined; disabledToolIds?: string[] | undefined; restrictToolIds?: string[] | undefined; missionSettings?: { workerModel?: string | undefined; workerReasoningEffort?: ReasoningEffort | undefined; validationWorkerModel?: string | undefined; validationWorkerReasoningEffort?: ReasoningEffort | undefined; skipScrutiny?: boolean | undefined; skipUserTesting?: boolean | undefined; } | undefined; compactionThresholdCheckEnabled?: boolean | undefined; compactionTokenLimit?: number | undefined; }, \"tagPatch\" | \"tags\"> & SessionTagsUpdate, requestId?: string | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.upsert_custom_model",
+      "source": "daemon",
+      "name": "upsertCustomModel",
+      "summary": "",
+      "params": {
+        "description": "(params: { model: string; provider: string; displayName?: string | undefined; baseUrl?: string | undefined; apiKey?: string | undefined; maxOutputTokens?: number | null | undefined; noImageSupport?: boolean | null | undefined; rawIndex?: number | undefined; expectedModel?: string | undefined; configuration?: Record<string, unknown> | undefined; preservedSecrets?: ([\"apiKey\"] | [\"apiKeyHelper\"] | [\"extraHeaders\"] | [\"bedrock\", \"awsAuthRefresh\"] | [\"bedrock\", \"awsCredentialExport\"] | [\"extraHeaders\", string])[] | undefined; expectedRevision?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.upsert_model_provider",
+      "source": "daemon",
+      "name": "upsertModelProvider",
+      "summary": "",
+      "params": {
+        "description": "(params: { configuration: Record<string, unknown>; expectedRevision: string; preservedSecrets?: ([\"apiKey\"] | [\"apiKeyHelper\"] | [\"extraHeaders\"] | [\"bedrock\", \"awsAuthRefresh\"] | [\"bedrock\", \"awsCredentialExport\"] | [\"extraHeaders\", string])[] | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.validate_working_directory",
+      "source": "daemon",
+      "name": "validateWorkingDirectory",
+      "summary": "",
+      "params": {
+        "description": "(params: { workingDirectory: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.wait_for_config_pull",
+      "source": "daemon",
+      "name": "waitForConfigPull",
+      "summary": "Await startup configuration independently of the session initialization request.",
+      "params": {
+        "description": "(timeoutMs: number, signal?: AbortSignal | undefined)"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.warmup_cache",
+      "source": "daemon",
+      "name": "warmupCache",
+      "summary": "",
+      "params": {
+        "description": "(_params: { sessionId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.write_shared_folder_file",
+      "source": "daemon",
+      "name": "writeSharedFolderFile",
+      "summary": "",
+      "params": {
+        "description": "(params: { path: string; content: string; sessionId: string; encoding?: \"base64\" | \"utf8\" | undefined; baseFingerprint?: string | undefined; baseModifiedAtMs?: number | undefined; createOnly?: boolean | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.write_terminal_data",
+      "source": "daemon",
+      "name": "writeTerminalData",
+      "summary": "",
+      "params": {
+        "description": "(params: { data: string; sessionId: string; terminalId: string; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "daemon.write_workspace_file_content",
+      "source": "daemon",
+      "name": "writeWorkspaceFileContent",
+      "summary": "",
+      "params": {
+        "description": "(params: { content: string; sessionId: string; filePath: string; cwd?: string | undefined; baseFingerprint?: string | undefined; })"
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.DeleteDeleteAWikiRun",
+      "source": "rest",
+      "name": "DELETE /api/v0/wiki/{wikiRunId}",
+      "summary": "Delete a wiki run",
+      "params": {
+        "type": "object",
+        "properties": {
+          "wikiRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wikiRunId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.GetCheckWhetherTheCallerCanUploadAWikiForARepository",
+      "source": "rest",
+      "name": "GET /api/v0/wiki/upload-access",
+      "summary": "Check whether the caller can upload a wiki for a repository",
+      "params": {
+        "type": "object",
+        "properties": {
+          "repoUrl": {
+            "type": "string",
+            "description": "Repository URL that will be passed to POST /api/v0/wiki"
+          }
+        },
+        "required": [
+          "repoUrl"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetExportAWikiRunAsAZip",
+      "source": "rest",
+      "name": "GET /api/v0/wiki/{wikiRunId}/export",
+      "summary": "Export a wiki run as a zip",
+      "params": {
+        "type": "object",
+        "properties": {
+          "wikiRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wikiRunId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetGetAWikiPage",
+      "source": "rest",
+      "name": "GET /api/v0/wiki/{wikiRunId}/pages/{pageId}",
+      "summary": "Get a wiki page",
+      "params": {
+        "type": "object",
+        "properties": {
+          "wikiRunId": {
+            "type": "string"
+          },
+          "pageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wikiRunId",
+          "pageId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetGetAWikiRun",
+      "source": "rest",
+      "name": "GET /api/v0/wiki/{wikiRunId}",
+      "summary": "Get a wiki run",
+      "params": {
+        "type": "object",
+        "properties": {
+          "wikiRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wikiRunId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetListCiAutomationJobs",
+      "source": "rest",
+      "name": "GET /api/v0/automations/ci/jobs",
+      "summary": "List CI automation jobs",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetListCiEligibleRepositories",
+      "source": "rest",
+      "name": "GET /api/v0/automations/ci/repositories",
+      "summary": "List CI-eligible repositories",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetListCiRepositoryOwners",
+      "source": "rest",
+      "name": "GET /api/v0/automations/ci/repository-owners",
+      "summary": "List CI repository owners",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetListGithubActionsRunsForCiAutomationWorkflows",
+      "source": "rest",
+      "name": "GET /api/v0/automations/ci/runs",
+      "summary": "List GitHub Actions runs for CI automation workflows",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetListTheLatestWikiRuns",
+      "source": "rest",
+      "name": "GET /api/v0/wiki",
+      "summary": "List the latest wiki runs",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetListWikiRunHistoryForARepository",
+      "source": "rest",
+      "name": "GET /api/v0/wiki/history/{repoUrl}",
+      "summary": "List wiki run history for a repository",
+      "params": {
+        "type": "object",
+        "properties": {
+          "repoUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repoUrl"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetScanRepositoriesForCiWorkflows",
+      "source": "rest",
+      "name": "GET /api/v0/automations/ci/scan",
+      "summary": "Scan repositories for CI workflows",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.GetSearchAWikiRun",
+      "source": "rest",
+      "name": "GET /api/v0/wiki/{wikiRunId}/search",
+      "summary": "Search a wiki run",
+      "params": {
+        "type": "object",
+        "properties": {
+          "wikiRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wikiRunId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.PostCreateAWikiRun",
+      "source": "rest",
+      "name": "POST /api/v0/wiki",
+      "summary": "Create a wiki run",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.PostCreateAWikiVideoUploadUrl",
+      "source": "rest",
+      "name": "POST /api/v0/wiki/video-upload-url",
+      "summary": "Create a wiki video upload URL",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.PostExecuteADroidTurn",
+      "source": "rest",
+      "name": "POST /api/v0/droid/execute",
+      "summary": "Execute a Droid turn",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "environment"
+                        ]
+                      },
+                      "environmentId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "templateId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "environmentId"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "template"
+                        ]
+                      },
+                      "templateId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "environmentId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "templateId"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "computer"
+                        ]
+                      },
+                      "computerId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "environmentId": {
+                        "not": {}
+                      },
+                      "templateId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "computerId"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "session"
+                        ]
+                      },
+                      "sessionId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "environmentId": {
+                        "not": {}
+                      },
+                      "templateId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "sessionId"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reasoningEffort": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "dynamic",
+                  "off",
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ]
+              }
+            },
+            "required": [
+              "prompt",
+              "target"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.PostOpenACiWorkflowPrCreateEditDelete",
+      "source": "rest",
+      "name": "POST /api/v0/automations/ci/edit",
+      "summary": "Open a CI workflow PR (create / edit / delete)",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.PostUpdateWikiRunPrivacyLevel",
+      "source": "rest",
+      "name": "POST /api/v0/wiki/{wikiRunId}/privacy",
+      "summary": "Update wiki run privacy level",
+      "params": {
+        "type": "object",
+        "properties": {
+          "wikiRunId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wikiRunId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.answerSessionElicitation",
+      "source": "rest",
+      "name": "POST /api/v0/sessions/{sessionId}/elicitations/{requestId}",
+      "summary": "Answer a pending session elicitation",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session ID"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Pending elicitation ID"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "cancelled": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ],
+                    "description": "Dismiss an AskUser elicitation without answering"
+                  },
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "index": {
+                          "type": "number"
+                        },
+                        "question": {
+                          "type": "string"
+                        },
+                        "answer": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "index",
+                        "question",
+                        "answer"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 0
+                  },
+                  "selectedOption": {
+                    "not": {}
+                  }
+                },
+                "required": [
+                  "cancelled"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "index": {
+                          "type": "number"
+                        },
+                        "question": {
+                          "type": "string"
+                        },
+                        "answer": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "index",
+                        "question",
+                        "answer"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "description": "Answers to an AskUser elicitation: exactly one per question, matched by index"
+                  },
+                  "cancelled": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  },
+                  "selectedOption": {
+                    "not": {}
+                  }
+                },
+                "required": [
+                  "answers"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "selectedOption": {
+                    "type": "string",
+                    "enum": [
+                      "proceed_once",
+                      "proceed_always",
+                      "proceed_always_file",
+                      "proceed_auto_run",
+                      "proceed_auto_run_low",
+                      "proceed_auto_run_medium",
+                      "proceed_auto_run_high",
+                      "proceed_new_session",
+                      "proceed_new_session_low",
+                      "proceed_new_session_medium",
+                      "proceed_new_session_high",
+                      "proceed_edit",
+                      "proceed_always_tools",
+                      "proceed_always_server",
+                      "proceed_report_false_positive",
+                      "cancel"
+                    ],
+                    "description": "One of the permission elicitation's options[].value"
+                  },
+                  "comment": {
+                    "type": "string",
+                    "description": "Note passed to the agent when approving a spec. Rejections and other prompts drop it; after cancel, send feedback as a message"
+                  },
+                  "answers": {
+                    "not": {}
+                  },
+                  "cancelled": {
+                    "not": {}
+                  }
+                },
+                "required": [
+                  "selectedOption"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "sessionId",
+          "requestId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.bulkCreateComputers",
+      "source": "rest",
+      "name": "POST /api/v0/computers/bulk",
+      "summary": "Create computers in bulk",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "quantity": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20,
+                "description": "Number of identical computers to create."
+              },
+              "namePrefix": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 58,
+                "pattern": "^[a-z]([a-z0-9-]*[a-z0-9])?$"
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "repos": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri",
+                  "maxLength": 2048
+                },
+                "maxItems": 200
+              },
+              "autoInstallDeps": {
+                "type": "boolean"
+              },
+              "serviceAccountId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "quantity",
+              "namePrefix"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.cancelEnvironmentBuild",
+      "source": "rest",
+      "name": "POST /api/v0/environments/{environmentId}/builds/{buildId}/cancel",
+      "summary": "Cancel a Factory Environment Build",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "buildId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "environmentId",
+          "buildId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.completeComputerFileUpload",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/files/{fileName}/complete-upload",
+      "summary": "Complete a computer file upload",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^(?=.*\\S)(?!.*[\\\\/])(?!.*\\.\\.)(?!.*[\\x00-\\x1F\\x7F]).+$",
+            "description": "Workspace file name"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "transferId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "sessionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "destPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 510,
+                "pattern": "^(?=.*\\S)(?![\\\\/])(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?($|\\/))(?!.*\\.\\.)(?!.*[\\x00-\\x1F\\x7F]).+$"
+              }
+            },
+            "required": [
+              "transferId",
+              "sessionId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "computerId",
+          "fileName"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createComputer",
+      "source": "rest",
+      "name": "POST /api/v0/computers",
+      "summary": "Create a computer",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "hostId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "remoteUser": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63
+              },
+              "repos": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri",
+                  "maxLength": 2048
+                },
+                "maxItems": 200
+              },
+              "autoInstallDeps": {
+                "type": "boolean"
+              },
+              "serviceAccountId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "environment"
+                        ]
+                      },
+                      "environmentId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Factory Environment ID used to create this Computer."
+                      },
+                      "isListed": {
+                        "type": "boolean"
+                      },
+                      "keepWhenIdle": {
+                        "type": "boolean"
+                      },
+                      "softwareFactoryDraft": {
+                        "type": "object",
+                        "properties": {
+                          "workstreamId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "creationSessionId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "firstTurnId": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "required": [
+                          "workstreamId",
+                          "creationSessionId",
+                          "firstTurnId"
+                        ],
+                        "additionalProperties": true
+                      },
+                      "templateId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "environmentId",
+                      "isListed"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "template"
+                        ]
+                      },
+                      "templateId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Legacy compatibility field for the Factory Environment ID. Prefer the environment source variant and its environmentId field."
+                      },
+                      "isListed": {
+                        "type": "boolean"
+                      },
+                      "keepWhenIdle": {
+                        "type": "boolean"
+                      },
+                      "softwareFactoryDraft": {
+                        "type": "object",
+                        "properties": {
+                          "workstreamId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "creationSessionId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "firstTurnId": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "required": [
+                          "workstreamId",
+                          "creationSessionId",
+                          "firstTurnId"
+                        ],
+                        "additionalProperties": true
+                      },
+                      "environmentId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "templateId",
+                      "isListed"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "execution-template"
+                        ]
+                      },
+                      "templateId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Legacy compatibility field for the Factory Environment ID. Prefer the environment source variant and its environmentId field."
+                      },
+                      "isListed": {
+                        "type": "boolean"
+                      },
+                      "keepWhenIdle": {
+                        "type": "boolean"
+                      },
+                      "softwareFactoryDraft": {
+                        "type": "object",
+                        "properties": {
+                          "workstreamId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "creationSessionId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "firstTurnId": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "required": [
+                          "workstreamId",
+                          "creationSessionId",
+                          "firstTurnId"
+                        ],
+                        "additionalProperties": true
+                      },
+                      "environmentId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sourceComputerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "templateId",
+                      "isListed"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "computer"
+                        ]
+                      },
+                      "sourceComputerId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "environmentId": {
+                        "not": {}
+                      },
+                      "templateId": {
+                        "not": {}
+                      },
+                      "executionTemplateId": {
+                        "not": {}
+                      },
+                      "computerId": {
+                        "not": {}
+                      },
+                      "sessionId": {
+                        "not": {}
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "sourceComputerId"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createComputerFileDownload",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/files/{fileName}/create-download",
+      "summary": "Create a computer file download",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^(?=.*\\S)(?!.*[\\\\/])(?!.*\\.\\.)(?!.*[\\x00-\\x1F\\x7F]).+$",
+            "description": "Workspace file name"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "cwd": {
+                "type": "string"
+              },
+              "filePath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1020,
+                "pattern": "^(?=.*\\S)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.?($|\\/))(?!.*\\.\\.)(?!.*[\\x00-\\x1F\\x7F]).+$"
+              },
+              "contentType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+\\/[!#$%&'*+.^_`|~0-9A-Za-z-]+(?: *; *[!#$%&'*+.^_`|~0-9A-Za-z-]+=(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+|\"[\\x20-\\x7E]*\"))*$"
+              }
+            },
+            "required": [
+              "sessionId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "computerId",
+          "fileName"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createComputerFileUpload",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/files/{fileName}/create-upload",
+      "summary": "Create a computer file upload",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^(?=.*\\S)(?!.*[\\\\/])(?!.*\\.\\.)(?!.*[\\x00-\\x1F\\x7F]).+$",
+            "description": "Workspace file name"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483648
+              },
+              "contentType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+\\/[!#$%&'*+.^_`|~0-9A-Za-z-]+(?: *; *[!#$%&'*+.^_`|~0-9A-Za-z-]+=(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+|\"[\\x20-\\x7E]*\"))*$"
+              }
+            },
+            "required": [
+              "sizeBytes",
+              "contentType"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "computerId",
+          "fileName"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createEnvironment",
+      "source": "rest",
+      "name": "POST /api/v0/environments",
+      "summary": "Create a Factory Environment",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63,
+                    "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "organization"
+                    ],
+                    "default": "user"
+                  },
+                  "repositories": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "maxLength": 2048
+                        },
+                        "script": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "script"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 200
+                  },
+                  "setupScript": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "makeOrganizationDefault": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "repositories"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63,
+                    "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "organization"
+                    ],
+                    "default": "user"
+                  },
+                  "repositories": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "maxLength": 2048
+                        },
+                        "script": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "script"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 200
+                  },
+                  "setupScript": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "makeOrganizationDefault": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "repositories"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createServiceAccount",
+      "source": "rest",
+      "name": "POST /api/v0/service-accounts",
+      "summary": "Create a service account",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^(?=.{1,64}$)[a-zA-Z0-9_-]+(?:\\.[a-zA-Z0-9_-]+)*$"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Service account description. Must contain well-formed Unicode and no U+0000 characters."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "inactive"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createServiceAccountApiKey",
+      "source": "rest",
+      "name": "POST /api/v0/service-accounts/{serviceAccountId}/api-keys",
+      "summary": "Create a service account API key",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "expiresAt": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "serviceAccountId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.createSession",
+      "source": "rest",
+      "name": "POST /api/v0/sessions",
+      "summary": "Create a session",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "computerId": {
+                "type": "string",
+                "description": "Computer ID to connect"
+              },
+              "cwd": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Working directory for the session on the computer."
+              },
+              "sessionSettings": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "reasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "dynamic",
+                      "off",
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  },
+                  "interactionMode": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "spec",
+                      "agi",
+                      "mission"
+                    ]
+                  },
+                  "autonomyLevel": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "low",
+                      "medium",
+                      "high"
+                    ]
+                  },
+                  "autonomyMode": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "spec",
+                      "auto-low",
+                      "auto-medium",
+                      "auto-high"
+                    ],
+                    "description": "Deprecated: use interactionMode + autonomyLevel instead."
+                  },
+                  "specModeModel": {
+                    "type": "string"
+                  },
+                  "specModeReasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "dynamic",
+                      "off",
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  },
+                  "providerLock": {
+                    "type": "string",
+                    "enum": [
+                      "anthropic",
+                      "openai",
+                      "generic-chat-completion-api",
+                      "factory",
+                      "google",
+                      "xai",
+                      "bedrock-converse"
+                    ]
+                  },
+                  "providerLockTimestamp": {
+                    "type": "string"
+                  },
+                  "apiProviderLock": {
+                    "type": "string",
+                    "enum": [
+                      "bedrock",
+                      "anthropic",
+                      "vertex_anthropic",
+                      "bedrock_anthropic",
+                      "bedrock_converse",
+                      "bedrock_openai",
+                      "openai",
+                      "azure_openai",
+                      "azure_anthropic",
+                      "google",
+                      "xai",
+                      "mistral",
+                      "fireworks",
+                      "baseten",
+                      "together",
+                      "snowflake",
+                      "databricks"
+                    ]
+                  },
+                  "archivedAt": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "worktree": {
+                    "type": "object",
+                    "properties": {
+                      "branch": {
+                        "type": "string"
+                      },
+                      "lifecycle": {
+                        "type": "string",
+                        "enum": [
+                          "ephemeral",
+                          "persistent"
+                        ]
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "parentWorktreePath": {
+                        "type": "string"
+                      },
+                      "removedAt": {
+                        "type": "string"
+                      },
+                      "repoRoot": {
+                        "type": "string"
+                      },
+                      "setupProfileId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "repoRoot"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "enabledToolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "disabledToolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "restrictToolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "toolExecutionMode": {
+                    "type": "string",
+                    "enum": [
+                      "direct_only",
+                      "script_only"
+                    ]
+                  },
+                  "allowSubagentsInScripts": {
+                    "type": "boolean"
+                  },
+                  "systemPrompt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "preset"
+                            ]
+                          },
+                          "preset": {
+                            "type": "string",
+                            "enum": [
+                              "droid"
+                            ]
+                          },
+                          "append": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "preset",
+                          "append"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "compactionModel": {
+                    "type": "string"
+                  },
+                  "compactionThresholdCheckEnabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "computerId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.deleteComputer",
+      "source": "rest",
+      "name": "DELETE /api/v0/computers/{computerId}",
+      "summary": "Delete a computer",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.deleteEnvironment",
+      "source": "rest",
+      "name": "DELETE /api/v0/environments/{environmentId}",
+      "summary": "Delete a Factory Environment",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "environmentId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.deleteServiceAccount",
+      "source": "rest",
+      "name": "DELETE /api/v0/service-accounts/{serviceAccountId}",
+      "summary": "Delete a service account",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          }
+        },
+        "required": [
+          "serviceAccountId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.deleteSession",
+      "source": "rest",
+      "name": "DELETE /api/v0/sessions/{sessionId}",
+      "summary": "Delete a session",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session ID"
+          },
+          "computerId": {
+            "type": "string",
+            "description": "Computer ID to query directly"
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.ensureDefaultEnvironment",
+      "source": "rest",
+      "name": "POST /api/v0/environments/default",
+      "summary": "Provision the organization default Factory Environment if none exists",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getComputer",
+      "source": "rest",
+      "name": "GET /api/v0/computers/{computerId}",
+      "summary": "Get a computer",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "sharedSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A shared session the caller is a member of. Grants access to the service-account computer that runs it."
+          },
+          "includeProvisioningSteps": {
+            "type": "string",
+            "description": "Set to \"true\" to include provisioning steps in the response."
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getComputerByName",
+      "source": "rest",
+      "name": "GET /api/v0/computers/name/{name}",
+      "summary": "Get a computer by name",
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "description": "Computer name"
+          },
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Look up a service account’s Computers (requires human Manager+)."
+          },
+          "includeProvisioningSteps": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include provisioning step details."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getComputerMetrics",
+      "source": "rest",
+      "name": "GET /api/v0/computers/{computerId}/metrics",
+      "summary": "Get computer metrics",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of time range (ISO 8601)"
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getEnvironment",
+      "source": "rest",
+      "name": "GET /api/v0/environments/{environmentId}",
+      "summary": "Get a Factory Environment",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "environmentId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getEnvironmentBuildAttemptDiagnostics",
+      "source": "rest",
+      "name": "GET /api/v0/environments/{environmentId}/builds/{buildId}/diagnostics",
+      "summary": "Get Factory Environment Build Diagnostics",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "buildId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "environmentId",
+          "buildId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getEnvironmentBuildDiagnostics",
+      "source": "rest",
+      "name": "GET /api/v0/environments/{environmentId}/build-diagnostics",
+      "summary": "Get Factory Environment Build Diagnostics",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "environmentId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getGlobalLimit",
+      "source": "rest",
+      "name": "GET /api/v0/organization/usage/limits/global",
+      "summary": "Get global user credits limit",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getGroupLimits",
+      "source": "rest",
+      "name": "GET /api/v0/organization/usage/limits/groups",
+      "summary": "Get group credits limits",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getMessage",
+      "source": "rest",
+      "name": "GET /api/v0/sessions/{sessionId}/messages/{messageId}",
+      "summary": "Get a message by ID",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session ID"
+          },
+          "messageId": {
+            "type": "string",
+            "description": "Message ID"
+          },
+          "computerId": {
+            "type": "string",
+            "description": "Computer ID to query directly"
+          }
+        },
+        "required": [
+          "sessionId",
+          "messageId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getMessages",
+      "source": "rest",
+      "name": "GET /api/v0/sessions/{sessionId}/messages",
+      "summary": "Get session messages",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "string",
+            "default": "20",
+            "description": "Maximum number of items to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for pagination"
+          },
+          "computerId": {
+            "type": "string",
+            "description": "Computer ID to query directly"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "tool"
+            ],
+            "description": "Filter messages by role"
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getServiceAccount",
+      "source": "rest",
+      "name": "GET /api/v0/service-accounts/{serviceAccountId}",
+      "summary": "Get a service account",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          }
+        },
+        "required": [
+          "serviceAccountId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getSession",
+      "source": "rest",
+      "name": "GET /api/v0/sessions/{sessionId}",
+      "summary": "Get a session",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session ID"
+          },
+          "computerId": {
+            "type": "string",
+            "description": "Computer ID to query directly"
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getSharedUserLimits",
+      "source": "rest",
+      "name": "GET /api/v0/organization/usage/limits/shared",
+      "summary": "Get shared monthly user limits",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.getUserLimits",
+      "source": "rest",
+      "name": "GET /api/v0/organization/usage/limits/users",
+      "summary": "Get user credits limits",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.interruptSession",
+      "source": "rest",
+      "name": "POST /api/v0/sessions/{sessionId}/interrupt",
+      "summary": "Interrupt a session",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.inviteUser",
+      "source": "rest",
+      "name": "POST /api/v0/organization/users/invite",
+      "summary": "Invite or update a user",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "format": "email",
+                "description": "Email address to invite"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "manager",
+                  "owner"
+                ],
+                "default": "user",
+                "description": "Role to assign (defaults to user)"
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listAvailableComputerProviders",
+      "source": "rest",
+      "name": "GET /api/v0/computers/providers",
+      "summary": "List available computer providers",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listChildSessions",
+      "source": "rest",
+      "name": "GET /api/v0/sessions/{sessionId}/children",
+      "summary": "List a session's child sessions",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The parent session id"
+          },
+          "includeArtifacts": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include each child session’s integration artifacts (pull requests, issues, pages)."
+          },
+          "includeAttention": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include what each child session is waiting on (a permission prompt or a question)."
+          },
+          "includeUsage": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include each child session’s token usage and Factory Standard Credits, rolled up with its Task subagents."
+          },
+          "includeArchived": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include archived child sessions, such as a mission agent whose computer was reclaimed, each with its archivedAt. The response sets archivedIncluded when it does."
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listComputers",
+      "source": "rest",
+      "name": "GET /api/v0/computers",
+      "summary": "List computers",
+      "params": {
+        "type": "object",
+        "properties": {
+          "hostId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Look up a service account’s Computers (requires human Manager+)."
+          },
+          "includeProvisioningSteps": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include provisioning step details."
+          },
+          "includeUnlisted": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Whether to include Computers hidden from normal listings."
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listEnterpriseControlChangeHistory",
+      "source": "rest",
+      "name": "GET /api/v0/organization/enterprise-controls/history",
+      "summary": "List enterprise control change history",
+      "params": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "string",
+            "default": "20",
+            "description": "Maximum number of items to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for pagination"
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listEnvironmentBuildStatuses",
+      "source": "rest",
+      "name": "GET /api/v0/environments/build-statuses",
+      "summary": "List current Factory Environment build statuses",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "environmentIds"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listEnvironmentSources",
+      "source": "rest",
+      "name": "GET /api/v0/environments/source-options",
+      "summary": "List available Factory Environment sources",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listEnvironments",
+      "source": "rest",
+      "name": "GET /api/v0/environments",
+      "summary": "List Factory Environments visible to the caller",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listOrganizationAuditEvents",
+      "source": "rest",
+      "name": "GET /api/v0/organization/audit",
+      "summary": "List organization audit events",
+      "params": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Opaque nextCursor from the previous page. Keep all filters unchanged."
+          },
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "user_lifecycle_change",
+              "user_limit_change",
+              "membership_change",
+              "api_key_lifecycle_change",
+              "service_account_change",
+              "integration_change",
+              "organization_lifecycle_change",
+              "managed_settings_change",
+              "compliance_settings_change",
+              "organization_security_settings_change",
+              "analytics_settings_change",
+              "connector_availability_change",
+              "compute_deployment_change",
+              "computer_secrets_change",
+              "computer_provisioning_change",
+              "organization_monthly_usage_settings_change",
+              "delegation_activity",
+              "remote_delegation_config_change",
+              "agent_readiness_report_change",
+              "agent_readiness_criterion_change",
+              "sandbox_environment_change",
+              "context_space_member_change",
+              "workstream_ownership_transfer",
+              "computer_owner_transfer",
+              "automation_owner_transfer",
+              "workstream_member_invite",
+              "workstream_member_remove",
+              "workstream_member_leave",
+              "provider_credential_change",
+              "session_created"
+            ],
+            "description": "Filter by one audit event type."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "user"
+            ],
+            "description": "Filter by payload scope. With eventType, only user_limit_change and integration_change support this filter."
+          },
+          "actorId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filter by actor principal ID."
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive creation-time lower bound (ISO 8601 UTC)."
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive creation-time upper bound (ISO 8601 UTC)."
+          },
+          "organization": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Root owners only: all merges the in-region organization subtree; an organization ID selects one organization in that subtree. Omit for the active organization."
+          },
+          "limit": {
+            "type": "string",
+            "pattern": "^[0-9]+$",
+            "description": "Maximum events per page, an integer from 1 to 100. Defaults to 25."
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listOrganizationComputerSecrets",
+      "source": "rest",
+      "name": "GET /api/v0/organization/computer-secrets",
+      "summary": "List organization computer secret names",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listOrganizationUsers",
+      "source": "rest",
+      "name": "GET /api/v0/organization/users",
+      "summary": "List organization users",
+      "params": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "string",
+            "default": "20",
+            "description": "Maximum number of items to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for pagination"
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listServiceAccountApiKeys",
+      "source": "rest",
+      "name": "GET /api/v0/service-accounts/{serviceAccountId}/api-keys",
+      "summary": "List service account API keys",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          }
+        },
+        "required": [
+          "serviceAccountId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listServiceAccounts",
+      "source": "rest",
+      "name": "GET /api/v0/service-accounts",
+      "summary": "List service accounts",
+      "params": {
+        "type": "object",
+        "properties": {}
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listSessionElicitations",
+      "source": "rest",
+      "name": "GET /api/v0/sessions/{sessionId}/elicitations",
+      "summary": "List pending session elicitations",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session ID"
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.listSessions",
+      "source": "rest",
+      "name": "GET /api/v0/sessions",
+      "summary": "List sessions",
+      "params": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "string",
+            "default": "20",
+            "description": "Maximum number of items to return (1-100)"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Cursor for pagination"
+          },
+          "computerId": {
+            "type": "string",
+            "description": "Computer ID to query directly"
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.postMessage",
+      "source": "rest",
+      "name": "POST /api/v0/sessions/{sessionId}/messages",
+      "summary": "Add a message to a session",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Message text content"
+              },
+              "images": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "base64"
+                      ]
+                    },
+                    "data": {
+                      "type": "string"
+                    },
+                    "mediaType": {
+                      "type": "string",
+                      "enum": [
+                        "image/jpeg",
+                        "image/png",
+                        "image/gif",
+                        "image/webp"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "data",
+                    "mediaType"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Optional base64-encoded images"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "base64"
+                          ]
+                        },
+                        "mediaType": {
+                          "type": "string",
+                          "enum": [
+                            "application/pdf"
+                          ]
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "parsedData": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "mediaType",
+                        "data"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text"
+                          ]
+                        },
+                        "mediaType": {
+                          "type": "string",
+                          "enum": [
+                            "text/plain"
+                          ]
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "mime": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "mediaType",
+                        "data"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "description": "Optional file attachments (PDFs, text files)"
+              },
+              "computerId": {
+                "type": "string",
+                "description": "Computer ID to route the message to; falls back to the session.computerId if omitted"
+              },
+              "sender": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "orchestrator"
+                        ]
+                      },
+                      "sessionId": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "sessionId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "agent"
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                        "pattern": "^\\P{Cc}+$"
+                      },
+                      "sessionId": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "sessionId"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "The mission session sending this message (the orchestrator, or an agent by name), stored on the message so clients can attribute it and the model sees a [From …] header. Omit for human messages."
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.recordComputerActivity",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/activity",
+      "summary": "Record managed computer activity",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "sharedSessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A shared session the caller is a member of. Grants access to the service-account computer that runs it."
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.refreshComputer",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/refresh",
+      "summary": "Refresh a computer",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.removeUser",
+      "source": "rest",
+      "name": "DELETE /api/v0/organization/users",
+      "summary": "Remove a user",
+      "params": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address of the user to remove"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.restartComputer",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/restart",
+      "summary": "Restart a managed computer",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "body": {
+            "anyOf": [
+              {
+                "not": {}
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "resume",
+                      "reboot"
+                    ],
+                    "default": "resume"
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.retryEnvironmentBuild",
+      "source": "rest",
+      "name": "POST /api/v0/environments/{environmentId}/builds",
+      "summary": "Retry a Factory Environment Build",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "environmentId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.retryInstallDeps",
+      "source": "rest",
+      "name": "POST /api/v0/computers/{computerId}/install-deps",
+      "summary": "Retry the install-dependencies step",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.revokeServiceAccountApiKey",
+      "source": "rest",
+      "name": "POST /api/v0/service-accounts/{serviceAccountId}/api-keys/{keyId}/revoke",
+      "summary": "Revoke a service account API key",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          },
+          "keyId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "API key ID"
+          }
+        },
+        "required": [
+          "serviceAccountId",
+          "keyId"
+        ]
+      },
+      "destructive": true
+    },
+    {
+      "id": "rest.rotateServiceAccountApiKey",
+      "source": "rest",
+      "name": "POST /api/v0/service-accounts/{serviceAccountId}/api-keys/{keyId}/rotate",
+      "summary": "Rotate a service account API key",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          },
+          "keyId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "API key ID"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "expiresAt": {
+                "type": "integer",
+                "exclusiveMinimum": true,
+                "minimum": 0
+              },
+              "gracePeriodMinutes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10,
+                "description": "How long (0-10 minutes) the rotated-from key stays valid after rotation. Omit or 0 revokes it immediately. Rejected with a 400 if the key would expire before the grace window ends (the grace period never extends a key lifetime)."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "serviceAccountId",
+          "keyId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.setDefaultEnvironment",
+      "source": "rest",
+      "name": "PUT /api/v0/environments/default",
+      "summary": "Set the organization default Factory Environment",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "environmentId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "environmentId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.setGlobalLimit",
+      "source": "rest",
+      "name": "PUT /api/v0/organization/usage/limits/global",
+      "summary": "Set global user credits limit",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": 1000000,
+                "nullable": true,
+                "description": "Global per-user credits limit (minimum 1,000,000). Pass null to remove the global limit."
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.setGroupLimits",
+      "source": "rest",
+      "name": "PUT /api/v0/organization/usage/limits/groups",
+      "summary": "Set group credits limits",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "groupId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,256}$",
+                      "description": "Stable WorkOS directory group id. Rename-proof: renaming the group in your identity provider never changes this id, so the mapping survives."
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1000000,
+                      "nullable": true,
+                      "description": "Credits limit to set for members of this group (minimum 1,000,000). Pass null to unmap the group (members fall back to the global limit)."
+                    }
+                  },
+                  "required": [
+                    "groupId",
+                    "limit"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100,
+                "description": "Array of group limit entries (up to 100). Each maps a synced directory group to a per-member credits limit."
+              }
+            },
+            "required": [
+              "groups"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.setSharedUserLimits",
+      "source": "rest",
+      "name": "PUT /api/v0/organization/usage/limits/shared",
+      "summary": "Set shared monthly user limits",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "principals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "principalId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "principalId",
+                    "limit"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100
+              }
+            },
+            "required": [
+              "principals"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.setUserLimits",
+      "source": "rest",
+      "name": "PUT /api/v0/organization/usage/limits/users",
+      "summary": "Set user credits limits",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "users": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "User email address"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1000000,
+                      "nullable": true,
+                      "description": "Credits limit to set for this user (minimum 1,000,000). Pass null to remove the individual override."
+                    }
+                  },
+                  "required": [
+                    "email",
+                    "limit"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100,
+                "description": "Array of user limit entries (up to 100). Each identifies a user by email."
+              }
+            },
+            "required": [
+              "users"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.updateComputer",
+      "source": "rest",
+      "name": "PATCH /api/v0/computers/{computerId}",
+      "summary": "Update a computer",
+      "params": {
+        "type": "object",
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Computer ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63
+              },
+              "hostId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "computerIdentity": {
+                "type": "object",
+                "properties": {
+                  "publicKey": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9+/]{43}=$"
+                  },
+                  "keyId": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  },
+                  "algorithm": {
+                    "type": "string",
+                    "enum": [
+                      "X25519"
+                    ]
+                  }
+                },
+                "required": [
+                  "publicKey",
+                  "keyId",
+                  "algorithm"
+                ],
+                "additionalProperties": false
+              },
+              "remoteUser": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "computerId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.updateEnvironment",
+      "source": "rest",
+      "name": "PATCH /api/v0/environments/{environmentId}",
+      "summary": "Update a Factory Environment",
+      "params": {
+        "type": "object",
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Factory Environment ID. Must not contain \"/\" and must not be \".\" or \"..\"."
+          },
+          "body": {
+            "allOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63,
+                    "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+                  },
+                  "repositories": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "maxLength": 2048
+                        },
+                        "script": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "script"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 200
+                  },
+                  "setupScript": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "nullable": true
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63,
+                    "pattern": "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+                  },
+                  "repositories": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "maxLength": 2048
+                        },
+                        "script": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "script"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 200
+                  },
+                  "setupScript": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "nullable": true
+                  },
+                  "sourceId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "environmentId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.updateOrganizationComputerSecrets",
+      "source": "rest",
+      "name": "PATCH /api/v0/organization/computer-secrets",
+      "summary": "Update organization computer secrets",
+      "params": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "createOnly": {
+                "type": "boolean"
+              },
+              "upsert": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[A-Z_][A-Z0-9_]*$",
+                      "maxLength": 128,
+                      "description": "Uppercase POSIX environment variable name."
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 100
+              },
+              "delete": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z_][A-Z0-9_]*$",
+                  "maxLength": 128
+                },
+                "maxItems": 100
+              }
+            },
+            "required": [
+              "upsert",
+              "delete"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.updateServiceAccount",
+      "source": "rest",
+      "name": "PATCH /api/v0/service-accounts/{serviceAccountId}",
+      "summary": "Update a service account",
+      "params": {
+        "type": "object",
+        "properties": {
+          "serviceAccountId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service account ID"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Service account description. Must contain well-formed Unicode and no U+0000 characters."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "inactive"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "serviceAccountId"
+        ]
+      },
+      "destructive": false
+    },
+    {
+      "id": "rest.updateSession",
+      "source": "rest",
+      "name": "PATCH /api/v0/sessions/{sessionId}",
+      "summary": "Update a session",
+      "params": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session ID"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "sessionSettings": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "reasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "dynamic",
+                      "off",
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  },
+                  "interactionMode": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "spec",
+                      "agi",
+                      "mission"
+                    ]
+                  },
+                  "autonomyLevel": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "low",
+                      "medium",
+                      "high"
+                    ]
+                  },
+                  "autonomyMode": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "spec",
+                      "auto-low",
+                      "auto-medium",
+                      "auto-high"
+                    ],
+                    "description": "Deprecated: use interactionMode + autonomyLevel instead."
+                  },
+                  "specModeModel": {
+                    "type": "string"
+                  },
+                  "specModeReasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "dynamic",
+                      "off",
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh",
+                      "max"
+                    ]
+                  },
+                  "providerLock": {
+                    "type": "string",
+                    "enum": [
+                      "anthropic",
+                      "openai",
+                      "generic-chat-completion-api",
+                      "factory",
+                      "google",
+                      "xai",
+                      "bedrock-converse"
+                    ]
+                  },
+                  "providerLockTimestamp": {
+                    "type": "string"
+                  },
+                  "apiProviderLock": {
+                    "type": "string",
+                    "enum": [
+                      "bedrock",
+                      "anthropic",
+                      "vertex_anthropic",
+                      "bedrock_anthropic",
+                      "bedrock_converse",
+                      "bedrock_openai",
+                      "openai",
+                      "azure_openai",
+                      "azure_anthropic",
+                      "google",
+                      "xai",
+                      "mistral",
+                      "fireworks",
+                      "baseten",
+                      "together",
+                      "snowflake",
+                      "databricks"
+                    ]
+                  },
+                  "archivedAt": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "worktree": {
+                    "type": "object",
+                    "properties": {
+                      "branch": {
+                        "type": "string"
+                      },
+                      "lifecycle": {
+                        "type": "string",
+                        "enum": [
+                          "ephemeral",
+                          "persistent"
+                        ]
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "parentWorktreePath": {
+                        "type": "string"
+                      },
+                      "removedAt": {
+                        "type": "string"
+                      },
+                      "repoRoot": {
+                        "type": "string"
+                      },
+                      "setupProfileId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "repoRoot"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "enabledToolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "disabledToolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "restrictToolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "compactionModel": {
+                    "type": "string"
+                  },
+                  "compactionThresholdCheckEnabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "destructive": false
+    }
+  ]
+}
