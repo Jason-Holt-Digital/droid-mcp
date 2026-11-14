@@ -192,7 +192,7 @@ Runs one operation from `droid_ops`.
   2. With `DROID_MCP_MAX_AUTONOMY` at `off` or `low`, only operations marked `readOnly` run.
   3. A destructive operation runs only when the server was started with `DROID_MCP_ALLOW_DESTRUCTIVE=1`. The agent cannot turn this on.
   4. On such a server, a destructive operation also needs `confirm: true`, passed after the user agreed.
-  5. An `autonomyLevel`, `subagentAutonomyLevel` or `autonomyMode` anywhere in `params` must be within `DROID_MCP_MAX_AUTONOMY`, as for `droid_start` and `droid_send`. `subagentAutonomyLevel: 'inherit'` is allowed only at `high`.
+  5. An `autonomyLevel`, `subagentAutonomyLevel` or `autonomyMode` anywhere in `params` must be within `DROID_MCP_MAX_AUTONOMY`, as for `droid_start` and `droid_send`. `subagentAutonomyLevel: 'inherit'` is allowed only at `high`. `skipPermissionsUnsafe` is refused at every cap.
   6. `params` must match the schema.
 - `readOnly` and `destructive` come from the catalog, not from the method name.
 - Returns `id` and `result`. A result over 8 KB comes back as `truncated: true`, `totalBytes` and a `preview` of the JSON instead.

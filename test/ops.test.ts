@@ -500,3 +500,23 @@ test("subagentAutonomyLevel 'inherit' is allowed at the high cap and refused bel
   }
   assert.deepEqual(seen, [{ subagentAutonomyLevel: 'inherit' }]);
 });
+
+test('droid_call refuses skipPermissionsUnsafe at any cap, and allows it set to false', async () => {
+  const seen: string[] = [];
+  const c = await connect({ env: { DROID_MCP_MAX_AUTONOMY: 'high', ...ALLOW }, daemon: async (m) => seen.push(m) });
+  try {
+    for (const id of ['daemon.initialize_session', 'daemon.load_session']) {
+      const res = await c.call('droid_call', { id, params: { sessionId: 's', skipPermissionsUnsafe: true }, confirm: true });
+      assert.deepEqual(res.json, {
+        code: 'invalid',
+        message: 'params.skipPermissionsUnsafe is not allowed: droid-mcp never skips permission checks',
+        fix: 'Leave skipPermissionsUnsafe out, and set autonomy within the cap instead.',
+      });
+    }
+    assert.deepEqual(seen, []);
+    assert.equal((await c.call('droid_call', { id: 'daemon.load_session', params: { sessionId: 's', skipPermissionsUnsafe: false } })).isError, false);
+    assert.deepEqual(seen, ['loadSession']);
+  } finally {
+    await c.close();
+  }
+});

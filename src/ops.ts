@@ -64,6 +64,14 @@ export function checkAutonomy(value: unknown, cap: Autonomy, path = 'params'): v
   if (value === null || typeof value !== 'object') return;
   for (const [k, v] of Object.entries(value)) {
     const where = Array.isArray(value) ? `${path}[${k}]` : `${path}.${k}`;
+    // Turns permission checks off altogether; droid-mcp never allows it, whatever the cap.
+    if (k === 'skipPermissionsUnsafe' && v !== false && v !== undefined && v !== null) {
+      throw new Refused(
+        'invalid',
+        `${where} is not allowed: droid-mcp never skips permission checks`,
+        'Leave skipPermissionsUnsafe out, and set autonomy within the cap instead.',
+      );
+    }
     // A subagent that inherits gets its session's level, which can exceed a lower cap; at 'high' nothing can.
     const inherits = k === 'subagentAutonomyLevel' && v === 'inherit' && cap === 'high';
     const level = inherits ? undefined : AUTONOMY_KEYS.has(k) ? v : k === 'autonomyMode' && typeof v === 'string' ? (MODE_LEVEL.get(v) ?? v) : undefined;
