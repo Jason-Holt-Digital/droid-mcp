@@ -57,13 +57,13 @@ export function pickComputer(list: Computer[], nameOrId: string): Computer {
   throw new Refused(
     'not_found',
     `no computer named ${nameOrId}; known computers: ${list.map((c) => c.name).join(', ') || 'none'}`,
-    'Pass a computer name or id from droid_computers.',
+    'Pass a computer name or id from droid_status.',
   );
 }
 
 export function offlineError(c: Computer): Refused {
   const seen = c.lastSeenAt === undefined ? 'never seen' : `daemon last seen ${isoSeconds(c.lastSeenAt)}`;
-  return new Refused('computer_offline', `computer ${c.name} is offline (${seen})`, 'Start its daemon, or pick another computer from droid_computers.');
+  return new Refused('computer_offline', `computer ${c.name} is offline (${seen})`, 'Start its daemon, or pick another computer from droid_status.');
 }
 
 export class Computers {

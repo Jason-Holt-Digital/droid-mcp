@@ -2,7 +2,7 @@
 
 An MCP server that lets any MCP client (Droid, Claude Code, Cursor, other agents) find, start, steer and read Factory Droid sessions on every Droid computer you have, including mission/workstream orchestrators and their agents. It reads local session files, runs its own sessions through `@factory/droid-sdk`, and reaches sessions on every other online Droid computer (your own computers and Factory cloud computers) through the Factory REST API when an API key is available.
 
-Droids can also call back. In HTTP mode, a hook on each computer posts an event to the server's `POST /events` when a session finishes, asks a question, needs a permission or ends. The server keeps recent events for `droid_events` and forwards events from subscribed sessions to a webhook that wakes your agent.
+Droids can also call back. In HTTP mode, a hook on each computer posts an event to the server's `POST /events` when a session finishes, asks a question, needs a permission or ends. The server keeps recent events for `droid_inbox` and forwards events from subscribed sessions to a webhook that wakes your agent.
 
 Status: early (0.1.0). Tested on macOS with droid CLI 1.10.0, `@factory/droid-sdk` 0.11.0 and Node 26 (`engines` requires Node >= 24). The only platform-specific server code is the Keychain lookup for secrets (`FACTORY_API_KEY`, the events token, the webhook URL and key), which runs only on `darwin`; elsewhere they must come from the environment. Linux is untested.
 
@@ -212,17 +212,17 @@ From the repo directory, use the MCP Inspector CLI. List the tools:
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/list
 ```
 
-Expect 14 tools: `droid_find`, `droid_computers`, `droid_status`, `droid_setup`, `droid_events`, `droid_subscribe`, `droid_unsubscribe`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
+Expect 14 tools: `droid_status`, `droid_setup`, `droid_sessions`, `droid_start`, `droid_send`, `droid_respond`, `droid_subscribe`, `droid_unsubscribe`, `droid_wait`, `droid_result`, `droid_interrupt`, `droid_close`, `droid_inbox`, `droid_models`.
 
 Call three read-only tools:
 
 ```sh
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_models --tool-arg filter=opus
-npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_computers
-npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_find --tool-arg limit=5
+npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_status
+npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/call --tool-name droid_sessions --tool-arg limit=5
 ```
 
-Then, from a connected client, ask it to call `droid_computers` and `droid_find`. Both are read-only and spend no model tokens.
+Then, from a connected client, ask it to call `droid_status` and `droid_sessions`. Both are read-only and spend no model tokens.
 
 `node src/main.ts doctor [--http host:port]` prints each capability as `ok` or `FIX` with the fix, and exits 1 when the API key, the `--http` value or the roots need fixing. It shows only whether each secret is set. The `droid_status` tool returns the same checks plus, for each computer, when its doorbell plugin last rang or the one line to paste there to install it, and its latest `droid_setup` job.
 
@@ -314,13 +314,13 @@ The server accepts these tokenless posts and checks each one with Factory before
 
 ```text
 Discover               Start or steer          Follow and approve                        Read or stop
-droid_computers  ─┐
-droid_find       ─┤    droid_start ─┐          droid_wait ── pending prompt? ──► droid_respond
+droid_status     ─┐
+droid_sessions   ─┤    droid_start ─┐          droid_wait ── pending prompt? ──► droid_respond
 droid_models     ─┴──► droid_send  ─┴─► turn ─► droid_wait ── state "idle" ─────► droid_result
-                                        runs in                                   droid_cancel
-                                        background
+                                        runs in                                   droid_interrupt
+                                        background                                droid_close
 
-Callback           hook on any computer ─► POST /events ─► droid_events or webhook ─► droid_send, droid_respond
+Callback           hook on any computer ─► POST /events ─► droid_inbox or webhook ─► droid_send, droid_respond
 ```
 
 Terms used below:
@@ -329,12 +329,12 @@ Terms used below:
 - **Own session:** a session currently running inside this server, either started with `droid_start` or resumed locally by `droid_send`. It stays own until it is closed.
 - **Autonomy:** what the agent in a session may do without asking: `off` < `low` < `medium` < `high`.
 - **Pending prompt:** a permission request or AskUser question waiting for `droid_respond` (listed in `attention`).
-- **Own session state:** the `state` (`status` from `droid_send`, `run` in `droid_find`) of an own session, one of five (`src/runs.ts`):
+- **Own session state:** the `state` (`status` from `droid_send`, `state` in `droid_sessions`) of an own session, one of five (`src/runs.ts`):
   - `working`: a turn is running.
   - `needs_you`: the turn is paused on a pending prompt.
   - `idle`: the turn ended and the droid process is still alive.
   - `dead`: the droid process exited or its connection failed without this server closing it. Pending prompts are cancelled, and the next `droid_send` resumes it from its transcript in a new process.
-  - `closed`: closed with `droid_cancel` scope `session`, by auto-close, or at server shutdown.
+  - `closed`: closed with `droid_close`, by auto-close, or at server shutdown.
 
 ## Access at a glance
 
@@ -361,9 +361,9 @@ A session started with `droid_start` (including a fork) closes itself after 30 m
 
 "Read-only" means the tool is registered with `readOnlyHint: true` (`src/tools.ts`). All results are JSON text, trimmed to about 8 KB; `droid_wait` event text is clipped at 4000 characters with `truncated: true`.
 
-The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel` and `droid_result` takes a name or id from `droid_computers`. Without it, the tool uses the computer where `droid_find` or a posted event last saw the session, or else this machine. If that computer is offline, the call fails at once with its last heartbeat time instead of hanging. A paused cloud computer is allowed.
+The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_interrupt`, `droid_close` and `droid_result` takes a name or id from `droid_status`. Without it, the tool uses the computer where `droid_sessions` or a posted event last saw the session, or else this machine. If that computer is offline, the call fails at once with its last heartbeat time instead of hanging. A paused cloud computer is allowed.
 
-#### droid_find
+#### droid_sessions
 
 ![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY optional](https://img.shields.io/badge/FACTORY__API__KEY-optional-lightgrey)
 
@@ -379,18 +379,20 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - `query` matches title, id prefix or cwd. With `content: true` it searches transcripts with `rg -F` (40 s timeout) on this machine only, and other computers are not searched.
   - Hidden by default: archived sessions and subagents.
   - With a key, each listed workstream gets a `children` summary from REST, including agents on other computers.
+  - Each session has one `state`: `working`, `needs_you`, `idle`, `dead` or `closed`. An own session reports its run state. Any other session maps its Factory status: `running` is `working`, `pending` is `needs_you`, and `idle`, an unknown status or none (local files) is `idle`.
   - Subscribed sessions carry `subscribed: true`.
 
-#### droid_computers
+#### droid_status
 
 ![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![FACTORY_API_KEY optional](https://img.shields.io/badge/FACTORY__API__KEY-optional-lightgrey)
 
-- Reads: your computer list from REST; `~/.factory/computer.json` to know which one is this machine. Changes nothing.
+- Reads: your computer list from REST; `~/.factory/computer.json` to know which one is this machine; this machine's plugin install and curlrc. Changes nothing.
 - Backend: Factory REST API.
-- Credential: `FACTORY_API_KEY`; without it, the list holds only this machine.
+- Credential: `FACTORY_API_KEY`; without it, the list holds only this machine and `note` says so.
 - Parameters: none.
 - Notes:
-  - Returns `id`, `name`, `kind` (`own`, `cloud`), `state` (`online`, `paused`, `offline`), `lastSeen`, `thisMachine` and `providerStatus` for each computer. See [Computers and online state](#computers-and-online-state).
+  - Returns `checks` (the same as `doctor`), `onlineWindowMinutes`, and for each computer `id`, `name`, `kind` (`own`, `cloud`), `state` (`online`, `paused`, `offline`), `lastSeen`, `thisMachine`, `providerStatus`, `plugin` (when it last rang, or the line to paste) and `setup` (its latest `droid_setup` job). See [Computers and online state](#computers-and-online-state).
+  - If the computer list fails, the checks still come back, with `computersError`.
   - Always fetches a fresh list; other tools reuse a list for up to 30 s.
   - When several computers share a name, tools refuse that name and list the matching ids; pass an id instead.
 
@@ -406,7 +408,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - Returns at once with `state`, `sessionId`, `detail` and `pasteLine`, the same setup as one line to run by hand. Without a key, or for an offline computer, the refusal's `fix` carries that line. `droid_status` shows each computer's latest job under `setup`.
   - A loopback `url` is refused for any computer but this machine. Windows computers are unverified.
 
-#### droid_events
+#### droid_inbox
 
 ![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![HTTP mode](https://img.shields.io/badge/needs-HTTP%20mode-lightgrey)
 
@@ -418,7 +420,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - Without `after`, returns the latest events. With it, returns events after that `seq`, oldest first. It does not wait; pass `nextAfter` back as `after`.
   - Each event has `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text`, `cwd`, `tags` and `forwarded`.
   - `missed: true` means events after `after` already dropped out of the ring; an `after` ahead of the log (after a server restart) restarts from the oldest kept event and sets `missed`. `forwarding` says whether a webhook is configured.
-  - Anyone who can reach `/events` can ring. A ring for an unsubscribed session costs no Factory call and only adds an unforwarded line to `droid_events`; for a subscribed one, the server forwards only what Factory or its own run confirms.
+  - Anyone who can reach `/events` can ring. A ring for an unsubscribed session costs no Factory call and only adds an unforwarded line to `droid_inbox`; for a subscribed one, the server forwards only what Factory or its own run confirms.
 - Event text is untrusted session content. See [Callbacks](#callbacks).
 
 #### droid_subscribe and droid_unsubscribe
@@ -484,16 +486,26 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 - Parameters: `session`, `computer`, `requestId`, then `decision` and `comment`, or `answers` (one per question), or `cancel`.
 - Notes: `decision` must be one of the offered options.
 
-#### droid_cancel
+#### droid_interrupt
 
-![stops token spend](https://img.shields.io/badge/stops%20token%20spend-2ea44f) ![interrupts or closes](https://img.shields.io/badge/interrupts%20or%20closes-dbab09) ![FACTORY_API_KEY if not own](https://img.shields.io/badge/FACTORY__API__KEY-if%20not%20own-lightgrey)
+![stops token spend](https://img.shields.io/badge/stops%20token%20spend-2ea44f) ![interrupts](https://img.shields.io/badge/interrupts-dbab09) ![FACTORY_API_KEY if not own](https://img.shields.io/badge/FACTORY__API__KEY-if%20not%20own-lightgrey)
 
 - Reads: nothing.
-- Changes: interrupts a turn; closes an own session.
+- Changes: stops the running turn. The session stays open for the next `droid_send`.
 - Backend: own child process or Factory REST API.
-- Credential: none for own sessions; `FACTORY_API_KEY` otherwise (`scope: "turn"` only).
-- Parameters: `session`, `computer`, `scope` (`turn`, `session`).
-- Notes: `scope: "session"` works only for own sessions.
+- Credential: none for own sessions; `FACTORY_API_KEY` otherwise.
+- Parameters: `session`, `computer`.
+
+#### droid_close
+
+![stops token spend](https://img.shields.io/badge/stops%20token%20spend-2ea44f) ![closes](https://img.shields.io/badge/closes-dbab09) ![own sessions only](https://img.shields.io/badge/own%20sessions-only-lightgrey)
+
+- Reads: nothing.
+- Changes: stops the turn and closes an own session's process. The session stays resumable with `droid_send`.
+- Backend: own child process.
+- Credential: none.
+- Parameters: `session`, `computer`.
+- Notes: refused for every other session, with the fix to use `droid_interrupt`.
 
 #### droid_result
 
@@ -512,18 +524,18 @@ It depends on the target session (`src/route.ts`, `src/tools.ts`):
 ```mermaid
 flowchart TD
   target["target session"] --> own{"own session?"}
-  own -->|yes| ownBox["Own child process<br/>all tools; droid_cancel can close it;<br/>droid_result: last result and diff"]
+  own -->|yes| ownBox["Own child process<br/>all tools; droid_close can close it;<br/>droid_result: last result and diff"]
   own -->|no| here{"on this machine?"}
   here -->|no| keyRemote{"key set?"}
-  keyRemote -->|yes| restRemote["REST: droid_send, droid_wait,<br/>droid_respond, droid_cancel (turn only),<br/>droid_result (text, no diff)"]
+  keyRemote -->|yes| restRemote["REST: droid_send, droid_wait,<br/>droid_respond, droid_interrupt,<br/>droid_result (text, no diff)"]
   keyRemote -->|no| refusedRemote["Refused"]
   here -->|yes| ws{"workstream?"}
   ws -->|yes| keyWs{"key set?"}
-  keyWs -->|yes| restWs["REST: droid_send, droid_wait,<br/>droid_respond, droid_cancel<br/>Local: droid_result"]
-  keyWs -->|no| localWs["Local transcript: droid_wait, droid_result<br/>Refused: droid_send (never resumed locally),<br/>droid_respond, droid_cancel"]
+  keyWs -->|yes| restWs["REST: droid_send, droid_wait,<br/>droid_respond, droid_interrupt<br/>Local: droid_result"]
+  keyWs -->|no| localWs["Local transcript: droid_wait, droid_result<br/>Refused: droid_send (never resumed locally),<br/>droid_respond, droid_interrupt"]
   ws -->|no| keyStd{"key set?"}
-  keyStd -->|yes| restStd["REST: droid_send, droid_respond, droid_cancel<br/>Local transcript: droid_wait, droid_result"]
-  keyStd -->|no| localStd["droid_send: local resume (conditions below)<br/>Local transcript: droid_wait, droid_result<br/>Refused: droid_respond, droid_cancel"]
+  keyStd -->|yes| restStd["REST: droid_send, droid_respond, droid_interrupt<br/>Local transcript: droid_wait, droid_result"]
+  keyStd -->|no| localStd["droid_send: local resume (conditions below)<br/>Local transcript: droid_wait, droid_result<br/>Refused: droid_respond, droid_interrupt"]
 ```
 
 Per-tool differences:
@@ -531,24 +543,24 @@ Per-tool differences:
 - `seq` in `droid_wait` is a cursor whose meaning depends on the source: an event number for own sessions, a byte offset into the transcript for other local sessions, and a message sequence number for REST sessions. Treat it as opaque and pass `nextSeq` back as `afterSeq`.
 - `droid_wait` on a local transcript returns no pending prompts.
 - `droid_result` on an own session returns the last result. For any session on this machine, it can also return `git diff HEAD`. For a session not on this machine, it returns REST text and no diff.
-- `droid_cancel` can close only an own session. For every other session it can only interrupt the turn.
+- `droid_close` can close only an own session. For every other session, use `droid_interrupt` to stop the turn.
 
 Local resume happens only without a key, only with `allowLocalResume: true`, and only for a standalone session that has readable settings, is not archived, is not a subagent, was not modified in the last 30 minutes, and has a recorded autonomy within the cap. The resumed session becomes an own session.
 
-A session this server closed (with `droid_cancel` scope `session`, auto-close, or shutdown) can be resumed at once: the 30-minute check is skipped because no other droid holds it. With a key, `droid_send` resumes it locally instead of going over REST, so `droid_wait` sees the new turn; without a key it still needs `allowLocalResume: true`. The server remembers these sessions in memory only, so after a restart they fall back to the 30-minute check (`src/route.ts`).
+A session this server closed (with `droid_close`, auto-close, or shutdown) can be resumed at once: the 30-minute check is skipped because no other droid holds it. With a key, `droid_send` resumes it locally instead of going over REST, so `droid_wait` sees the new turn; without a key it still needs `allowLocalResume: true`. The server remembers these sessions in memory only, so after a restart they fall back to the 30-minute check (`src/route.ts`).
 
 ## Computers and online state
 
-A Droid computer is either your own machine running the Droid daemon (`kind: "own"`) or a Factory cloud computer (`kind: "cloud"`). `droid_computers` sorts each into `online`, `paused` or `offline` (`src/computers.ts`):
+A Droid computer is either your own machine running the Droid daemon (`kind: "own"`) or a Factory cloud computer (`kind: "cloud"`). `droid_status` sorts each into `online`, `paused` or `offline` (`src/computers.ts`):
 
 - Own computer: `online` when its daemon heartbeat (`lastSeenAt`) is under 5 minutes old, otherwise `offline`. Heartbeats arrive about every 60 s; the worst gap measured was about 150 s.
-- Cloud computer: follows the sandbox state. `running` is `online`. `paused` is `paused`: `droid_find` skips it, but a tool that names it is allowed, since Factory may resume it. Anything else is `offline`.
+- Cloud computer: follows the sandbox state. `running` is `online`. `paused` is `paused`: `droid_sessions` skips it, but a tool that names it is allowed, since Factory may resume it. Anything else is `offline`.
 
 Factory's own `status` field says `active` even when an own computer's daemon is dead, and a call to a dead daemon hangs about 30 s before failing with 503. That is why the server judges liveness by the heartbeat and fails fast on offline computers.
 
 ## Callbacks
 
-Each computer reports session events to the server. Your agent reads them with `droid_events`, or a webhook wakes it, and it answers with `droid_send` or `droid_respond`. There are two ways in: the doorbell plugin, and the older token hooks from step 7, which stay until the plugin is rolled out everywhere.
+Each computer reports session events to the server. Your agent reads them with `droid_inbox`, or a webhook wakes it, and it answers with `droid_send` or `droid_respond`. There are two ways in: the doorbell plugin, and the older token hooks from step 7, which stay until the plugin is rolled out everywhere.
 
 ### Doorbell plugin: tokenless rings
 
@@ -563,7 +575,7 @@ sequenceDiagram
   D->>S: POST /events (hook stdin, no token, 3 s timeout)
   S-->>D: 202 at once
   alt session not subscribed
-    S->>S: log the ring (droid_events, forwarded false), no Factory call
+    S->>S: log the ring (droid_inbox, forwarded false), no Factory call
   else subscribed
     S->>F: what is true now? (status, pending prompts, last reply)
     S->>S: add the confirmed event (30 s debounce)
@@ -581,7 +593,7 @@ From a ring the server reads only `session_id`, `hook_event_name` and `notificat
 
 Other hook events and other notification types (`idle_prompt`, `auth_success`) get a 202 and are ignored. The event's computer is the session's computer from REST, or this machine for sessions this server runs. Each source address may ring 60 times a minute; beyond that the server answers 429 and does nothing else. Bad JSON or a bad shape gets a 400. Verification errors go to the server log and never affect the reply.
 
-A forged ring can at most repeat a real event for a subscribed session, which the debounce limits, or add an unverified line to `droid_events` for an unsubscribed one.
+A forged ring can at most repeat a real event for a subscribed session, which the debounce limits, or add an unverified line to `droid_inbox` for an unsubscribed one.
 
 ### Token hooks
 
@@ -607,7 +619,7 @@ Forwarding rule (`src/ring.ts`, `src/events.ts`), the same for both paths:
 - The same session and kind are never forwarded twice within 30 s.
 - The webhook gets `source: "droid-mcp"`, `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text` and `cwd`.
 
-Every event is kept for `droid_events`, forwarded or not. Events live in memory only and are lost when the server restarts.
+Every event is kept for `droid_inbox`, forwarded or not. Events live in memory only and are lost when the server restarts.
 
 ## What the agent can and cannot touch
 
@@ -621,8 +633,8 @@ Every event is kept for `droid_events`, forwarded or not. Events live in memory 
     - `droid_result` diff
   - Not limited:
     - `droid_start` fork source (the source's own cwd)
-    - `droid_find`, `droid_wait`, `droid_result` text (any local transcript)
-    - REST sends, `droid_respond`, `droid_cancel` (any session the key can reach)
+    - `droid_sessions`, `droid_wait`, `droid_result` text (any local transcript)
+    - REST sends, `droid_respond`, `droid_interrupt` (any session the key can reach)
 - Files read: `~/.factory/sessions/*/*.jsonl` and their `.settings.json` files (`src/catalog.ts`), `~/.factory/settings.json` (`src/models.ts`), `~/.factory/computer.json` (`src/computers.ts`), `~/.droid-mcp/state.json` (`src/runs.ts`) and `~/.droid-mcp/subscriptions.json` (`src/subscriptions.ts`).
 - The only files the server writes are `~/.droid-mcp/state.json` and `~/.droid-mcp/subscriptions.json`, each through a temporary file in the same directory and a rename. The directory is created with mode `0700` and the files with `0600` (`src/runs.ts`).
 - Droid writes its own session files. The agent inside a session starts in its cwd, but autonomy, not the roots list, decides what its commands can touch.
@@ -706,7 +718,7 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 
 - Never returns `FACTORY_API_KEY` or custom-model API keys. Custom models are reduced to an allowlist of fields, and `baseUrl` is reduced to its host (`src/models.ts`).
 - Never offers "always allow" permission options (`src/config.ts`).
-- Never closes a session that is not an own session; `droid_cancel` with `scope: "session"` is refused for those (`src/tools.ts`).
+- Never closes a session that is not an own session; `droid_close` is refused for those (`src/tools.ts`).
 - Never resumes a workstream session, or one whose settings it cannot read, through `droid_send` (`src/route.ts`). `droid_start` with `fork` does load its source locally without these checks.
 - Never runs commands other than `droid exec` (through the SDK), `droid exec --help`, `git -C <cwd> diff HEAD`, `rg` and, on macOS, `security find-generic-password` (`src/models.ts`, `src/tools.ts`, `src/catalog.ts`, `src/config.ts`).
 - Has no tool that deletes sessions or files (`src/tools.ts`).
@@ -721,12 +733,12 @@ node scripts/smoke.ts [scratchDir] [idleSessionIdToResume]
 
 `scripts/smoke.ts` is a live end-to-end check over a real stdio MCP client. It spends model tokens. It starts the server with `DROID_MCP_MAX_AUTONOMY=medium` and `FACTORY_API_KEY` removed from its environment, then:
 
-- checks the tool list, `droid_find` grouping, title and content search, and read-only `droid_wait`/`droid_result` on a local orchestrator;
+- checks the tool list, `droid_sessions` grouping, title and content search, and read-only `droid_wait`/`droid_result` on a local orchestrator;
 - checks refusals: sending to a workstream without a key, an unknown session, a cwd outside the roots, autonomy above the cap;
 - starts a session in the scratch dir (default `~/repos/droid-mcp-scratch`, which must be inside `DROID_MCP_ROOTS`) at autonomy `off`, approves its permission prompt, and checks the created file, the result text, idempotent start and send, the diff and closing;
 - with a second argument, resumes that idle local session with `allowLocalResume`.
 
-It needs at least one local workstream session with its orchestrator, and a transcript containing the text `droid_find`. It refuses to run when a key is in the Keychain: the refusal checks send to a real workstream, and with a key those sends would go through REST and actually post.
+It needs at least one local workstream session with its orchestrator, and a transcript containing the text `droid_sessions`. It refuses to run when a key is in the Keychain: the refusal checks send to a real workstream, and with a key those sends would go through REST and actually post.
 
 ## Known limits
 
@@ -738,7 +750,7 @@ It needs at least one local workstream session with its orchestrator, and a tran
 - `droid_wait` on a local transcript cannot see pending prompts or tool events.
 - After an own session is closed, `droid_wait` and `droid_result` keep reading its in-memory state until a `droid_send` resumes it locally. If a later `droid_send` reaches it over REST (a named remote computer), they do not see the new turn.
 - Linux is untested.
-- `droid_find` and the other tools cannot reach an offline computer; Factory does not wake it.
+- `droid_sessions` and the other tools cannot reach an offline computer; Factory does not wake it.
 - Hooks on cloud computers need a network route to the server URL.
 - Events are kept in memory and lost when the server restarts.
 - The Windows hook and installer are tested only with PowerShell 7 on Linux so far.

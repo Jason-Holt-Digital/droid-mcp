@@ -137,13 +137,17 @@ test('local without a key: reads the transcript, refuses close, and needs a key 
   );
   assert.equal(await access.result(), 'a\n\nb', 'every assistant message after the last user message');
   assert.equal(access.cwd(), cwd);
-  await assert.rejects(access.close(), { code: 'invalid', message: 'only sessions this server started can be closed' });
+  await assert.rejects(access.close(), {
+    code: 'invalid',
+    message: 'only sessions this server started can be closed',
+    fix: 'Use droid_interrupt to stop its running turn.',
+  });
   await assert.rejects(access.respond('r1', { cancel: true }), {
     code: 'needs_api_key',
     message: 'answering prompts for sessions this server did not start needs FACTORY_API_KEY',
     fix: API_KEY_FIX,
   });
-  await assert.rejects(access.interrupt(), { code: 'needs_api_key', message: 'cancelling for sessions this server did not start needs FACTORY_API_KEY' });
+  await assert.rejects(access.interrupt(), { code: 'needs_api_key', message: 'interrupting for sessions this server did not start needs FACTORY_API_KEY' });
 });
 
 test('local workstream session with a key: followed and answered over REST, result still from the transcript', async () => {

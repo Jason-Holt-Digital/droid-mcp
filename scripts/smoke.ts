@@ -55,21 +55,23 @@ async function settle(session: string, afterSeq: number): Promise<{ seq: number;
 try {
   const tools = (await client.listTools()).tools.map((t) => t.name).sort();
   assert.deepEqual(tools, [
-    'droid_cancel',
-    'droid_computers',
-    'droid_events',
-    'droid_find',
+    'droid_close',
+    'droid_inbox',
+    'droid_interrupt',
     'droid_models',
     'droid_respond',
     'droid_result',
     'droid_send',
+    'droid_sessions',
+    'droid_setup',
     'droid_start',
+    'droid_status',
     'droid_subscribe',
     'droid_unsubscribe',
     'droid_wait',
   ]);
 
-  const ws = await call('droid_find', { scope: 'workstreams', limit: 200 });
+  const ws = await call('droid_sessions', { scope: 'workstreams', limit: 200 });
   assert.ok(ws.workstreams.length > 0, 'workstreams found');
   const firstMissing = ws.workstreams.findIndex((w: any) => w.missingOrchestrator);
   assert.ok(firstMissing === -1 || ws.workstreams.slice(firstMissing).every((w: any) => w.missingOrchestrator), 'local orchestrators come first');
@@ -80,21 +82,21 @@ try {
     ws.workstreams.map((w: any) => `${w.title ?? w.id} (${w.agents.length} agents${w.missingOrchestrator ? ', orchestrator elsewhere' : ''})`).join('; '),
   );
 
-  const all = await call('droid_find', {});
+  const all = await call('droid_sessions', {});
   assert.ok(all.sessions.length > 0 && all.total > 0);
-  const byTitle = await call('droid_find', { query: orch.title.slice(0, 12), scope: 'workstreams' });
+  const byTitle = await call('droid_sessions', { query: orch.title.slice(0, 12), scope: 'workstreams' });
   assert.ok(
     byTitle.workstreams.some((w: any) => w.id === orch.id),
     'title query finds the workstream',
   );
-  const content = await call('droid_find', { query: 'droid_find', content: true, includeSubagents: true });
+  const content = await call('droid_sessions', { query: 'droid_sessions', content: true, includeSubagents: true });
   assert.ok(content.total >= 1, 'content search finds this build session');
 
   const followed = await call('droid_wait', { session: orch.id, maxEvents: 3 });
   assert.ok(followed.events.length > 0, 'reads a desktop-held orchestrator read-only');
   await call('droid_result', { session: orch.id, maxBytes: 300 });
   assert.match(await call('droid_send', { session: orch.id, prompt: 'x', idempotencyKey: randomUUID() }, true), /workstream sessions need FACTORY_API_KEY/);
-  assert.match(await call('droid_cancel', { session: orch.id, scope: 'turn' }, true), /FACTORY_API_KEY/);
+  assert.match(await call('droid_interrupt', { session: orch.id }, true), /FACTORY_API_KEY/);
   assert.match(await call('droid_send', { session: randomUUID(), prompt: 'x', idempotencyKey: randomUUID() }, true), /not on this machine/);
   assert.match(await call('droid_start', { cwd: homedir(), prompt: 'x', idempotencyKey: randomUUID() }, true), /outside the allowed roots/);
   assert.match(await call('droid_start', { cwd: scratch, prompt: 'x', autonomy: 'high', idempotencyKey: randomUUID() }, true), /exceeds the cap/);
@@ -128,9 +130,9 @@ try {
   assert.equal((await call('droid_result', { session: sid })).content.trim(), 'OK2');
   const diff = await call('droid_result', { session: sid, include: ['diff'] });
   assert.equal(typeof diff.content, 'string');
-  const found = await call('droid_find', { query: sid.slice(0, 8) });
-  assert.equal(found.sessions[0]?.sessions[0]?.run, 'idle', 'find shows our run state');
-  await call('droid_cancel', { session: sid, scope: 'session' });
+  const found = await call('droid_sessions', { query: sid.slice(0, 8) });
+  assert.equal(found.sessions[0]?.sessions[0]?.state, 'idle', 'droid_sessions shows our run state');
+  await call('droid_close', { session: sid });
 
   if (resumeId) {
     assert.match(await call('droid_send', { session: resumeId, prompt: 'x', idempotencyKey: randomUUID() }, true), /allowLocalResume/);
@@ -143,7 +145,7 @@ try {
     assert.equal(resumed.via, 'local-resume');
     await settle(resumeId, resumed.nextSeq);
     assert.equal((await call('droid_result', { session: resumeId })).content.trim(), 'RESUMED');
-    await call('droid_cancel', { session: resumeId, scope: 'session' });
+    await call('droid_close', { session: resumeId });
   }
 
   console.log('SMOKE OK');

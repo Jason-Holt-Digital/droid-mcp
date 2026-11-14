@@ -384,7 +384,7 @@ export class Runs {
         throw new ToolError(
           'busy',
           `the turn did not stop within ${INTERRUPT_GRACE_MS / 1000} s of the interrupt`,
-          'Check it with droid_wait, and cancel again if it is still running.',
+          'Check it with droid_wait, and call droid_interrupt again if it is still running.',
         );
       }
     });
@@ -659,7 +659,7 @@ export class KeyStore {
         throw new ToolError(
           'invalid',
           'an earlier attempt with this idempotencyKey did not finish and may have taken effect',
-          'Check droid_find for its session before retrying with a new idempotencyKey.',
+          'Check droid_sessions for its session before retrying with a new idempotencyKey.',
         );
       }
       if (hit) return hit.result as T;

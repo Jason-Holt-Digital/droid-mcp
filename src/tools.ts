@@ -23,7 +23,7 @@ import { loadCatalog, type ModelCatalog } from './models.ts';
 import type { Rest } from './rest.ts';
 import type { Doorbell } from './ring.ts';
 import { routeSend } from './route.ts';
-import { preview, type KeyStore, type Runs } from './runs.ts';
+import { preview, type KeyStore, type Runs, type RunState } from './runs.ts';
 import { EFFORTS, validateSettings } from './settings.ts';
 import { pluginSource, setupCommands, validateSetup, type Setup } from './setup.ts';
 import type { Subscriptions } from './subscriptions.ts';
@@ -38,7 +38,7 @@ export type Ctx = {
   computers: Computers;
   events: EventLog;
   forwarder?: Forwarder;
-  // sessionId -> computerId, learned from droid_find's REST listings and from posted events.
+  // sessionId -> computerId, learned from droid_sessions' REST listings and from posted events.
   sessionComputers?: Map<string, string>;
   fanoutTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
@@ -157,7 +157,18 @@ const MODEL_HELP =
 const USAGE =
   'Pass any id as model/specModel/workerModel/validatorModel to droid_start or droid_send; custom ids are BYOK models from ~/.factory/settings.json customModels';
 
-const COMPUTER = z.string().optional().describe('Computer name or id from droid_computers; defaults to this machine, or to where droid_find saw the session');
+const COMPUTER = z.string().optional().describe('Computer name or id from droid_status; defaults to this machine, or to where droid_sessions saw the session');
+
+const STATUS_STATES = new Map<string, RunState>([
+  ['running', 'working'],
+  ['pending', 'needs_you'],
+  ['idle', 'idle'],
+]);
+
+// Maps a Factory or local session status onto the run states this server reports for its own sessions.
+export function sessionState(status: string | undefined): RunState {
+  return STATUS_STATES.get(status ?? '') ?? 'idle';
+}
 
 function entry(r: Listing, ctx: Ctx) {
   return {
@@ -165,13 +176,12 @@ function entry(r: Listing, ctx: Ctx) {
     title: r.title,
     computer: r.computer,
     cwd: r.cwd,
-    status: r.status,
+    state: ctx.runs.get(r.id)?.state ?? sessionState(r.status),
     updated: iso(r.updatedAt),
     role: r.workstream?.role ?? (isSubagent(r) ? 'subagent' : undefined),
     parentId: r.parentId,
     archived: r.archived || undefined,
     tags: r.tags.filter((t) => !HIDDEN_TAGS.has(t)),
-    run: ctx.runs.get(r.id)?.state,
     subscribed: ctx.subscriptions.has(r.id) || undefined,
   };
 }
@@ -205,7 +215,7 @@ type FanOutReport = {
   truncated: string[];
 };
 
-// One slow or failing computer must not fail droid_find, so each listing has its own timeout and error.
+// One slow or failing computer must not fail droid_sessions, so each listing has its own timeout and error.
 async function fanOut(ctx: Ctx, rest: Rest, only: Computer | undefined, report: FanOutReport) {
   let targets: Computer[] = [];
   if (only) {
@@ -253,16 +263,16 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
   const catalog = ctx.catalog ?? (() => loadCatalog());
 
   server.registerTool(
-    'droid_find',
+    'droid_sessions',
     {
       description:
-        "Find the user's Factory Droid sessions on every online Droid computer (this machine from disk, others over REST), grouped into workstreams (orchestrator + agents) across computers and standalone sessions by repo (this machine) or by computer (others). Each session names its computer. Paged with cursor.",
+        "Find the user's Factory Droid sessions on every online Droid computer (this machine from disk, others over REST), grouped into workstreams (orchestrator + agents) across computers and standalone sessions by repo (this machine) or by computer (others). Each session names its computer and has one state: working, needs_you, idle, dead or closed. Paged with cursor.",
       inputSchema: {
         query: z.string().optional().describe('Match title, id prefix or cwd; with content=true, search transcripts instead'),
         content: z.boolean().optional().describe('Search transcript text; this machine only'),
         scope: z.enum(['workstreams', 'sessions', 'all']).optional(),
         cwd: z.string().optional(),
-        computer: z.string().optional().describe('Only this computer (name or id from droid_computers)'),
+        computer: z.string().optional().describe('Only this computer (name or id from droid_status)'),
         includeArchived: z.boolean().optional(),
         includeSubagents: z.boolean().optional(),
         limit: z.number().int().min(1).max(200).optional(),
@@ -317,7 +327,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       }
       const start = a.cursor === undefined ? 0 : Number.parseInt(a.cursor, 10);
       if (!Number.isInteger(start) || start < 0)
-        throw new ToolError('invalid', `invalid cursor: ${a.cursor}`, 'Pass nextCursor from the previous droid_find result, or omit cursor.');
+        throw new ToolError('invalid', `invalid cursor: ${a.cursor}`, 'Pass nextCursor from the previous droid_sessions result, or omit cursor.');
       const page = items.slice(start, start + (a.limit ?? 40));
       const orchestrators = new Map(records.filter((r) => r.workstream?.role === 'orchestrator').map((r) => [r.id, r]));
 
@@ -380,36 +390,9 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
   );
 
   server.registerTool(
-    'droid_computers',
-    {
-      description: `List the user's Factory Droid computers and whether each is reachable now: own computers are online when their daemon sent a heartbeat in the last ${ONLINE_WINDOW_MS / 60_000} minutes; cloud computers follow their sandbox state (paused ones may be resumed when named explicitly). Pass a name or id as \`computer\` to the other tools.`,
-      inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    },
-    handle(async () => {
-      const view = (c: Computer) => ({
-        id: c.id,
-        name: c.name,
-        kind: c.kind,
-        state: c.state,
-        lastSeen: c.lastSeenAt === undefined ? undefined : isoSeconds(c.lastSeenAt),
-        thisMachine: c.thisMachine,
-        providerStatus: c.providerStatus,
-      });
-      const list = await ctx.computers.list(true);
-      return {
-        computers: list.map(view),
-        onlineWindowMinutes: ONLINE_WINDOW_MS / 60_000,
-        note: ctx.rest ? undefined : 'FACTORY_API_KEY is not set, so only this machine is listed',
-      };
-    }),
-  );
-
-  server.registerTool(
     'droid_status',
     {
-      description:
-        'Check what this server can do and what is missing, with a fix for each gap: API key, webhook, HTTP mode, roots, autonomy cap, and the doorbell plugin on this machine. Lists each computer with when its plugin last rang and, if it never did, the one line to paste on that computer, plus its latest droid_setup job.',
+      description: `Check what this server can do and what is missing, with a fix for each gap: API key, webhook, HTTP mode, roots, autonomy cap, and the doorbell plugin on this machine. Lists the user's Factory Droid computers and whether each is reachable now (own computers are online when their daemon sent a heartbeat in the last ${ONLINE_WINDOW_MS / 60_000} minutes; cloud computers follow their sandbox state, and paused ones may be resumed when named explicitly), with when its plugin last rang or, if it never did, the one line to paste on that computer, plus its latest droid_setup job. Pass a computer name or id as \`computer\` to the other tools.`,
       inputSchema: {},
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
@@ -443,14 +426,20 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           state: c.state,
           lastSeen: c.lastSeenAt === undefined ? undefined : isoSeconds(c.lastSeenAt),
           thisMachine: c.thisMachine,
+          providerStatus: c.providerStatus,
           plugin: seen ? { seen: isoSeconds(seen) } : { fix: pluginFix(c) },
           setup: job && { ...job, at: isoSeconds(job.at) },
         };
       };
+      const base = {
+        checks,
+        onlineWindowMinutes: ONLINE_WINDOW_MS / 60_000,
+        note: ctx.rest ? undefined : 'FACTORY_API_KEY is not set, so only this machine is listed',
+      };
       try {
-        return { checks, computers: (await ctx.computers.list(true)).map(view) };
+        return { ...base, computers: (await ctx.computers.list(true)).map(view) };
       } catch (err) {
-        return { checks, computersError: errorBody(err) };
+        return { ...base, computersError: errorBody(err) };
       }
     }),
   );
@@ -461,7 +450,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       description:
         "Install the droid-mcp doorbell plugin on one Droid computer and point it at this server, through a Droid session there (autonomy off) that may run only three fixed commands; anything else is cancelled. Call it only when the user asked for it. Returns at once; droid_status shows the job's progress. pasteLine is the same setup as one line to run on that computer by hand. Unverified on Windows computers.",
       inputSchema: {
-        computer: z.string().describe('Computer name or id from droid_computers'),
+        computer: z.string().describe('Computer name or id from droid_status'),
         url: z.string().optional().describe("Events URL that computer can reach; defaults to DROID_MCP_EVENTS_URL, else this server's --http address"),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -503,7 +492,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
   );
 
   server.registerTool(
-    'droid_events',
+    'droid_inbox',
     {
       description:
         'Read callback events (finished, question, permission, ended) that hooks on each Droid computer posted to this server, oldest first after `after`, or the latest without it. Pass nextAfter back as after.',
@@ -578,10 +567,10 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           }
           const live = runs.get(a.fork);
           if (live && live.state !== 'closed') {
-            throw new Refused('invalid', 'fork source is open in this server', 'Close it with droid_cancel scope "session", then fork it.');
+            throw new Refused('invalid', 'fork source is open in this server', 'Close it with droid_close, then fork it.');
           }
           if (!(await findSession(ctx.sessionsRoot, a.fork))) {
-            throw new Refused('not_found', `fork source ${a.fork} is not on this machine`, 'Fork a session that droid_find lists on this machine.');
+            throw new Refused('not_found', `fork source ${a.fork} is not on this machine`, 'Fork a session that droid_sessions lists on this machine.');
           }
         }
         validateSettings(a, autonomy, await catalog());
@@ -616,7 +605,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     'droid_unsubscribe',
     {
       description:
-        "Stop the webhook waking you for a session's events; droid_events still lists them. droid_find marks subscribed sessions. Unsubscribing a session that is not subscribed is not an error.",
+        "Stop the webhook waking you for a session's events; droid_inbox still lists them. droid_sessions marks subscribed sessions. Unsubscribing a session that is not subscribed is not an error.",
       inputSchema: { session: z.string() },
       annotations: SUBSCRIPTION_HINTS,
     },
@@ -706,17 +695,26 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     handle(async (a) => (await openSession(ctx, a.session, a.computer)).respond(a.requestId, a)),
   );
 
+  const STOP_HINTS = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
+
   server.registerTool(
-    'droid_cancel',
+    'droid_interrupt',
     {
-      description: "Cancel a session's running turn (scope 'turn'), or close a session this server started (scope 'session').",
-      inputSchema: { session: z.string(), computer: COMPUTER, scope: z.enum(['turn', 'session']) },
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      description: "Stop a session's running turn. The session stays open and can take the next droid_send.",
+      inputSchema: { session: z.string(), computer: COMPUTER },
+      annotations: STOP_HINTS,
     },
-    handle(async (a) => {
-      const access = await openSession(ctx, a.session, a.computer);
-      return a.scope === 'session' ? access.close() : access.interrupt();
-    }),
+    handle(async (a) => (await openSession(ctx, a.session, a.computer)).interrupt()),
+  );
+
+  server.registerTool(
+    'droid_close',
+    {
+      description: 'Close a session this server started, stopping its process. Other sessions are refused; use droid_interrupt to stop their turn.',
+      inputSchema: { session: z.string(), computer: COMPUTER },
+      annotations: STOP_HINTS,
+    },
+    handle(async (a) => (await openSession(ctx, a.session, a.computer)).close()),
   );
 
   server.registerTool(

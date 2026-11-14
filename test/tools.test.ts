@@ -15,7 +15,7 @@ import type { Doorbell } from '../src/ring.ts';
 import { KeyStore, Runs, type OwnRun, type RunEvent } from '../src/runs.ts';
 import { Setup } from '../src/setup.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
-import { clampWait, DEFAULT_WAIT_MS, LIMIT_BYTES, MAX_WAIT_MS, pageBytes, registerTools, type Ctx } from '../src/tools.ts';
+import { clampWait, DEFAULT_WAIT_MS, LIMIT_BYTES, MAX_WAIT_MS, pageBytes, registerTools, sessionState, type Ctx } from '../src/tools.ts';
 import { catalog, fakeApi, fakeResume, fakeSetupRest, FIXTURES, IDS, SECRET } from './helpers.ts';
 
 let dir: string;
@@ -129,10 +129,10 @@ test('pageBytes pages by byte offset without splitting UTF-8 characters', () => 
   assert.deepEqual(pageBytes('', 0, 10), { text: '', offset: 0, nextOffset: undefined, totalBytes: 0 });
 });
 
-test('droid_find groups the catalog, hides archived and subagents, and stays under 8 KB', async () => {
+test('droid_sessions groups the catalog, hides archived and subagents, and stays under 8 KB', async () => {
   const c = await connect({});
   try {
-    const res = await c.call('droid_find', {});
+    const res = await c.call('droid_sessions', {});
     assert.equal(res.isError, false);
     assert.ok(Buffer.byteLength(res.text) <= LIMIT_BYTES);
     assert.equal(res.json.total, 4);
@@ -145,15 +145,15 @@ test('droid_find groups the catalog, hides archived and subagents, and stays und
       [IDS.liveStandalone],
     );
 
-    const all = await c.call('droid_find', { includeArchived: true, includeSubagents: true, scope: 'workstreams', limit: 2 });
+    const all = await c.call('droid_sessions', { includeArchived: true, includeSubagents: true, scope: 'workstreams', limit: 2 });
     assert.equal(all.json.total, 8);
     assert.equal(all.json.nextCursor, '2');
     assert.equal(all.json.sessions.length, 0);
-    const next = await c.call('droid_find', { includeArchived: true, includeSubagents: true, scope: 'workstreams', limit: 2, cursor: '6' });
+    const next = await c.call('droid_sessions', { includeArchived: true, includeSubagents: true, scope: 'workstreams', limit: 2, cursor: '6' });
     assert.equal(next.json.nextCursor, undefined);
     assert.equal(next.json.workstreams[0].missingOrchestrator, true);
 
-    const payment = await c.call('droid_find', { query: 'payment', includeArchived: true });
+    const payment = await c.call('droid_sessions', { query: 'payment', includeArchived: true });
     assert.equal(payment.json.workstreams[0].title, 'Triage the shop', 'title comes from the orchestrator even when it is filtered out');
     assert.equal(payment.json.workstreams[0].orchestrator, undefined);
     assert.equal(payment.json.workstreams[0].missingOrchestrator, undefined);
@@ -174,7 +174,7 @@ test('droid_send refuses workstream and unknown sessions without an API key', as
     assert.equal(unknown.error?.code, 'needs_api_key');
     assert.match(unknown.error!.message, /not on this machine/);
     const bad = await c.call('droid_send', { session: '../etc', prompt: 'hi', idempotencyKey: 'k3' });
-    assert.deepEqual(bad.error, { code: 'invalid', message: 'invalid session id: ../etc', fix: 'Pass a session id from droid_find.' });
+    assert.deepEqual(bad.error, { code: 'invalid', message: 'invalid session id: ../etc', fix: 'Pass a session id from droid_sessions.' });
     const follow = await c.call('droid_wait', { session: '1bd2caee-2a3d-5f4b-955e-85e5a0b99023' });
     assert.equal(follow.error?.code, 'needs_api_key');
   } finally {
@@ -308,22 +308,23 @@ test('every tool declares all four hints with the expected values', async () => 
       openWorldHint: openWorld,
     });
     const expected = {
-      droid_find: hints(true, false, true, true),
-      droid_computers: hints(true, false, true, true),
       droid_status: hints(true, false, true, true),
       droid_setup: hints(false, false, true, true),
-      droid_events: hints(true, false, true, false),
-      droid_models: hints(true, false, true, false),
+      droid_sessions: hints(true, false, true, true),
       droid_start: hints(false, true, true, true),
+      droid_send: hints(false, true, true, true),
+      droid_respond: hints(false, true, true, true),
       droid_subscribe: hints(false, false, true, false),
       droid_unsubscribe: hints(false, false, true, false),
-      droid_send: hints(false, true, true, true),
       droid_wait: hints(true, false, true, true),
-      droid_respond: hints(false, true, true, true),
-      droid_cancel: hints(false, true, true, true),
       droid_result: hints(true, false, true, true),
+      droid_interrupt: hints(false, true, true, true),
+      droid_close: hints(false, true, true, true),
+      droid_inbox: hints(true, false, true, false),
+      droid_models: hints(true, false, true, false),
     };
     const { tools } = await c.listTools();
+    assert.deepEqual(tools.map((t) => t.name).sort(), Object.keys(expected).sort(), 'the registered tools are exactly these 14');
     assert.deepEqual(Object.fromEntries(tools.map((t) => [t.name, t.annotations])), expected);
   } finally {
     await c.close();
@@ -564,11 +565,11 @@ async function fleet(opts: { clock?: { now: number }; ctx?: Partial<Ctx> } = {})
 
 type Found = { id: string; computer: string; title: string };
 
-test('droid_find merges this machine with online computers, dedupes, labels computers and reports the rest', async () => {
+test('droid_sessions merges this machine with online computers, dedupes, labels computers and reports the rest', async () => {
   const { c, api } = await fleet();
   try {
     const t = Date.now();
-    const res = await c.call('droid_find', { limit: 200 });
+    const res = await c.call('droid_sessions', { limit: 200 });
     assert.equal(res.isError, false, res.text);
     assert.ok(Date.now() - t < 3000, 'a hanging computer is cut off by its timeout');
     const listed = api.calls.filter((x) => x.path === '/api/v0/sessions').map((x) => x.query.get('computerId'));
@@ -615,11 +616,11 @@ test('droid_find merges this machine with online computers, dedupes, labels comp
     );
     assert.equal(res.json.workstreams[0].id, IDS.liveOrchestrator, 'workstreams with an orchestrator still come first');
 
-    const one = await c.call('droid_find', { computer: 'Laptop' });
+    const one = await c.call('droid_sessions', { computer: 'Laptop' });
     assert.deepEqual(one.json.computers.searched, ['laptop']);
     assert.ok(one.json.sessions.every((g: { computer?: string }) => g.computer === 'laptop'));
 
-    const content = await c.call('droid_find', { query: 'nothing-matches-this', content: true });
+    const content = await c.call('droid_sessions', { query: 'nothing-matches-this', content: true });
     assert.equal(content.json.contentSearch, 'this machine only');
     assert.deepEqual(content.json.computers.searched, ['this-box']);
   } finally {
@@ -627,11 +628,11 @@ test('droid_find merges this machine with online computers, dedupes, labels comp
   }
 });
 
-test('an unfiltered droid_find forgets a remembered remote computer for a session found locally', async () => {
+test('an unfiltered droid_sessions forgets a remembered remote computer for a session found locally', async () => {
   const sessionComputers = new Map([[IDS.liveStandalone, FLEET.laptop.id]]);
   const { c } = await fleet({ ctx: { sessionComputers } });
   try {
-    const res = await c.call('droid_find', { limit: 200 });
+    const res = await c.call('droid_sessions', { limit: 200 });
     assert.equal(res.isError, false, res.text);
     assert.equal(sessionComputers.has(IDS.liveStandalone), false);
     assert.equal(sessionComputers.get(REMOTE.laptopStandalone), FLEET.laptop.id);
@@ -647,14 +648,15 @@ test('a session tool naming an offline computer refuses before calling the sessi
       ['droid_wait', { session: REMOTE.laptopStandalone, computer: 'old-desk' }],
       ['droid_send', { session: REMOTE.laptopStandalone, computer: 'comp-desk', prompt: 'hi', idempotencyKey: 'off1' }],
       ['droid_result', { session: REMOTE.laptopStandalone, computer: 'old-desk' }],
-      ['droid_cancel', { session: REMOTE.laptopStandalone, computer: 'old-desk', scope: 'turn' }],
+      ['droid_interrupt', { session: REMOTE.laptopStandalone, computer: 'old-desk' }],
+      ['droid_close', { session: REMOTE.laptopStandalone, computer: 'old-desk' }],
       ['droid_respond', { session: REMOTE.laptopStandalone, computer: 'old-desk', requestId: 'r', cancel: true }],
     ] as const) {
       const res = await c.call(name, args);
       assert.equal(res.isError, true, name);
       assert.equal(res.error?.code, 'computer_offline', name);
       assert.match(res.error!.message, /^computer old-desk is offline \(daemon last seen 20\d\d-[\d-]+T[\d:]+Z\)$/, name);
-      assert.equal(res.error?.fix, 'Start its daemon, or pick another computer from droid_computers.', name);
+      assert.equal(res.error?.fix, 'Start its daemon, or pick another computer from droid_status.', name);
     }
     assert.deepEqual(
       api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')),
@@ -676,11 +678,11 @@ test('send and wait pass computerId for a named or remembered computer, and a re
     const post = api.calls.find((x) => x.method === 'POST' && x.path === `/api/v0/sessions/${REMOTE.cloudStandalone}/messages`);
     assert.deepEqual(post?.body, { text: 'go', computerId: FLEET.cloudA.id });
 
-    await c.call('droid_find', {});
+    await c.call('droid_sessions', {});
     const wait = await c.call('droid_wait', { session: REMOTE.laptopStandalone, waitMs: 0 });
     assert.equal(wait.isError, false, wait.text);
     const get = api.calls.find((x) => x.path === `/api/v0/sessions/${REMOTE.laptopStandalone}`);
-    assert.equal(get?.query.get('computerId'), FLEET.laptop.id, 'remembered from droid_find');
+    assert.equal(get?.query.get('computerId'), FLEET.laptop.id, 'remembered from droid_sessions');
 
     clock.now += 10 * 60_000;
     const before = api.calls.length;
@@ -779,8 +781,8 @@ test('a run this server owns is read and closed locally even when its session is
     assert.equal(result.json.content, 'the owned result', result.text);
     const named = await c.call('droid_result', { session: run.id, computer: 'old-desk' });
     assert.equal(named.json.content, 'the owned result', named.text);
-    const cancel = await c.call('droid_cancel', { session: run.id, scope: 'session' });
-    assert.equal(cancel.json.state, 'closed', cancel.text);
+    const closing = await c.call('droid_close', { session: run.id });
+    assert.equal(closing.json.state, 'closed', closing.text);
     assert.equal(closed, true);
     assert.deepEqual(
       api.calls.filter((x) => x.path.startsWith('/api/v0/sessions')),
@@ -791,20 +793,36 @@ test('a run this server owns is read and closed locally even when its session is
   }
 });
 
-test('droid_computers lists state per computer, and only this machine without a key', async () => {
-  const { c } = await fleet();
+test('droid_status lists state per computer with every computer field, and only this machine without a key', async () => {
+  const { c } = await fleet({ ctx: { probe: async () => ({}) } });
   try {
-    const res = await c.call('droid_computers', {});
+    const res = await c.call('droid_status', {});
     assert.equal(res.json.onlineWindowMinutes, 5);
+    assert.equal(res.json.note, undefined);
+    const cloudB = res.json.computers.find((x: { name: string }) => x.name === 'cloud-b');
+    assert.deepEqual(
+      { ...cloudB, plugin: undefined },
+      {
+        id: FLEET.cloudB.id,
+        name: 'cloud-b',
+        kind: 'cloud',
+        state: 'paused',
+        lastSeen: cloudB.lastSeen,
+        thisMachine: false,
+        providerStatus: 'paused',
+        plugin: undefined,
+      },
+    );
+    assert.match(cloudB.lastSeen, /^20\d\d-[\d-]+T[\d:]+Z$/);
     const states = Object.fromEntries(res.json.computers.map((x: { name: string; state: string }) => [x.name, x.state]));
     assert.deepEqual(states, { 'this-box': 'online', laptop: 'online', 'old-desk': 'offline', 'cloud-a': 'online', 'cloud-b': 'paused', 'slow-box': 'online' });
     assert.equal(res.json.computers.find((x: { thisMachine: boolean }) => x.thisMachine).name, 'this-box');
   } finally {
     await c.close();
   }
-  const bare = await connect({});
+  const bare = await connect({ probe: async () => ({}) });
   try {
-    const res = await bare.call('droid_computers', {});
+    const res = await bare.call('droid_status', {});
     assert.deepEqual(
       res.json.computers.map((x: { name: string; state: string; thisMachine: boolean }) => [x.name, x.state, x.thisMachine]),
       [['test-host', 'online', true]],
@@ -937,14 +955,14 @@ test('droid_setup starts a job with the env url and plugin source, and droid_sta
     await c.close();
   }
 });
-test('droid_events pages the event log and says whether forwarding is on', async () => {
+test('droid_inbox pages the event log and says whether forwarding is on', async () => {
   const events = new EventLog();
   const c = await connect({ events });
   try {
     for (const kind of ['finished', 'question', 'ended'] as const) {
       events.add({ sessionId: IDS.liveStandalone, kind, text: `${kind} text` }, { computer: 'laptop', forward: false });
     }
-    const all = await c.call('droid_events', { after: 0 });
+    const all = await c.call('droid_inbox', { after: 0 });
     assert.deepEqual(
       all.json.events.map((e: { seq: number }) => e.seq),
       [1, 2, 3],
@@ -953,13 +971,13 @@ test('droid_events pages the event log and says whether forwarding is on', async
     assert.equal(all.json.forwarding, 'off');
     assert.match(all.json.note, /untrusted/);
     assert.match(all.json.events[0].at, /^\d{4}-/);
-    const questions = await c.call('droid_events', { after: 0, kinds: ['question'] });
+    const questions = await c.call('droid_inbox', { after: 0, kinds: ['question'] });
     assert.deepEqual(
       questions.json.events.map((e: { kind: string }) => e.kind),
       ['question'],
     );
     assert.equal(questions.json.nextAfter, 3);
-    const page = await c.call('droid_events', { after: 0, limit: 2 });
+    const page = await c.call('droid_inbox', { after: 0, limit: 2 });
     assert.equal(page.json.nextAfter, 2);
   } finally {
     await c.close();
@@ -978,7 +996,7 @@ test('droid_subscribe and droid_unsubscribe are idempotent, persist, and refuse 
     assert.equal(new Subscriptions(path).has(sid), false);
     for (const tool of ['droid_subscribe', 'droid_unsubscribe']) {
       const bad = await c.call(tool, { session: '../etc' });
-      assert.deepEqual(bad.error, { code: 'invalid', message: 'invalid session id: ../etc', fix: 'Pass a session id from droid_find.' });
+      assert.deepEqual(bad.error, { code: 'invalid', message: 'invalid session id: ../etc', fix: 'Pass a session id from droid_sessions.' });
     }
   } finally {
     await c.close();
@@ -1008,13 +1026,13 @@ test('droid_start subscribes by default, not with subscribe: false, and a retry 
   }
 });
 
-test('droid_find marks subscribed sessions and omits the field on others', async () => {
+test('droid_sessions marks subscribed sessions and omits the field on others', async () => {
   const subscriptions = new Subscriptions(join(dir, 'subs-find.json'));
   await subscriptions.set(IDS.liveAgentNewer, true);
   await subscriptions.set(IDS.liveStandalone, true);
   const c = await connect({ subscriptions });
   try {
-    const res = await c.call('droid_find', {});
+    const res = await c.call('droid_sessions', {});
     const [ws] = res.json.workstreams;
     const byId = new Map<string, { subscribed?: boolean }>(
       [ws.orchestrator, ...ws.agents, ...res.json.sessions.flatMap((g: { sessions: unknown[] }) => g.sessions)].map((e) => [e.id, e]),
@@ -1025,5 +1043,91 @@ test('droid_find marks subscribed sessions and omits the field on others', async
     assert.equal('subscribed' in byId.get(IDS.liveAgentOlder)!, false);
   } finally {
     await c.close();
+  }
+});
+
+test('sessionState maps Factory and local statuses onto the shared run states', () => {
+  const table: Array<[string | undefined, string]> = [
+    ['running', 'working'],
+    ['pending', 'needs_you'],
+    ['idle', 'idle'],
+    ['something-new', 'idle'],
+    ['', 'idle'],
+    ['constructor', 'idle'],
+    [undefined, 'idle'],
+  ];
+  for (const [status, state] of table) assert.equal(sessionState(status), state, String(status));
+});
+
+test('droid_sessions gives each session one state, its own run state first, and no status or run field', async () => {
+  const run = { id: IDS.liveStandalone, state: 'working' } as unknown as OwnRun;
+  const runs = { get: (id: string) => (id === run.id ? run : undefined) } as unknown as Runs;
+  const c = await connect({ runs });
+  try {
+    const res = await c.call('droid_sessions', {});
+    const [ws] = res.json.workstreams;
+    const entries: Array<{ id: string; state: string }> = [
+      ws.orchestrator,
+      ...ws.agents,
+      ...res.json.sessions.flatMap((g: { sessions: unknown[] }) => g.sessions),
+    ];
+    assert.deepEqual(Object.fromEntries(entries.map((e) => [e.id, e.state])), {
+      [IDS.liveOrchestrator]: 'idle',
+      [IDS.liveAgentNewer]: 'idle',
+      [IDS.liveAgentOlder]: 'idle',
+      [IDS.liveStandalone]: 'working',
+    });
+    for (const e of entries) assert.ok(!('status' in e) && !('run' in e), e.id);
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_interrupt and droid_close stop an own run through Runs', async () => {
+  const calls: string[] = [];
+  const run = { id: REMOTE.laptopStandalone, state: 'working' } as unknown as OwnRun;
+  const runs = {
+    get: (id: string) => (id === run.id ? run : undefined),
+    cancel: async (r: OwnRun, scope: string) => {
+      calls.push(scope);
+      r.state = scope === 'session' ? 'closed' : 'idle';
+    },
+  } as unknown as Runs;
+  const c = await connect({ runs });
+  try {
+    assert.deepEqual((await c.call('droid_interrupt', { session: run.id })).json, { sessionId: run.id, state: 'idle' });
+    assert.deepEqual((await c.call('droid_close', { session: run.id })).json, { sessionId: run.id, state: 'closed' });
+    assert.deepEqual(calls, ['turn', 'session']);
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_interrupt goes over REST for other sessions; droid_close refuses them, and both need a key for local ones', async () => {
+  const calls: string[] = [];
+  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const req = new Request(input, init);
+    calls.push(`${req.method} ${new URL(req.url).pathname}`);
+    return Response.json({});
+  }) as typeof globalThis.fetch;
+  const closeRefusal = { code: 'invalid', message: 'only sessions this server started can be closed', fix: 'Use droid_interrupt to stop its running turn.' };
+  const keyed = await connect({ rest: createRest({ apiKey: 'k', fetch }) });
+  try {
+    const stopped = await keyed.call('droid_interrupt', { session: REMOTE.laptopStandalone });
+    assert.deepEqual(stopped.json, { sessionId: REMOTE.laptopStandalone, via: 'rest', interrupted: true }, stopped.text);
+    assert.deepEqual((await keyed.call('droid_close', { session: REMOTE.laptopStandalone })).error, closeRefusal);
+    assert.deepEqual((await keyed.call('droid_close', { session: IDS.liveStandalone })).error, closeRefusal);
+    assert.deepEqual(calls, [`POST /api/v0/sessions/${REMOTE.laptopStandalone}/interrupt`]);
+  } finally {
+    await keyed.close();
+  }
+  const bare = await connect({});
+  try {
+    const local = await bare.call('droid_interrupt', { session: IDS.liveStandalone });
+    assert.equal(local.error?.code, 'needs_api_key', local.text);
+    assert.equal(local.error?.message, 'interrupting for sessions this server did not start needs FACTORY_API_KEY');
+    assert.deepEqual((await bare.call('droid_close', { session: IDS.liveStandalone })).error, closeRefusal);
+  } finally {
+    await bare.close();
   }
 });

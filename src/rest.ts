@@ -25,7 +25,7 @@ const KEY_FIX = 'Check that FACTORY_API_KEY is valid and its account can use the
 const BY_STATUS: Record<number, [ErrorCode, string]> = {
   401: ['needs_api_key', KEY_FIX],
   403: ['needs_api_key', KEY_FIX],
-  404: ['not_found', 'Check the id with droid_find or droid_computers.'],
+  404: ['not_found', 'Check the id with droid_sessions or droid_status.'],
   409: ['busy', 'Check the session with droid_wait, then retry.'],
 };
 
