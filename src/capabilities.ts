@@ -35,7 +35,7 @@ export const eventsUrl = (http: string) => `http://${http}/events`;
 // Loopback and wildcard binds give a URL that other computers cannot use.
 export function localOnly(http: string): boolean {
   const host = hostPort(http)?.host ?? '';
-  return host === 'localhost' || host === '::1' || host === '::' || host === '0.0.0.0' || host.startsWith('127.');
+  return isLoopback(host) || isWildcard(host);
 }
 
 export function pasteLine(url: string, computerId: string): string {
@@ -59,12 +59,31 @@ function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'
   return check('plugin', installed === true, `this machine: ${detail}`, 'rings from this machine', fix);
 }
 
+const isLoopback = (host: string) => host === 'localhost' || host === '::1' || host.startsWith('127.');
+const isWildcard = (host: string) => host === '0.0.0.0' || host === '::';
+
+// Whether a curlrc url on this machine reaches a server bound to `bind`: the exact address, a loopback
+// address when bound to loopback, or any host on the port when bound to every interface.
+export function reachesBind(url: string, bind: { host: string; port: number }): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname.replace(/^\[(.*)\]$/, '$1');
+  if (u.protocol !== 'http:' || u.pathname !== '/events' || Number(u.port || 80) !== bind.port) return false;
+  return host === bind.host || isWildcard(bind.host) || (isLoopback(bind.host) && isLoopback(host));
+}
+
 function curlrcCheck(http: string | undefined, url: string | undefined): Check {
   const unlocks = 'rings from this machine reaching this server';
-  if (http === undefined || !hostPort(http)) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
-  const want = eventsUrl(http);
-  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : url === want ? `url is ${url}` : `url is ${url}, expected ${want}`;
-  return check('curlrc', url === want, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${want}"`);
+  const bind = http === undefined ? undefined : hostPort(http);
+  if (!bind) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
+  const want = isWildcard(bind.host) ? `http://127.0.0.1:${bind.port}/events` : eventsUrl(http!);
+  const ok = url !== undefined && reachesBind(url, bind);
+  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : ok ? `url is ${url}` : `url is ${url}, which does not reach ${http}`;
+  return check('curlrc', ok, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${want}"`);
 }
 
 export function capabilities(input: CapabilityInput): Check[] {
