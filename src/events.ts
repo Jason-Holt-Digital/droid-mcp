@@ -14,6 +14,8 @@ export type DroidEvent = {
   cwd?: string;
   tags?: string[];
   forwarded: boolean;
+  // For a forwarded event: whether the webhook answered 2xx. 'sending' until it answers or times out.
+  delivery?: 'sending' | 'delivered' | 'failed';
 };
 
 export const DEBOUNCE_MS = 30_000;
