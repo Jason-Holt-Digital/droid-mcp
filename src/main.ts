@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { capabilities, doctorReport, hostPort, missingRoots, probeThisMachine } from './capabilities.ts';
+import { capabilities, doctorReport, hostPort, missingRoots, probeThisMachine, resolveBind } from './capabilities.ts';
 import { repoRoot } from './catalog.ts';
 import { Computers } from './computers.ts';
 import { allowedRoots, autonomyCap, lookupApiKey, lookupSecret } from './config.ts';
@@ -24,7 +24,13 @@ async function lookupConfig(http: string | undefined) {
     lookupSecret('DROID_MCP_WEBHOOK_URL', 'WEBHOOK_URL'),
     lookupSecret('DROID_MCP_WEBHOOK_KEY', 'WEBHOOK_KEY'),
   ]);
-  const status = { http, webhook: Boolean(webhookUrl && webhookKey), eventsToken: Boolean(eventsToken), httpToken: Boolean(process.env.DROID_MCP_TOKEN) };
+  const status = {
+    http,
+    bindAddress: await resolveBind(http),
+    webhook: Boolean(webhookUrl && webhookKey),
+    eventsToken: Boolean(eventsToken),
+    httpToken: Boolean(process.env.DROID_MCP_TOKEN),
+  };
   return { apiKey, eventsToken, webhookUrl, webhookKey, status };
 }
 
