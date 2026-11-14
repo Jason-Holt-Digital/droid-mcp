@@ -45,6 +45,15 @@ function prompt(commands: string[]): string {
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Settles when p does or after ms, whichever comes first, and never rejects.
+const bounded = (p: Promise<unknown>, ms: number) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    p.catch(() => {}).finally(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 
 // One timer for the whole job. Every REST call races it, so a stalled call cannot outlive it; stop() ends it early.
 type Deadline = { at: number; within: <T>(p: Promise<T>) => Promise<T>; stop: (reason: string) => void; clear: () => void };
@@ -63,15 +72,17 @@ export class Setup {
   #rest: SetupRest;
   #pollMs: number;
   #timeoutMs: number;
+  #cleanupMs: number;
   #now: () => number;
   #jobs = new Map<string, Job>();
   #running = new Set<{ stop: (reason: string) => void; done: Promise<void> }>();
   #closed = false;
 
-  constructor(opts: { rest: SetupRest; pollMs?: number; timeoutMs?: number; now?: () => number }) {
+  constructor(opts: { rest: SetupRest; pollMs?: number; timeoutMs?: number; cleanupMs?: number; now?: () => number }) {
     this.#rest = opts.rest;
     this.#pollMs = opts.pollMs ?? 2000;
     this.#timeoutMs = opts.timeoutMs ?? 4 * 60_000;
+    this.#cleanupMs = opts.cleanupMs ?? 10_000;
     this.#now = opts.now ?? Date.now;
   }
 
@@ -190,8 +201,16 @@ export class Setup {
   }
 
   // A failed job may still have a command running there; stop it before archiving.
+  // Each call gets its own bound, so a stalled interrupt cannot block the archive or the job's result.
   async #cleanup(sessionId: string, state: 'done' | 'failed'): Promise<void> {
-    if (state === 'failed') await this.#rest.interrupt(sessionId).catch(() => {});
-    await this.#rest.archive(sessionId).catch(() => {});
+    if (state === 'failed')
+      await bounded(
+        Promise.resolve().then(() => this.#rest.interrupt(sessionId)),
+        this.#cleanupMs,
+      );
+    await bounded(
+      Promise.resolve().then(() => this.#rest.archive(sessionId)),
+      this.#cleanupMs,
+    );
   }
 }
