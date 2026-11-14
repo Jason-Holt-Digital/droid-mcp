@@ -41,7 +41,13 @@ export async function recordEvent(ctx: Ctx, input: EventInput, forward = true): 
     computer: computer ?? input.host ?? 'unknown',
     forward: forward && Boolean(ctx.forwarder?.enabled) && ctx.subscriptions.has(input.sessionId),
   });
-  if (event.forwarded) void ctx.forwarder?.send(event);
+  if (event.forwarded && ctx.forwarder) {
+    // Recorded on the event, so droid_events shows whether the webhook took it, not only that droid-mcp tried.
+    event.delivery = 'sending';
+    void ctx.forwarder.send(event).then((ok) => {
+      event.delivery = ok ? 'delivered' : 'failed';
+    });
+  }
   return event;
 }
 
