@@ -44,7 +44,7 @@ export type Ctx = {
   env?: NodeJS.ProcessEnv;
   catalog?: () => Promise<ModelCatalog>;
   doorbell?: Doorbell;
-  status?: { http?: string; webhook: boolean; eventsToken: boolean };
+  status?: { http?: string; webhook: boolean; eventsToken: boolean; httpToken: boolean };
   probe?: () => Promise<ThisMachine>;
   setup?: Setup;
 };
@@ -395,17 +395,19 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     },
     handle(async () => {
       const http = ctx.status?.http;
+      const env = ctx.env ?? process.env;
       const checks = capabilities({
         apiKey: Boolean(ctx.rest),
         webhook: ctx.status?.webhook ?? false,
         eventsToken: ctx.status?.eventsToken ?? false,
+        httpToken: ctx.status?.httpToken ?? false,
         http,
         roots: ctx.roots,
         missingRoots: missingRoots(ctx.roots),
         cap: autonomyCap(ctx.env),
+        eventsUrl: env.DROID_MCP_EVENTS_URL || undefined,
         ...(await (ctx.probe ?? probeThisMachine)()),
       });
-      const env = ctx.env ?? process.env;
       const url = configuredEventsUrl(env, http);
       const pluginFix = (c: Computer) => {
         if (!url) return 'This server has no events URL; run it with --http <host:port>, or set DROID_MCP_EVENTS_URL.';
