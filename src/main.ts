@@ -12,6 +12,7 @@ import { createHandler, newServer } from './http.ts';
 import { createRest } from './rest.ts';
 import { Doorbell } from './ring.ts';
 import { KeyStore, Runs } from './runs.ts';
+import { Setup } from './setup.ts';
 import { Subscriptions } from './subscriptions.ts';
 import type { Ctx } from './tools.ts';
 
@@ -40,6 +41,7 @@ async function doctor(http: string | undefined): Promise<number> {
     roots: allowedRoots(),
     missingRoots: missingRoots(allowedRoots()),
     cap: autonomyCap(),
+    eventsUrl: process.env.DROID_MCP_EVENTS_URL || undefined,
     ...(await probeThisMachine()),
   });
   const { lines, code } = doctorReport(checks);
@@ -80,6 +82,7 @@ async function main(): Promise<void> {
     sessionComputers: new Map(),
     forwarder: new Forwarder({ url: webhookUrl, key: webhookKey }),
     status,
+    setup: rest && new Setup({ rest }),
   };
   const doorbell = new Doorbell(ctx);
   ctx.doorbell = doorbell;
@@ -88,7 +91,9 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
-    await ctx.runs.closeAll();
+    // A stalled REST call must not hold the exit: setup gets 4 s to interrupt and 4 s to archive, inside a 10 s bound.
+    const setupClosed = ctx.setup?.close(8000) ?? Promise.resolve();
+    await Promise.all([ctx.runs.closeAll(), Promise.race([setupClosed, new Promise((r) => setTimeout(r, 10_000).unref())])]);
     await Promise.all([ctx.keys.flush(), ctx.subscriptions.flush()]);
     process.exit(0);
   };

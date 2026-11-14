@@ -5,7 +5,7 @@ import { ToolError } from '../src/config.ts';
 
 const KEY = 'fk-secret-test-key';
 
-type Call = { method: string; path: string; query: string; body: unknown; auth: string | null };
+type Call = { method: string; path: string; query: string; body: any; auth: string | null };
 
 function mockFetch(routes: Record<string, { status?: number; body: unknown }>) {
   const calls: Call[] = [];
@@ -231,4 +231,35 @@ test('status, messages and send route to a computer when given one', async () =>
   assert.match(get!.query, /computerId=c1/);
   assert.match(calls.find((c) => c.method === 'GET' && c.path.endsWith('/messages'))!.query, /computerId=c1/);
   assert.deepEqual(calls.find((c) => c.method === 'POST')!.body, { text: 'hi', computerId: 'c1' });
+});
+
+test('create sends the computer and settings, archive sends an ISO archivedAt, and permissions list their Execute commands', async () => {
+  const { fetch, calls } = mockFetch({
+    'POST /api/v0/sessions': { status: 201, body: { sessionId: 'new1' } },
+    'PATCH /api/v0/sessions/new1': { body: {} },
+    'GET /api/v0/sessions/new1/elicitations': {
+      body: {
+        elicitations: [
+          {
+            type: 'permission',
+            requestId: 'r1',
+            toolUses: [
+              { toolUse: { type: 'tool_use', id: 't1', name: 'Execute', input: { command: 'ls -la' } }, confirmationType: 'exec' },
+              { toolUse: { type: 'tool_use', id: 't2', name: 'Create', input: { file_path: '/tmp/x' } }, confirmationType: 'create' },
+            ],
+            options: [{ label: 'No', value: 'cancel' }],
+          },
+        ],
+      },
+    },
+  });
+  const rest = createRest({ apiKey: KEY, fetch });
+  assert.equal(await rest.create('c1', { autonomyLevel: 'off', tags: [{ name: 'droid-mcp-setup' }] }), 'new1');
+  assert.deepEqual(calls[0].body, { computerId: 'c1', sessionSettings: { autonomyLevel: 'off', tags: [{ name: 'droid-mcp-setup' }] } });
+  await rest.archive('new1');
+  assert.equal(calls[1].method, 'PATCH');
+  assert.equal(typeof calls[1].body.sessionSettings.archivedAt, 'string');
+  assert.ok(!Number.isNaN(Date.parse(calls[1].body.sessionSettings.archivedAt)));
+  const [e] = await rest.elicitations('new1');
+  assert.deepEqual([e.tools, e.commands], [['Execute', 'Create'], ['ls -la']]);
 });

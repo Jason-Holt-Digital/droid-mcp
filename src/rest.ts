@@ -1,6 +1,7 @@
 import {
   answerSessionElicitation,
   createFactoryClient,
+  createSession,
   getMessages,
   getSession,
   interruptSession,
@@ -11,6 +12,7 @@ import {
   postMessage,
   updateSession,
   type AnswerSessionElicitationRequestBody,
+  type CreateSessionRequestBody,
 } from '@factory/droid-sdk/api';
 import type { RemoteSession } from './catalog.ts';
 import { ToolError, type ErrorCode } from './config.ts';
@@ -50,6 +52,8 @@ export type Elicitation = {
   requestId: string;
   type: 'permission' | 'ask-user' | string;
   options?: string[];
+  tools?: string[];
+  commands?: string[];
   questions?: Array<{ index: number; question: string; options: string[] }>;
   summary?: string;
 };
@@ -67,6 +71,11 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
             requestId: e.requestId,
             type: e.type,
             options: e.options.map((o) => o.value),
+            tools: e.toolUses.map((t) => t.toolUse.name),
+            commands: e.toolUses.flatMap((t) => {
+              const command = (t.toolUse.input as { command?: unknown }).command;
+              return t.toolUse.name === 'Execute' && typeof command === 'string' ? [command] : [];
+            }),
             summary: e.toolUses
               .map((t) => `${t.toolUse.name} ${JSON.stringify(t.toolUse.input)}`)
               .join('; ')
@@ -116,6 +125,14 @@ export function createRest(opts: { apiKey: string; fetch?: typeof fetch; baseUrl
         })),
         nextCursor: data.pagination?.nextCursor ?? undefined,
       };
+    },
+
+    async create(computerId: string, sessionSettings: NonNullable<CreateSessionRequestBody['sessionSettings']>): Promise<string> {
+      return unwrap(await createSession({ client, body: { computerId, sessionSettings } }), 'createSession').sessionId;
+    },
+
+    async archive(sessionId: string) {
+      unwrap(await updateSession({ client, path: { sessionId }, body: { sessionSettings: { archivedAt: new Date().toISOString() } } }), 'archive');
     },
 
     async send(sessionId: string, text: string, computerId?: string) {

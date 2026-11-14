@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { homedir, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { API_KEY_FIX, type Autonomy } from './config.ts';
+import { DEFAULT_SOURCE, installCommands, setupCommands } from './setup.ts';
 
 export type Check = { name: string; ok: boolean; detail: string; unlocks: string; fix?: string };
 export type ThisMachine = {
@@ -23,6 +24,8 @@ export type CapabilityInput = ThisMachine & {
   eventsToken: boolean;
   // Whether DROID_MCP_TOKEN is set; --http refuses to start without it.
   httpToken: boolean;
+  // DROID_MCP_EVENTS_URL, when set: the URL droid_setup writes, e.g. behind a proxy.
+  eventsUrl?: string;
   http?: string;
   // The address a hostname bind such as localhost resolves to, which is where the server really listens.
   bindAddress?: string;
@@ -32,7 +35,7 @@ export type CapabilityInput = ThisMachine & {
   cap: Autonomy;
 };
 
-export const PLUGIN_INSTALL = 'droid plugin marketplace add Jason-Holt-Digital/droid-mcp && droid plugin install droid-mcp@droid-mcp --scope user';
+export const PLUGIN_INSTALL = installCommands(DEFAULT_SOURCE).join(' && ');
 const HTTP_FIX = 'Run the server with --http <host:port> and DROID_MCP_TOKEN.';
 const REQUIRED = ['api_key', 'http', 'roots'];
 
@@ -50,8 +53,18 @@ export function localOnly(http: string): boolean {
   return isLoopback(host) || isWildcard(host);
 }
 
-export function pasteLine(url: string, computerId: string): string {
-  return `${PLUGIN_INSTALL} && printf 'url = "%s"\\nheader = "x-droid-mcp-computer: %s"\\n' '${url}' '${computerId}' > ~/.factory/droid-mcp.curlrc`;
+// The URL other computers ring: DROID_MCP_EVENTS_URL when set (e.g. behind a proxy), else this server's --http address.
+export function configuredEventsUrl(env: NodeJS.ProcessEnv, http: string | undefined): string | undefined {
+  return env.DROID_MCP_EVENTS_URL || (http && hostPort(http) ? eventsUrl(http) : undefined);
+}
+
+export function loopbackUrl(url: string): boolean {
+  const { hostname, port } = new URL(url);
+  return localOnly(`${hostname}:${port || 80}`);
+}
+
+export function pasteLine(url: string, computerId: string, source = DEFAULT_SOURCE): string {
+  return setupCommands(source, url, computerId).join(' && ');
 }
 
 function check(name: string, ok: boolean, detail: string, unlocks: string, fix: string): Check {
@@ -99,13 +112,19 @@ export function reachesBind(url: string, bind: { host: string; port: number }, h
   return host === 'localhost' && (bind.host === '127.0.0.1' || bind.host === '::1');
 }
 
-function curlrcCheck(http: string | undefined, url: string | undefined, here: Here): Check {
+// The configured URL (what droid_setup writes, e.g. a reverse proxy) or any url that reaches the --http bind.
+function curlrcCheck(http: string | undefined, configured: string | undefined, url: string | undefined, here: Here): Check {
   const unlocks = 'rings from this machine reaching this server';
   const bind = http === undefined ? undefined : hostPort(http);
-  if (!bind) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
-  const want = isWildcard(bind.host) ? `http://127.0.0.1:${bind.port}/events` : eventsUrl(http!);
-  const ok = url !== undefined && reachesBind(url, bind, here);
-  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : ok ? `url is ${url}` : `url is ${url}, which does not reach ${http}`;
+  const want = configured ?? (bind && (isWildcard(bind.host) ? `http://127.0.0.1:${bind.port}/events` : eventsUrl(http!)));
+  if (!want) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
+  const ok = url !== undefined && (url === configured || (bind !== undefined && reachesBind(url, bind, here)));
+  const detail =
+    url === undefined
+      ? 'no url in ~/.factory/droid-mcp.curlrc'
+      : ok
+        ? `url is ${url}`
+        : `url is ${url}, which does not reach ${[configured, http].filter(Boolean).join(' or ')}`;
   return check('curlrc', ok, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${want}"`);
 }
 
@@ -135,7 +154,7 @@ export function capabilities(input: CapabilityInput): Check[] {
     ),
     check('autonomy_cap', true, `cap is ${input.cap} (DROID_MCP_MAX_AUTONOMY)`, `autonomy up to ${input.cap}`, ''),
     pluginCheck(input.pluginInstalled, input.pluginError),
-    curlrcCheck(input.http, input.curlrcUrl, input),
+    curlrcCheck(input.http, input.eventsUrl, input.curlrcUrl, input),
     check(
       'events_token',
       true,

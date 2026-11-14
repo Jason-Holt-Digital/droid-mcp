@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import type { resumeSession } from '@factory/droid-sdk/node';
 import { scanSessions, type SessionRecord } from '../src/catalog.ts';
 import { parseCustomModels, parseHelp, type ModelCatalog } from '../src/models.ts';
+import type { Elicitation } from '../src/rest.ts';
+import type { SetupRest } from '../src/setup.ts';
 
 export const FIXTURES = fileURLToPath(new URL('./fixtures/sessions', import.meta.url));
 
@@ -138,3 +140,59 @@ export function fakeResume(fail?: Error) {
   };
   return { resume: resume as unknown as typeof resumeSession, made };
 }
+
+type Step = { status: string; elicitations?: Elicitation[] };
+
+// A Rest stand-in for Setup: status() walks the steps and then repeats the last one.
+export function fakeSetupRest(steps: Step[], reply?: string) {
+  const calls = {
+    created: [] as unknown[],
+    sent: [] as string[],
+    answers: [] as Array<{ requestId: string; body: unknown }>,
+    interrupted: [] as string[],
+    archived: [] as string[],
+  };
+  let i = 0;
+  const rest: SetupRest = {
+    create: async (computerId, settings) => {
+      calls.created.push({ computerId, settings });
+      return 'setup-session';
+    },
+    send: async (_id, text) => {
+      calls.sent.push(text);
+      return { messageId: 'm1', status: 'running' };
+    },
+    status: async () => {
+      const step = steps[Math.min(i++, steps.length - 1)];
+      return { status: step.status, elicitations: step.elicitations ?? [] } as unknown as Awaited<ReturnType<SetupRest['status']>>;
+    },
+    messages: async () => ({
+      messages:
+        reply === undefined
+          ? []
+          : [
+              { id: 'a1', role: 'assistant', text: reply, createdAt: 2, seq: 2 },
+              { id: 'a0', role: 'assistant', text: 'older', createdAt: 1, seq: 1 },
+            ],
+      nextCursor: undefined,
+    }),
+    answer: async (_id, requestId, body) => {
+      calls.answers.push({ requestId, body });
+    },
+    interrupt: async (id) => {
+      calls.interrupted.push(id);
+    },
+    archive: async (id) => {
+      calls.archived.push(id);
+    },
+  };
+  return { rest, calls };
+}
+
+export const permission = (requestId: string, ...commands: string[]): Elicitation => ({
+  requestId,
+  type: 'permission',
+  options: ['proceed_once', 'cancel'],
+  tools: commands.map(() => 'Execute'),
+  commands,
+});

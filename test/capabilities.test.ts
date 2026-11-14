@@ -110,6 +110,16 @@ test('roots fail when none exists, and the detail names the missing ones', () =>
   assert.match(some.detail, /missing: \/a$/);
 });
 
+test('the curlrc may point at the configured events URL or the --http address', () => {
+  const eventsUrl = 'https://droid.example.ts.net/events';
+  assert.equal(byName({ ...ALL, eventsUrl, curlrcUrl: eventsUrl }).curlrc.ok, true);
+  assert.equal(byName({ ...ALL, eventsUrl, curlrcUrl: 'http://127.0.0.1:37999/events' }).curlrc.ok, true);
+  const wrong = byName({ ...ALL, eventsUrl, curlrcUrl: 'http://old:1/events' }).curlrc;
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.fix ?? '', /url = "https:\/\/droid\.example\.ts\.net\/events"/);
+  assert.equal(byName({ ...ALL, http: undefined, eventsUrl, curlrcUrl: eventsUrl }).curlrc.ok, true, 'a configured URL works without --http');
+});
+
 test('the curlrc check accepts any url that reaches the bind address', () => {
   const ok = (http: string, curlrcUrl: string) => byName({ ...ALL, http, curlrcUrl, localAddresses: ['100.73.48.66', 'fd7a::1'] }).curlrc.ok;
   assert.equal(ok('127.0.0.1:37999', 'http://localhost:37999/events'), true, 'loopback alias');

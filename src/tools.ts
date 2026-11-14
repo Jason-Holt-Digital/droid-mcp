@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AnswerSessionElicitationRequestBody } from '@factory/droid-sdk/api';
 import { z } from 'zod';
-import { capabilities, eventsUrl, localOnly, missingRoots, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
+import { capabilities, configuredEventsUrl, loopbackUrl, missingRoots, pasteLine, probeThisMachine, type ThisMachine } from './capabilities.ts';
 import {
   filterRecords,
   findSession,
@@ -30,6 +30,7 @@ import type { Doorbell } from './ring.ts';
 import { routeSend, type Target } from './route.ts';
 import { preview, type KeyStore, type RunEvent, type Runs } from './runs.ts';
 import { EFFORTS, startOnly, toRestSettings, validateSettings } from './settings.ts';
+import { pluginSource, setupCommands, validateSetup, type Setup } from './setup.ts';
 import type { Subscriptions } from './subscriptions.ts';
 
 export type Ctx = {
@@ -50,6 +51,7 @@ export type Ctx = {
   doorbell?: Doorbell;
   status?: { http?: string; bindAddress?: string; webhook: boolean; eventsToken: boolean; httpToken: boolean };
   probe?: () => Promise<ThisMachine>;
+  setup?: Setup;
 };
 
 export const LIMIT_BYTES = 8192;
@@ -502,12 +504,13 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
     'droid_status',
     {
       description:
-        'Check what this server can do and what is missing, with a fix for each gap: API key, webhook, HTTP mode, roots, autonomy cap, and the doorbell plugin on this machine. Lists each computer with when its plugin last rang and, if it never did, the one line to paste on that computer.',
+        'Check what this server can do and what is missing, with a fix for each gap: API key, webhook, HTTP mode, roots, autonomy cap, and the doorbell plugin on this machine. Lists each computer with when its plugin last rang and, if it never did, the one line to paste on that computer, plus its latest droid_setup job.',
       inputSchema: {},
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     handle(async () => {
       const http = ctx.status?.http;
+      const env = ctx.env ?? process.env;
       const checks = capabilities({
         apiKey: Boolean(ctx.rest),
         webhook: ctx.status?.webhook ?? false,
@@ -518,15 +521,18 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         roots: ctx.roots,
         missingRoots: missingRoots(ctx.roots),
         cap: autonomyCap(ctx.env),
+        eventsUrl: env.DROID_MCP_EVENTS_URL || undefined,
         ...(await (ctx.probe ?? probeThisMachine)()),
       });
+      const url = configuredEventsUrl(env, http);
       const pluginFix = (c: Computer) => {
-        if (http === undefined) return 'This server runs over stdio and has no /events; run it with --http <host:port> first.';
-        const line = pasteLine(eventsUrl(http), c.id);
-        if (c.thisMachine || !localOnly(http)) return `On ${c.name}, run: ${line}`;
-        return `On ${c.name}, run this with ${eventsUrl(http)} replaced by a URL ${c.name} can reach, such as this server's tailnet address: ${line}`;
+        if (!url) return 'This server has no events URL; run it with --http <host:port>, or set DROID_MCP_EVENTS_URL.';
+        const line = pasteLine(url, c.id, pluginSource(env));
+        if (c.thisMachine || !loopbackUrl(url)) return `On ${c.name}, run: ${line}`;
+        return `On ${c.name}, run this with ${url} replaced by a URL ${c.name} can reach, such as this server's tailnet address: ${line}`;
       };
       const view = (c: Computer) => {
+        const job = ctx.setup?.get(c.id);
         const seen = ctx.doorbell?.seenAt(c.id);
         return {
           id: c.id,
@@ -536,6 +542,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           lastSeen: c.lastSeenAt === undefined ? undefined : isoSeconds(c.lastSeenAt),
           thisMachine: c.thisMachine,
           plugin: seen ? { seen: isoSeconds(seen) } : { fix: pluginFix(c) },
+          setup: job && { ...job, at: isoSeconds(job.at) },
         };
       };
       try {
@@ -543,6 +550,53 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       } catch (err) {
         return { checks, computersError: errorBody(err) };
       }
+    }),
+  );
+
+  server.registerTool(
+    'droid_setup',
+    {
+      description:
+        "Install the droid-mcp doorbell plugin on one Droid computer and point it at this server, through a Droid session there (autonomy off) that may run only three fixed commands; anything else is cancelled. Call it only when the user asked for it. Returns at once; droid_status shows the job's progress. pasteLine is the same setup as one line to run on that computer by hand. Unverified on Windows computers.",
+      inputSchema: {
+        computer: z.string().describe('Computer name or id from droid_computers'),
+        url: z.string().optional().describe("Events URL that computer can reach; defaults to DROID_MCP_EVENTS_URL, else this server's --http address"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    handle(async (a) => {
+      const env = ctx.env ?? process.env;
+      const http = ctx.status?.http;
+      const url = a.url ?? configuredEventsUrl(env, http);
+      if (!url)
+        throw new Refused(
+          'invalid',
+          'no events URL: this server runs over stdio',
+          'Run the server with --http <host:port>, set DROID_MCP_EVENTS_URL, or pass url.',
+        );
+      const source = pluginSource(env);
+      validateSetup(source, url);
+      if (!ctx.rest || !ctx.setup) {
+        const id = (await ctx.computers.resolve(a.computer).catch(() => undefined))?.id ?? '<computer-id>';
+        const fix = `Set FACTORY_API_KEY in the server's environment, or run this on ${a.computer}: ${pasteLine(url, id, source)}`;
+        throw new Refused('needs_api_key', 'droid_setup needs FACTORY_API_KEY to start a session on that computer', fix);
+      }
+      const c = await ctx.computers.resolve(a.computer);
+      validateSetup(source, url, c.id);
+      const line = pasteLine(url, c.id, source);
+      if (c.state === 'offline') {
+        const err = offlineError(c);
+        throw new Refused(err.code, err.message, `${err.fix} Or, once it is up, run this on it: ${line}`);
+      }
+      if (!c.thisMachine && loopbackUrl(url)) {
+        throw new Refused(
+          'invalid',
+          `${url} is a loopback address, which ${c.name} cannot reach`,
+          'Set DROID_MCP_EVENTS_URL to an address that computer can reach, such as the tailnet address, or pass url.',
+        );
+      }
+      const job = await ctx.setup.start(c.id, setupCommands(source, url, c.id));
+      return { computer: c.name, state: job.state, sessionId: job.sessionId, detail: job.detail, pasteLine: line };
     }),
   );
 

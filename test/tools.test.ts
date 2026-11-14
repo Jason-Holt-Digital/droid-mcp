@@ -13,9 +13,10 @@ import { EventLog } from '../src/events.ts';
 import { createRest } from '../src/rest.ts';
 import type { Doorbell } from '../src/ring.ts';
 import { KeyStore, Runs, type OwnRun, type RunEvent } from '../src/runs.ts';
+import { Setup } from '../src/setup.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
 import { clampWait, DEFAULT_WAIT_MS, LIMIT_BYTES, MAX_WAIT_MS, pageBytes, registerTools, type Ctx } from '../src/tools.ts';
-import { catalog, fakeApi, fakeResume, FIXTURES, IDS, SECRET } from './helpers.ts';
+import { catalog, fakeApi, fakeResume, fakeSetupRest, FIXTURES, IDS, SECRET } from './helpers.ts';
 
 let dir: string;
 let project: string;
@@ -310,6 +311,7 @@ test('every tool declares all four hints with the expected values', async () => 
       droid_find: hints(true, false, true, true),
       droid_computers: hints(true, false, true, true),
       droid_status: hints(true, false, true, true),
+      droid_setup: hints(false, false, true, true),
       droid_events: hints(true, false, true, false),
       droid_models: hints(true, false, true, false),
       droid_start: hints(false, true, true, true),
@@ -836,6 +838,15 @@ test('droid_status reports checks and, per computer, when its plugin rang or the
     await c.close();
   }
 
+  const proxied = await fleet({ ctx: { probe, status, env: { DROID_MCP_EVENTS_URL: 'https://droid.example.ts.net/events' } } });
+  try {
+    const res = await proxied.c.call('droid_status', {});
+    const cloud = res.json.computers.find((x: { name: string }) => x.name === 'cloud-a');
+    assert.equal(cloud.plugin.fix, `On cloud-a, run: ${pasteLine('https://droid.example.ts.net/events', FLEET.cloudA.id)}`, 'the configured events URL wins');
+  } finally {
+    await proxied.c.close();
+  }
+
   const tailnet = await fleet({ ctx: { probe, status: { ...status, http: '100.73.48.66:37999' } } });
   try {
     const res = await tailnet.c.call('droid_status', {});
@@ -863,13 +874,69 @@ test('droid_status keeps its checks when the computer list fails, and tells stdi
   const bare = await connect({ probe: async () => ({}) });
   try {
     const res = await bare.call('droid_status', {});
-    assert.match(res.json.computers[0].plugin.fix, /stdio .*--http/);
+    assert.match(res.json.computers[0].plugin.fix, /no events URL; run it with --http/);
     assert.equal(res.json.checks.find((x: { name: string }) => x.name === 'api_key').ok, false);
   } finally {
     await bare.close();
   }
 });
 
+test('droid_setup without a key refuses with the paste line for that computer', async () => {
+  const c = await connect({ status: { http: '100.73.48.66:37999', webhook: false, eventsToken: false, httpToken: true } });
+  try {
+    const res = await c.call('droid_setup', { computer: 'test-host' });
+    assert.equal(res.error?.code, 'needs_api_key', res.text);
+    assert.ok(res.error?.fix.endsWith(pasteLine('http://100.73.48.66:37999/events', 'this-machine')), res.text);
+    const unsafe = await c.call('droid_setup', { computer: 'test-host', url: "http://x/'; id; '" });
+    assert.equal(unsafe.error?.code, 'invalid', unsafe.text);
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_setup refuses a loopback url for another computer and an offline computer, with the paste line', async () => {
+  const { rest } = fakeSetupRest([{ status: 'running' }]);
+  const setup = new Setup({ rest });
+  const { c } = await fleet({ ctx: { setup, status: { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true } } });
+  try {
+    const loop = await c.call('droid_setup', { computer: 'laptop' });
+    assert.equal(loop.error?.code, 'invalid', loop.text);
+    assert.equal(loop.error?.fix, 'Set DROID_MCP_EVENTS_URL to an address that computer can reach, such as the tailnet address, or pass url.');
+    const offline = await c.call('droid_setup', { computer: 'old-desk', url: 'http://100.73.48.66:37999/events' });
+    assert.equal(offline.error?.code, 'computer_offline', offline.text);
+    assert.ok(offline.error?.fix.endsWith(pasteLine('http://100.73.48.66:37999/events', FLEET.desk.id)), offline.text);
+    assert.equal(setup.get(FLEET.laptop.id), undefined);
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_setup starts a job with the env url and plugin source, and droid_status shows it', async () => {
+  const { rest, calls } = fakeSetupRest([{ status: 'running' }]);
+  const setup = new Setup({ rest, pollMs: 20, timeoutMs: 1000 });
+  const env = { DROID_MCP_EVENTS_URL: 'http://mac-mini.tail.ts.net:37999/events', DROID_MCP_PLUGIN_SOURCE: 'Jason-Holt-Digital/droid-mcp#slice-10-setup' };
+  const status = { http: '127.0.0.1:37999', webhook: false, eventsToken: false, httpToken: true };
+  const { c } = await fleet({ ctx: { setup, env, status, probe: async () => ({}) } });
+  try {
+    const res = await c.call('droid_setup', { computer: 'laptop' });
+    assert.equal(res.isError, false, res.text);
+    const line = pasteLine(env.DROID_MCP_EVENTS_URL, FLEET.laptop.id, env.DROID_MCP_PLUGIN_SOURCE);
+    assert.deepEqual(res.json, { computer: 'laptop', state: 'working', sessionId: 'setup-session', detail: res.json.detail, pasteLine: line });
+    assert.match(line, /droid-mcp@droid-mcp@slice-10-setup/);
+    assert.ok(calls.sent[0].includes(line.split(' && ')[2]));
+    const again = await c.call('droid_setup', { computer: 'laptop' });
+    assert.equal(again.json.sessionId, 'setup-session');
+    assert.equal(calls.created.length, 1);
+    const s = await c.call('droid_status', {});
+    const laptop = s.json.computers.find((x: { name: string }) => x.name === 'laptop');
+    assert.equal(laptop.setup.state, 'working');
+    assert.equal(laptop.setup.sessionId, 'setup-session');
+    assert.match(laptop.setup.at, /^\d{4}-.*Z$/);
+    assert.equal(s.json.computers.find((x: { name: string }) => x.name === 'cloud-a').setup, undefined);
+  } finally {
+    await c.close();
+  }
+});
 test('droid_events pages the event log and says whether forwarding is on', async () => {
   const events = new EventLog();
   const c = await connect({ events });
