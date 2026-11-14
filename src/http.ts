@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { isWatched, parseEventBody, type DroidEvent, type EventInput } from './events.ts';
+import { parseEventBody, type DroidEvent, type EventInput } from './events.ts';
 import { registerTools, type Ctx } from './tools.ts';
 
 export const EVENT_BODY_MAX = 16 * 1024;
@@ -55,8 +55,7 @@ export async function recordEvent(ctx: Ctx, input: EventInput): Promise<DroidEve
   if (input.computerId && computer !== undefined) ctx.sessionComputers?.set(input.sessionId, input.computerId);
   const event = ctx.events.add(input, {
     computer: computer ?? input.host ?? 'unknown',
-    watched: isWatched(input.tags, ctx.runs.get(input.sessionId) !== undefined),
-    forwarding: Boolean(ctx.forwarder?.enabled),
+    forward: Boolean(ctx.forwarder?.enabled) && ctx.subscriptions.has(input.sessionId),
   });
   if (event.forwarded) void ctx.forwarder?.send(event);
   return event;

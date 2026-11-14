@@ -10,6 +10,7 @@ import { EventLog, Forwarder } from '../src/events.ts';
 import { createHandler } from '../src/http.ts';
 import { createRest } from '../src/rest.ts';
 import { KeyStore, type Runs } from '../src/runs.ts';
+import { Subscriptions } from '../src/subscriptions.ts';
 import type { Ctx } from '../src/tools.ts';
 import { fakeApi, FIXTURES } from './helpers.ts';
 
@@ -17,6 +18,7 @@ const MCP_TOKEN = 'mcp-token-test';
 const EVENTS_TOKEN = 'events-token-test';
 const SID = '4d3c2b1a-0f9e-5d8c-b7a6-123456789abc';
 const OWN = '7a6b5c4d-3e2f-5a1b-9c8d-abcdef012345';
+const OTHER = '5e4d3c2b-1a0f-5e9d-c8b7-23456789abcd';
 
 let dir: string;
 let ctx: Ctx;
@@ -40,6 +42,7 @@ before(async () => {
     roots: [dir],
     runs: { get: (id: string) => (id === OWN ? { id } : undefined) } as unknown as Runs,
     keys: new KeyStore(join(dir, 'state.json')),
+    subscriptions: new Subscriptions(join(dir, 'subscriptions.json')),
     rest,
     computers: new Computers({ rest, file: join(dir, 'computer.json') }),
     events: new EventLog(),
@@ -73,6 +76,7 @@ test('POST /events needs the events token, and the MCP bearer is not accepted th
   assert.equal((await post(`${base}/events`, MCP_TOKEN, body)).status, 401);
   assert.equal(ctx.events.since(0, 50).events.length, 0, 'nothing recorded from rejected requests');
 
+  await ctx.subscriptions.set(SID, true);
   const ok = await post(`${base}/events`, EVENTS_TOKEN, body);
   assert.equal(ok.status, 202);
   const { seq, forwarded: fw } = await ok.json();
@@ -84,11 +88,52 @@ test('POST /events needs the events token, and the MCP bearer is not accepted th
 
   const fallback = await post(`${base}/events`, EVENTS_TOKEN, { sessionId: SID, kind: 'finished', host: 'arch-box' });
   const second = await fallback.json();
-  assert.equal(second.forwarded, false, 'an unwatched finish is not forwarded');
   assert.equal(ctx.events.since(second.seq - 1, 1).events[0].computer, 'arch-box');
   const own = await (await post(`${base}/events`, EVENTS_TOKEN, { sessionId: OWN, kind: 'finished' })).json();
-  assert.equal(own.forwarded, true, 'a session this server started is watched');
   assert.equal(ctx.events.since(own.seq - 1, 1).events[0].computer, 'unknown');
+});
+
+test('an unsubscribed session never reaches the webhook, whatever the kind, its tags or who started it', async () => {
+  const base = await serve();
+  const before = forwarded.length;
+  const seqs: number[] = [];
+  for (const body of [{ sessionId: OTHER }, { sessionId: OWN }, { sessionId: OTHER, tags: ['cto'] }]) {
+    for (const kind of ['question', 'permission', 'finished', 'ended']) {
+      const res = await post(`${base}/events`, EVENTS_TOKEN, { ...body, kind });
+      assert.equal(res.status, 202);
+      const { seq, forwarded: fw } = await res.json();
+      assert.equal(fw, false, `${body.sessionId} ${kind}`);
+      seqs.push(seq);
+    }
+  }
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(forwarded.length, before, 'the webhook was never called');
+  const logged = ctx.events.since(seqs[0] - 1, 50).events;
+  assert.deepEqual(
+    logged.map((e) => e.seq),
+    seqs,
+  );
+  assert.ok(logged.every((e) => !e.forwarded));
+});
+
+test("a subscribed session's events are forwarded, once per kind within 30 s", async () => {
+  const base = await serve();
+  const before = forwarded.length;
+  await ctx.subscriptions.set(OWN, true);
+  const send = async (kind: string) => (await (await post(`${base}/events`, EVENTS_TOKEN, { sessionId: OWN, kind })).json()).forwarded;
+  try {
+    assert.equal(await send('finished'), true);
+    assert.equal(await send('finished'), false, 'debounced');
+    assert.equal(await send('ended'), true);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.deepEqual(
+      forwarded.slice(before).map((b) => (b as { kind: string }).kind),
+      ['finished', 'ended'],
+    );
+  } finally {
+    await ctx.subscriptions.set(OWN, false);
+  }
+  assert.equal(await send('question'), false, 'unsubscribed again');
 });
 
 test('an event from an unknown computerId is recorded but does not set the session computer', async () => {

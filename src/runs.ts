@@ -489,6 +489,19 @@ export class Runs {
   }
 }
 
+export async function writeAtomic(path: string, text: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const tmp = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const fh = await open(tmp, 'w', 0o600);
+  try {
+    await fh.writeFile(text);
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
+  await rename(tmp, path);
+}
+
 type KeyEntry = { at: number; result?: unknown; pending?: true };
 const KEY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -571,16 +584,7 @@ export class KeyStore {
       for (const k of this.dropped) if (!(k in this.data)) delete merged[k];
       const cutoff = Date.now() - KEY_TTL_MS;
       for (const [k, v] of Object.entries(merged)) if (v.at < cutoff) delete merged[k];
-      await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
-      const tmp = `${this.path}.${process.pid}.${randomUUID()}.tmp`;
-      const fh = await open(tmp, 'w', 0o600);
-      try {
-        await fh.writeFile(JSON.stringify({ keys: merged }));
-        await fh.sync();
-      } finally {
-        await fh.close();
-      }
-      await rename(tmp, this.path);
+      await writeAtomic(this.path, JSON.stringify({ keys: merged }));
     };
     const next = this.saving.then(write, write);
     this.saving = next.catch(() => {});

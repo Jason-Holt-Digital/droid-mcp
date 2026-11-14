@@ -2,7 +2,7 @@
 
 An MCP server that lets any MCP client (Droid, Claude Code, Cursor, other agents) find, start, steer and read Factory Droid sessions on every Droid computer you have, including mission/workstream orchestrators and their agents. It reads local session files, runs its own sessions through `@factory/droid-sdk`, and reaches sessions on every other online Droid computer (your own computers and Factory cloud computers) through the Factory REST API when an API key is available.
 
-Droids can also call back. In HTTP mode, a hook on each computer posts an event to the server's `POST /events` when a session finishes, asks a question, needs a permission or ends. The server keeps recent events for `droid_events` and can forward them to a webhook that wakes your agent.
+Droids can also call back. In HTTP mode, a hook on each computer posts an event to the server's `POST /events` when a session finishes, asks a question, needs a permission or ends. The server keeps recent events for `droid_events` and forwards events from subscribed sessions to a webhook that wakes your agent.
 
 Status: early (0.1.0). Tested on macOS with droid CLI 1.10.0, `@factory/droid-sdk` 0.11.0 and Node 26 (`engines` requires Node >= 24). The only platform-specific server code is the Keychain lookup for secrets (`FACTORY_API_KEY`, the events token, the webhook URL and key), which runs only on `darwin`; elsewhere they must come from the environment. Linux is untested.
 
@@ -212,7 +212,7 @@ From the repo directory, use the MCP Inspector CLI. List the tools:
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/list
 ```
 
-Expect 10 tools: `droid_find`, `droid_computers`, `droid_events`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
+Expect 12 tools: `droid_find`, `droid_computers`, `droid_events`, `droid_subscribe`, `droid_unsubscribe`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
 
 Call three read-only tools:
 
@@ -346,6 +346,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - `query` matches title, id prefix or cwd. With `content: true` it searches transcripts with `rg -F` (40 s timeout) on this machine only, and other computers are not searched.
   - Hidden by default: archived sessions and subagents.
   - With a key, each listed workstream gets a `children` summary from REST, including agents on other computers.
+  - Subscribed sessions carry `subscribed: true`.
 
 #### droid_computers
 
@@ -374,6 +375,14 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - `missed: true` means events after `after` already dropped out of the ring; an `after` ahead of the log (after a server restart) restarts from the oldest kept event and sets `missed`. `forwarding` says whether a webhook is configured.
   - Event text is untrusted session content. See [Callbacks](#callbacks).
 
+#### droid_subscribe and droid_unsubscribe
+
+![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![no credential](https://img.shields.io/badge/no%20credential-lightgrey)
+
+- Changes: adds or removes a session in `~/.droid-mcp/subscriptions.json`. Only subscribed sessions' events wake your agent through the webhook; see [Callbacks](#callbacks).
+- Parameters: `session`.
+- Notes: return `sessionId` and `subscribed`. Both are idempotent. The agent should subscribe to a session you run yourself only when you ask it to.
+
 #### droid_models
 
 ![read-only](https://img.shields.io/badge/read--only-2ea44f) ![no model tokens](https://img.shields.io/badge/no%20model%20tokens-2ea44f) ![no credential](https://img.shields.io/badge/no%20credential-lightgrey)
@@ -389,11 +398,11 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 ![spends model tokens](https://img.shields.io/badge/spends%20model%20tokens-d73a49) ![edits files](https://img.shields.io/badge/edits%20files-dbab09) ![FACTORY_API_KEY or CLI login](https://img.shields.io/badge/FACTORY__API__KEY-or%20CLI%20login-lightgrey)
 
 - Reads: model list, `~/.droid-mcp/state.json`, the fork source (with `fork`).
-- Changes: creates a session; the agent edits files in `cwd` up to the granted autonomy. Writes `~/.droid-mcp/state.json`.
+- Changes: creates a session; the agent edits files in `cwd` up to the granted autonomy. Writes `~/.droid-mcp/state.json` and subscribes to the session in `~/.droid-mcp/subscriptions.json`.
 - Backend: `droid exec` child process spawned through the SDK.
 - Credential: `FACTORY_API_KEY` if found, otherwise the droid CLI login.
-- Parameters: `cwd`, `prompt`, `idempotencyKey` (required), `autonomy`, settings (see [Models and settings](#models-and-settings)).
-- Notes: returns `sessionId` and `state`. The turn runs in the background; follow it with `droid_wait`.
+- Parameters: `cwd`, `prompt`, `idempotencyKey` (required), `autonomy`, `subscribe` (default `true`), settings (see [Models and settings](#models-and-settings)).
+- Notes: returns `sessionId` and `state`. The turn runs in the background; follow it with `droid_wait`. A retry with the same key keeps the first call's `subscribe` choice.
 
 #### droid_send
 
@@ -523,10 +532,11 @@ Event kinds (`hooks/droid_mcp_hook.py`):
 
 To get a question back from a session, tell it to end its reply with a line starting `QUESTION:`.
 
-Forwarding rule (`src/events.ts`):
+Forwarding rule (`src/http.ts`, `src/events.ts`):
 
-- `question` and `permission` are always forwarded.
-- `finished` and `ended` are forwarded only for sessions tagged `cto` or started by this server process.
+- An event is forwarded only if its session is subscribed, whatever its kind. Tags and which process started the session do not matter.
+- `droid_start` subscribes to the sessions it starts (unless `subscribe: false`). For other sessions, the agent calls `droid_subscribe` when you ask it to, and `droid_unsubscribe` to stop.
+- Subscriptions are saved in `~/.droid-mcp/subscriptions.json` and last until unsubscribed, across server restarts and session restarts.
 - The same session and kind are never forwarded twice within 30 s.
 - The webhook gets `source: "droid-mcp"`, `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text` and `cwd`.
 
@@ -548,8 +558,8 @@ The hook never blocks Droid. On macOS and Linux it forks, posts in the backgroun
     - `droid_start` fork source (the source's own cwd)
     - `droid_find`, `droid_wait`, `droid_result` text (any local transcript)
     - REST sends, `droid_respond`, `droid_cancel` (any session the key can reach)
-- Files read: `~/.factory/sessions/*/*.jsonl` and their `.settings.json` files (`src/catalog.ts`), `~/.factory/settings.json` (`src/models.ts`), `~/.factory/computer.json` (`src/computers.ts`), and `~/.droid-mcp/state.json` (`src/runs.ts`).
-- The only file the server writes is `~/.droid-mcp/state.json`, through a temporary file in the same directory and a rename. The directory is created with mode `0700` and the file with `0600` (`src/runs.ts`).
+- Files read: `~/.factory/sessions/*/*.jsonl` and their `.settings.json` files (`src/catalog.ts`), `~/.factory/settings.json` (`src/models.ts`), `~/.factory/computer.json` (`src/computers.ts`), `~/.droid-mcp/state.json` (`src/runs.ts`) and `~/.droid-mcp/subscriptions.json` (`src/subscriptions.ts`).
+- The only files the server writes are `~/.droid-mcp/state.json` and `~/.droid-mcp/subscriptions.json`, each through a temporary file in the same directory and a rename. The directory is created with mode `0700` and the files with `0600` (`src/runs.ts`).
 - Droid writes its own session files. The agent inside a session starts in its cwd, but autonomy, not the roots list, decides what its commands can touch.
 
 ### Autonomy

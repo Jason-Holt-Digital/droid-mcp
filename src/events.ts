@@ -39,14 +39,6 @@ export function parseEventBody(json: unknown): EventInput {
   return r.data;
 }
 
-export function isWatched(tags: string[] | undefined, startedHere: boolean): boolean {
-  return startedHere || Boolean(tags?.includes('cto'));
-}
-
-export function shouldForward(kind: EventKind, watched: boolean): boolean {
-  return kind === 'question' || kind === 'permission' || watched;
-}
-
 export class EventLog {
   #events: DroidEvent[] = [];
   #next = 1;
@@ -57,11 +49,11 @@ export class EventLog {
     this.#max = max;
   }
 
-  add(input: EventInput, opts: { computer: string; watched: boolean; now?: number; forwarding?: boolean }): DroidEvent {
+  add(input: EventInput, opts: { computer: string; forward: boolean; now?: number }): DroidEvent {
     const now = opts.now ?? Date.now();
     const key = `${input.sessionId}:${input.kind}`;
     const last = this.#lastForward.get(key);
-    const forwarded = (opts.forwarding ?? true) && shouldForward(input.kind, opts.watched) && (last === undefined || now - last >= DEBOUNCE_MS);
+    const forwarded = opts.forward && (last === undefined || now - last >= DEBOUNCE_MS);
     if (forwarded) {
       this.#lastForward.set(key, now);
       if (this.#lastForward.size > this.#max) {

@@ -28,12 +28,14 @@ import type { Rest } from './rest.ts';
 import { routeSend, type Target } from './route.ts';
 import { preview, type KeyStore, type RunEvent, type Runs } from './runs.ts';
 import { EFFORTS, startOnly, toRestSettings, validateSettings } from './settings.ts';
+import type { Subscriptions } from './subscriptions.ts';
 
 export type Ctx = {
   sessionsRoot: string;
   roots: string[];
   runs: Runs;
   keys: KeyStore;
+  subscriptions: Subscriptions;
   rest?: Rest;
   computers: Computers;
   events: EventLog;
@@ -160,11 +162,15 @@ const USAGE =
 
 const SESSION_ID_FIX = 'Pass a session id from droid_find.';
 
+function checkSessionId(id: string): void {
+  if (!isSessionId(id)) throw new Refused('invalid', `invalid session id: ${id}`, SESSION_ID_FIX);
+}
+
 const COMPUTER = z.string().optional().describe('Computer name or id from droid_computers; defaults to this machine, or to where droid_find saw the session');
 
 const nonEmpty = (list: string[]) => (list.length ? list : undefined);
 
-function entry(r: Listing, runs: Runs) {
+function entry(r: Listing, ctx: Ctx) {
   return {
     id: r.id,
     title: r.title,
@@ -176,7 +182,8 @@ function entry(r: Listing, runs: Runs) {
     parentId: r.parentId,
     archived: r.archived || undefined,
     tags: r.tags.filter((t) => !HIDDEN_TAGS.has(t)),
-    run: runs.get(r.id)?.state,
+    run: ctx.runs.get(r.id)?.state,
+    subscribed: ctx.subscriptions.has(r.id) || undefined,
   };
 }
 
@@ -212,7 +219,7 @@ async function locate(ctx: Ctx, session: string, computer?: string, sending = fa
 async function resolveTarget(ctx: Ctx, id: string, opts: { sending?: boolean; where?: Where } = {}): Promise<Target> {
   const run = ctx.runs.get(id);
   if (run && !(opts.sending && run.state === 'closed')) return { kind: 'own', run };
-  if (!isSessionId(id)) throw new Refused('invalid', `invalid session id: ${id}`, SESSION_ID_FIX);
+  checkSessionId(id);
   if (opts.where?.remote) return { kind: 'unknown', id };
   const record = await findSession(ctx.sessionsRoot, id);
   return record ? { kind: 'local', record } : { kind: 'unknown', id };
@@ -413,7 +420,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         const sessions: Array<{ repo?: string; computer?: string; sessions: unknown[] }> = [];
         let lastGroup: RepoGroup<Listing> | undefined;
         for (const it of slice) {
-          const e = entry(it.r, runs);
+          const e = entry(it.r, ctx);
           if (it.ws) {
             let w = workstreams.at(-1);
             if (w?.id !== it.ws.id) {
@@ -530,22 +537,23 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
   server.registerTool(
     'droid_start',
     {
-      description: `Start a new Droid session in cwd (must be inside the allowed roots) and send it the first prompt. Retrying with the same idempotencyKey returns the same session. To let a session ask you something, tell it to end its reply with a line starting \`QUESTION:\`; tag a session 'cto' to be called back when it finishes. ${MODEL_HELP}`,
+      description: `Start a new Droid session in cwd (must be inside the allowed roots) and send it the first prompt. Retrying with the same idempotencyKey returns the same session. You are subscribed to the new session's events (see droid_subscribe) unless subscribe is false. To let a session ask you something, tell it to end its reply with a line starting \`QUESTION:\`. ${MODEL_HELP}`,
       inputSchema: {
         cwd: z.string(),
         prompt: z.string().min(1),
         autonomy: AUTONOMY.optional(),
         idempotencyKey: z.string().min(1).max(200),
+        subscribe: z.boolean().optional().describe("Wake you for this session's events (default true)"),
         ...runSettings,
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     handle(async (a) => {
-      const { sessionId } = await ctx.keys.once(`start:${a.idempotencyKey}`, async () => {
+      const { sessionId, subscribe } = await ctx.keys.once(`start:${a.idempotencyKey}`, async () => {
         const cwd = checkCwd(a.cwd, ctx.roots);
         const autonomy = resolveAutonomy(a.autonomy, ctx.env);
         if (a.fork !== undefined) {
-          if (!isSessionId(a.fork)) throw new Refused('invalid', `invalid session id: ${a.fork}`, SESSION_ID_FIX);
+          checkSessionId(a.fork);
           if (a.appendSystemPrompt !== undefined) {
             throw new Refused('invalid', 'appendSystemPrompt cannot be combined with fork', 'Pass only one of appendSystemPrompt and fork.');
           }
@@ -559,10 +567,41 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
         }
         validateSettings(a, autonomy, await catalog());
         const run = await runs.start({ cwd, prompt: a.prompt, autonomy, settings: a });
-        return { sessionId: run.id };
+        return { sessionId: run.id, subscribe: a.subscribe !== false };
       });
+      if (subscribe) await ctx.subscriptions.set(sessionId, true);
       return { sessionId, state: runs.get(sessionId)?.state ?? 'unknown' };
     }),
+  );
+
+  const subscription = (subscribed: boolean) =>
+    handle(async (a: { session: string }) => {
+      checkSessionId(a.session);
+      await ctx.subscriptions.set(a.session, subscribed);
+      return { sessionId: a.session, subscribed };
+    });
+  const SUBSCRIPTION_HINTS = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+
+  server.registerTool(
+    'droid_subscribe',
+    {
+      description:
+        "Subscribe to a session's callback events (finished, question, permission, ended): the webhook wakes you for them until droid_unsubscribe, across restarts. Sessions you start with droid_start are subscribed already. Subscribe to a session the user runs himself only when the user asks you to. Subscribing twice is not an error.",
+      inputSchema: { session: z.string() },
+      annotations: SUBSCRIPTION_HINTS,
+    },
+    subscription(true),
+  );
+
+  server.registerTool(
+    'droid_unsubscribe',
+    {
+      description:
+        "Stop the webhook waking you for a session's events; droid_events still lists them. droid_find marks subscribed sessions. Unsubscribing a session that is not subscribed is not an error.",
+      inputSchema: { session: z.string() },
+      annotations: SUBSCRIPTION_HINTS,
+    },
+    subscription(false),
   );
 
   server.registerTool(
