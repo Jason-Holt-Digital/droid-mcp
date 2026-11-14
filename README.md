@@ -9,12 +9,13 @@ droid-mcp is an MCP server. It runs on one computer. Your agent (Grok Bot, Claud
 ## Your agent can
 
 - Start a Droid session in a repo on the computer that runs droid-mcp, with the model and autonomy you pick.
-- See every session on every online computer. A session droid-mcp runs is Working, Needs you, Idle, Dead or Closed. Others show Working or Idle.
+- See every session on every online computer, with its state.
 - Get woken when a session it is subscribed to asks a question, needs permission, finishes or ends. You choose the subscriptions.
 - Answer the question, approve or deny the permission, or send a follow-up.
 - Read the result and the git diff.
 - Interrupt a turn or close a session.
 - Watch the sessions you run yourself and step in when you ask it to.
+- Run rare operations with `droid_ops` and `droid_call`. Destructive ones need `DROID_MCP_ALLOW_DESTRUCTIVE=1` and your OK.
 
 ## What to set up
 

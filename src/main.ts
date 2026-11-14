@@ -9,6 +9,7 @@ import { Computers } from './computers.ts';
 import { allowedRoots, autonomyCap, lookupApiKey, lookupSecret } from './config.ts';
 import { EventLog, Forwarder } from './events.ts';
 import { createHandler, newServer } from './http.ts';
+import { relayDaemon } from './ops.ts';
 import { createRest } from './rest.ts';
 import { Doorbell } from './ring.ts';
 import { KeyStore, Runs } from './runs.ts';
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
   delete process.env.DROID_MCP_EVENTS_TOKEN;
   delete process.env.DROID_MCP_WEBHOOK_KEY;
   const rest = apiKey ? createRest({ apiKey }) : undefined;
+  const computers = new Computers({ rest, file: join(homedir(), '.factory', 'computer.json') });
   const ctx: Ctx = {
     sessionsRoot: join(homedir(), '.factory', 'sessions'),
     roots: allowedRoots(),
@@ -77,12 +79,13 @@ async function main(): Promise<void> {
     keys: new KeyStore(join(homedir(), '.droid-mcp', 'state.json')),
     subscriptions: new Subscriptions(join(homedir(), '.droid-mcp', 'subscriptions.json')),
     rest,
-    computers: new Computers({ rest, file: join(homedir(), '.factory', 'computer.json') }),
+    computers,
     events: new EventLog(),
     sessionComputers: new Map(),
     forwarder: new Forwarder({ url: webhookUrl, key: webhookKey }),
     status,
     setup: rest && new Setup({ rest }),
+    daemon: apiKey && rest ? relayDaemon(apiKey, rest, computers) : undefined,
   };
   const doorbell = new Doorbell(ctx);
   ctx.doorbell = doorbell;

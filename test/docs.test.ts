@@ -74,7 +74,7 @@ test('every relative link and image in the docs resolves to a file', () => {
 
 test('docs/tools.md and SKILL.md name exactly the registered tools', async () => {
   const tools = await registeredTools();
-  assert.equal(tools.length, 14);
+  assert.equal(tools.length, 16);
   for (const doc of ['docs/tools.md', 'skills/droid-mcp/SKILL.md']) {
     const named = [...new Set(read(doc).match(/droid_[a-z_]+/g))].sort();
     assert.deepEqual(named, tools, doc);

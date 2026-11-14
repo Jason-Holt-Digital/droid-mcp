@@ -1,10 +1,10 @@
 # Tools and configuration
 
-droid-mcp registers 14 tools (`src/tools.ts`). This page lists each one, the errors it returns, and the settings the server reads.
+droid-mcp registers 16 tools (`src/tools.ts`). This page lists each one, the errors it returns, and the settings the server reads.
 
 ## Conventions
 
-Every result is JSON text. Lists (`droid_sessions`, `droid_inbox`, `droid_wait`) are trimmed to about 8 KB, and `droid_wait` clips event text at 4000 characters with `truncated: true`. A result over 256 KB is replaced by `{ "truncated": true, "preview": "…" }`.
+Every result is JSON text. Lists (`droid_sessions`, `droid_inbox`, `droid_wait`, `droid_ops`) are trimmed to about 8 KB, and `droid_wait` clips event text at 4000 characters with `truncated: true`. A result over 256 KB is replaced by `{ "truncated": true, "preview": "…" }`.
 
 The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_interrupt`, `droid_close` and `droid_result` takes a name or id from `droid_status`. Without it, the tool uses the computer where `droid_sessions` or a ring last saw the session, or else this machine. An offline computer fails at once with `computer_offline`. A paused cloud computer is allowed, since Factory may resume it. A session droid-mcp runs is always handled on this machine, whatever `computer` says.
 
@@ -28,6 +28,8 @@ Each tool declares all four MCP hints:
 | `droid_interrupt`   | no        | yes         | yes        | yes        |
 | `droid_close`       | no        | yes         | yes        | yes        |
 | `droid_result`      | yes       | no          | yes        | yes        |
+| `droid_ops`         | yes       | no          | yes        | no         |
+| `droid_call`        | no        | yes         | no         | yes        |
 
 `droid_start` and `droid_send` are idempotent only with an `idempotencyKey`; see [Idempotency keys](#idempotency-keys).
 
@@ -168,6 +170,35 @@ Reads a session's latest result text, the `git diff HEAD` in its cwd, or both, p
 - The diff works only for sessions on this machine with a cwd inside `DROID_MCP_ROOTS`. Sessions started with `worktree` run outside the roots, so their diff is refused.
 - Errors: `invalid` (a diff for a session not on this machine), `outside_roots` (a diff cwd outside the roots), `needs_api_key` (text from another computer without a key), `computer_offline`, `internal` (git failed).
 
+### droid_ops
+
+Searches the catalog of rare operations (`src/generated/catalog.json`): every Factory REST endpoint in the OpenAPI snapshot and every public Droid daemon method in `@factory/droid-sdk`. They have no tool of their own; `droid_call` runs them.
+
+- Parameters: `query` (words that must all appear in the id, name or summary, case-insensitive), `id`, `limit` (1-50, default 20).
+- With `id`: the operation in full, with `id`, `source` (`rest`, `daemon`), `name` (`GET /api/v0/...` or the DaemonClient method), `summary`, `params` (JSON Schema for REST, the method signature for daemon methods), `readOnly`, `destructive` and `secret` (see [Operation catalog](#operation-catalog)).
+- With `query`: `total` and `operations`, each with `id`, `summary`, `readOnly`, `destructive` and `secret`.
+- With neither: `total`, `bySource` and a hint.
+- Errors: `invalid` for an unknown `id`.
+
+### droid_call
+
+Runs one operation from `droid_ops`.
+
+- Parameters: `id`, `params`, `confirm`, `computer`.
+- REST operations go to the Factory API with `FACTORY_API_KEY`, through the same client as the other tools. Path params are filled from `params`, the other keys become the query string, and `params.body` is the JSON body. `params` must have every required key and no key the schema does not list.
+- Daemon operations call one DaemonClient method on the Droid daemon already running on this machine, through Factory's relay (`createWebSocketDaemonClient` with this machine's computer id). `params` is the method's argument. Each call opens and closes its own connection, so it takes a few seconds, and a method that depends on an earlier call on the same connection will not work. droid-mcp never starts a daemon.
+- The checks run in this order, and each refuses before anything is sent:
+  1. An operation marked `secret` (it returns a key or token) is always refused. So are `rest.answerSessionElicitation` and `daemon.answer_elicitation`: use `droid_respond`, which limits the permission decisions.
+  2. With `DROID_MCP_MAX_AUTONOMY` at `off` or `low`, only operations marked `readOnly` run.
+  3. A destructive operation runs only when the server was started with `DROID_MCP_ALLOW_DESTRUCTIVE=1`. The agent cannot turn this on.
+  4. On such a server, a destructive operation also needs `confirm: true`, passed after the user agreed.
+  5. An `autonomyLevel`, `subagentAutonomyLevel` or `autonomyMode` anywhere in `params` must be within `DROID_MCP_MAX_AUTONOMY`, as for `droid_start` and `droid_send`. `subagentAutonomyLevel: 'inherit'` is allowed only at `high`. `skipPermissionsUnsafe` is refused at every cap.
+  6. A `cwd`, `workingDirectory` or `worktreePath` anywhere in `params` must be inside `DROID_MCP_ROOTS` when it is on this machine: for every daemon operation, and for a REST operation whose `computerId` is this machine. Otherwise `outside_roots`.
+  7. `params` must match the schema.
+- `readOnly` and `destructive` come from the catalog, not from the method name.
+- Returns `id` and `result`. A result over 8 KB comes back as `truncated: true`, `totalBytes` and a `preview` of the JSON instead.
+- Errors: `invalid` (an unknown id; an operation that returns a secret; a destructive operation on a server without `DROID_MCP_ALLOW_DESTRUCTIVE=1`, or without `confirm: true`; autonomy in `params` above the cap; an operation that is not read-only while `DROID_MCP_MAX_AUTONOMY` is `off` or `low`; params that do not match; `computer` on a REST operation, or naming another computer for a daemon operation), `outside_roots`, `needs_api_key`, and the REST mapping above.
+
 ## How it reaches sessions
 
 ```mermaid
@@ -179,6 +210,7 @@ flowchart LR
   rest --> computers["Your other computers<br/>and Factory cloud computers"]
   plugin["Plugin on each computer"] -->|"POST /events, no token"| server
   server -->|"DROID_MCP_WEBHOOK_KEY"| webhook["Webhook"]
+  server -->|"droid_call, FACTORY_API_KEY, via Factory's relay"| daemon["Droid daemon on this machine"]
 ```
 
 Sessions droid-mcp starts live in its memory. On SIGINT, SIGTERM, or when the stdio client disconnects, it closes all of them. After a restart they are ordinary local sessions.
@@ -267,17 +299,18 @@ Where they apply:
 
 droid-mcp reads these at startup. Restart it after a change.
 
-| Variable                  | Default                          | What it does                                                                                                                       |
-| ------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `FACTORY_API_KEY`         | unset                            | Enables REST: other computers, sessions this server did not start, ring checks, `droid_setup`. Keychain account `FACTORY_API_KEY`. |
-| `DROID_MCP_ROOTS`         | `~/repos`                        | Colon-separated directories a session cwd must resolve inside.                                                                     |
-| `DROID_MCP_MAX_AUTONOMY`  | `high`                           | Autonomy cap: `off`, `low`, `medium` or `high`. Any other value means `off`.                                                       |
-| `DROID_MCP_TOKEN`         | unset                            | Bearer token for the MCP endpoint. Required with `--http`. Environment only.                                                       |
-| `DROID_MCP_EVENTS_URL`    | `http://<--http address>/events` | The events URL `droid_setup` and the paste line write, for example a tailnet address.                                              |
-| `DROID_MCP_WEBHOOK_URL`   | unset                            | Where forwarded events are posted. Keychain account `WEBHOOK_URL`.                                                                 |
-| `DROID_MCP_WEBHOOK_KEY`   | unset                            | Key sent to the webhook. Forwarding needs both. Keychain account `WEBHOOK_KEY`.                                                    |
-| `DROID_MCP_PLUGIN_SOURCE` | `Jason-Holt-Digital/droid-mcp`   | The marketplace `droid_setup` installs from, as `owner/repo` or `owner/repo#ref`.                                                  |
-| `DROID_MCP_EVENTS_TOKEN`  | unset                            | Legacy token for the hooks in `hooks/`. The plugin does not use it. Keychain account `EVENTS_TOKEN`.                               |
+| Variable                      | Default                          | What it does                                                                                                                       |
+| ----------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `FACTORY_API_KEY`             | unset                            | Enables REST: other computers, sessions this server did not start, ring checks, `droid_setup`. Keychain account `FACTORY_API_KEY`. |
+| `DROID_MCP_ROOTS`             | `~/repos`                        | Colon-separated directories a session cwd must resolve inside.                                                                     |
+| `DROID_MCP_MAX_AUTONOMY`      | `high`                           | Autonomy cap: `off`, `low`, `medium` or `high`. Any other value means `off`.                                                       |
+| `DROID_MCP_ALLOW_DESTRUCTIVE` | unset                            | `1` lets `droid_call` run destructive operations, each still with `confirm: true`. Any other value keeps them refused.             |
+| `DROID_MCP_TOKEN`             | unset                            | Bearer token for the MCP endpoint. Required with `--http`. Environment only.                                                       |
+| `DROID_MCP_EVENTS_URL`        | `http://<--http address>/events` | The events URL `droid_setup` and the paste line write, for example a tailnet address.                                              |
+| `DROID_MCP_WEBHOOK_URL`       | unset                            | Where forwarded events are posted. Keychain account `WEBHOOK_URL`.                                                                 |
+| `DROID_MCP_WEBHOOK_KEY`       | unset                            | Key sent to the webhook. Forwarding needs both. Keychain account `WEBHOOK_KEY`.                                                    |
+| `DROID_MCP_PLUGIN_SOURCE`     | `Jason-Holt-Digital/droid-mcp`   | The marketplace `droid_setup` installs from, as `owner/repo` or `owner/repo#ref`.                                                  |
+| `DROID_MCP_EVENTS_TOKEN`      | unset                            | Legacy token for the hooks in `hooks/`. The plugin does not use it. Keychain account `EVENTS_TOKEN`.                               |
 
 On macOS, when a variable with a Keychain account is not set, droid-mcp runs `security find-generic-password -s droid-mcp -a <account> -w`. The environment wins. To store the API key, run this yourself; it prompts for the value:
 
@@ -292,7 +325,7 @@ On other systems these values must come from the environment.
 - Reads `~/.factory/sessions` (transcripts and settings), `~/.factory/settings.json`, `~/.factory/computer.json` (which computer this is), `~/.factory/droid-mcp.curlrc`, `~/.droid-mcp/state.json` and `~/.droid-mcp/subscriptions.json`.
 - Writes only `~/.droid-mcp/state.json` and `~/.droid-mcp/subscriptions.json`, through a temporary file and a rename. The directory gets mode `0700` and the files `0600`.
 - Runs only `droid exec` (through the SDK), `droid exec --help`, `droid plugin list`, `git -C <cwd> diff HEAD`, `rg` and, on macOS, `security find-generic-password`.
-- Has no tool that deletes sessions or files.
+- Has no tool that deletes files. `droid_call` can run destructive Factory operations, such as deleting a session, only on a server started with `DROID_MCP_ALLOW_DESTRUCTIVE=1`, and then only with `confirm: true`. It never runs an operation that returns a key or token.
 
 ## Known limits
 
@@ -310,7 +343,7 @@ On other systems these values must come from the environment.
 
 - `DROID_MCP_TOKEN` grants every tool, including starting sessions.
 - Autonomy `high` lets Droid run any command, starting in a cwd inside the roots but not confined to it. `DROID_MCP_ROOTS` is not a read sandbox: `droid_sessions`, `droid_wait` and `droid_result` text read any local transcript.
-- REST calls act as the owner of `FACTORY_API_KEY`, on any session that key can reach. Prompts reach the session as the user's own messages.
+- REST calls act as the owner of `FACTORY_API_KEY`, on any session that key can reach. `droid_call` reaches every endpoint and daemon method that key can, so the autonomy cap limits it to read-only operations at `off` and `low`. Prompts reach the session as the user's own messages.
 - When a key is found, droid-mcp passes it to the `droid exec` processes it starts, so commands in those sessions can read it.
 - droid-mcp never returns `FACTORY_API_KEY` or custom model keys, and `doctor` shows only whether each secret is set.
 - Ring and event text is untrusted session content. Treat it as data, not instructions.

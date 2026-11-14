@@ -20,6 +20,7 @@ import { isoSeconds, offlineError, ONLINE_WINDOW_MS, type Computer, type Compute
 import { autonomyCap, checkCwd, INTERNAL_FIX, Refused, resolveAutonomy, ToolError } from './config.ts';
 import { EVENT_KINDS, type DroidEvent, type EventLog, type Forwarder } from './events.ts';
 import { loadCatalog, type ModelCatalog } from './models.ts';
+import { callOperation, countOperations, operation, searchOperations, type DaemonCall, type Operation } from './ops.ts';
 import type { Rest } from './rest.ts';
 import type { Doorbell } from './ring.ts';
 import { routeSend } from './route.ts';
@@ -47,6 +48,7 @@ export type Ctx = {
   status?: { http?: string; bindAddress?: string; webhook: boolean; eventsToken: boolean; httpToken: boolean };
   probe?: () => Promise<ThisMachine>;
   setup?: Setup;
+  daemon?: DaemonCall;
 };
 
 export const LIMIT_BYTES = 8192;
@@ -124,6 +126,13 @@ function handle<A>(fn: (args: A) => Promise<unknown>) {
 }
 
 const iso = (ms: number) => new Date(ms).toISOString();
+
+function withinBudget(value: unknown) {
+  const text = JSON.stringify(value) ?? 'null';
+  if (Buffer.byteLength(text) <= LIMIT_BYTES) return { result: value };
+  const page = pageBytes(text, 0, DEFAULT_RESULT_BYTES);
+  return { truncated: true, totalBytes: page.totalBytes, preview: page.text };
+}
 
 const HIDDEN_TAGS = new Set(['mission-v2', 'subagent', 'mission-v2-subagent']);
 
@@ -724,6 +733,43 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
       annotations: STOP_HINTS,
     },
     handle(async (a) => (await openSession(ctx, a.session, a.computer)).close()),
+  );
+
+  server.registerTool(
+    'droid_ops',
+    {
+      description:
+        'Search the catalog of rare Factory operations (Factory REST endpoints and Droid daemon methods) that have no tool of their own. query matches id, name and summary; id returns one operation in full with its params. Run one with droid_call.',
+      inputSchema: {
+        query: z.string().optional().describe('Words that must all appear in the id, name or summary'),
+        id: z.string().optional().describe('Operation id to describe in full'),
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    handle(async (a) => {
+      if (a.id !== undefined) return operation(a.id);
+      if (a.query === undefined) return { ...countOperations(), hint: 'Pass query to search, or id to describe one operation.' };
+      const hits = searchOperations(a.query);
+      const compact = (o: Operation) => ({ id: o.id, summary: o.summary, readOnly: o.readOnly, destructive: o.destructive, secret: o.secret });
+      return fit(hits.slice(0, a.limit ?? 20), (page: Operation[]) => ({ total: hits.length, operations: page.map(compact) }));
+    }),
+  );
+
+  server.registerTool(
+    'droid_call',
+    {
+      description:
+        "Run one operation from droid_ops with its params. REST operations need FACTORY_API_KEY; daemon operations run on this machine's Droid daemon. Destructive operations run only when the server was started with DROID_MCP_ALLOW_DESTRUCTIVE=1, and then only with the user's OK and confirm: true. Operations that return keys or tokens are refused. With DROID_MCP_MAX_AUTONOMY off or low, only read-only operations run.",
+      inputSchema: {
+        id: z.string().describe('Operation id from droid_ops'),
+        params: z.record(z.string(), z.unknown()).optional().describe("The operation's params; a REST request body goes in params.body"),
+        confirm: z.boolean().optional().describe('Required for destructive operations, after the user agreed'),
+        computer: z.string().optional().describe('Daemon operations only; must be this machine'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    },
+    handle(async (a) => ({ id: a.id, ...withinBudget(await callOperation(ctx, a)) })),
   );
 
   server.registerTool(
