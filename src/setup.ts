@@ -114,8 +114,10 @@ export class Setup {
   }
 
   // Ends every job still working: interrupts and archives its session. The server awaits this before it exits.
-  async close(): Promise<void> {
+  // Interrupt and archive each get half of budgetMs, so the archive is still tried before the server gives up.
+  async close(budgetMs = 8000): Promise<void> {
     this.#closed = true;
+    this.#cleanupMs = Math.min(this.#cleanupMs, Math.floor(budgetMs / 2));
     const all = [...this.#running];
     for (const r of all) r.stop('the server shut down during setup');
     await Promise.all(all.map((r) => r.done));
