@@ -212,7 +212,7 @@ From the repo directory, use the MCP Inspector CLI. List the tools:
 npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/list
 ```
 
-Expect 13 tools: `droid_find`, `droid_computers`, `droid_status`, `droid_events`, `droid_subscribe`, `droid_unsubscribe`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
+Expect 14 tools: `droid_find`, `droid_computers`, `droid_status`, `droid_setup`, `droid_events`, `droid_subscribe`, `droid_unsubscribe`, `droid_models`, `droid_start`, `droid_send`, `droid_wait`, `droid_respond`, `droid_cancel`, `droid_result`.
 
 Call three read-only tools:
 
@@ -224,7 +224,7 @@ npx -y @modelcontextprotocol/inspector --cli node src/main.ts --method tools/cal
 
 Then, from a connected client, ask it to call `droid_computers` and `droid_find`. Both are read-only and spend no model tokens.
 
-`node src/main.ts doctor [--http host:port]` prints each capability as `ok` or `FIX` with the fix, and exits 1 when the API key, the `--http` value or the roots need fixing. It shows only whether each secret is set. The `droid_status` tool returns the same checks plus, for each computer, when its doorbell plugin last rang or the one line to paste there to install it.
+`node src/main.ts doctor [--http host:port]` prints each capability as `ok` or `FIX` with the fix, and exits 1 when the API key, the `--http` value or the roots need fixing. It shows only whether each secret is set. The `droid_status` tool returns the same checks plus, for each computer, when its doorbell plugin last rang or the one line to paste there to install it, and its latest `droid_setup` job.
 
 ### 7. Optional: callbacks from every computer
 
@@ -307,6 +307,8 @@ The server accepts these tokenless posts and checks each one with Factory before
 - `DROID_MCP_EVENTS_TOKEN` (default unset): bearer token for the token hooks' `POST /events`; the doorbell plugin does not use it. On macOS, falls back to Keychain account `EVENTS_TOKEN` (step 7).
 - `DROID_MCP_WEBHOOK_URL` (default unset): webhook that receives forwarded events. Falls back to Keychain account `WEBHOOK_URL`.
 - `DROID_MCP_WEBHOOK_KEY` (default unset): key sent to the webhook; forwarding needs both URL and key. Falls back to Keychain account `WEBHOOK_KEY`.
+- `DROID_MCP_EVENTS_URL` (default `http://<--http address>/events`): the events URL `droid_setup` writes on other computers; set it to an address they can reach, such as the tailnet address.
+- `DROID_MCP_PLUGIN_SOURCE` (default `Jason-Holt-Digital/droid-mcp`): the marketplace `droid_setup` and the paste line install from, as `owner/repo` or `owner/repo#ref`.
 
 ## How the tools fit together
 
@@ -391,6 +393,18 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
   - Returns `id`, `name`, `kind` (`own`, `cloud`), `state` (`online`, `paused`, `offline`), `lastSeen`, `thisMachine` and `providerStatus` for each computer. See [Computers and online state](#computers-and-online-state).
   - Always fetches a fresh list; other tools reuse a list for up to 30 s.
   - When several computers share a name, tools refuse that name and list the matching ids; pass an id instead.
+
+#### droid_setup
+
+![FACTORY_API_KEY](https://img.shields.io/badge/needs-FACTORY__API__KEY-lightgrey) ![model tokens](https://img.shields.io/badge/spends-model%20tokens-lightgrey)
+
+- Changes: installs the [doorbell plugin](#doorbell-plugin) on one computer and writes its `~/.factory/droid-mcp.curlrc` (the events URL and an `x-droid-mcp-computer` header with that computer's id).
+- Backend: a Droid session created over Factory REST on that computer (Haiku 4.5, autonomy `off`, tag `droid-mcp-setup`).
+- Parameters: `computer`, `url` (default `DROID_MCP_EVENTS_URL`, else `http://<--http address>/events`).
+- Notes:
+  - The server approves only the three setup commands, in order, and cancels any other command, tool or question. The job ends on the reply `SETUP-OK`, a failure, or after 4 minutes, and the session is archived.
+  - Returns at once with `state`, `sessionId`, `detail` and `pasteLine`, the same setup as one line to run by hand. Without a key, or for an offline computer, the refusal's `fix` carries that line. `droid_status` shows each computer's latest job under `setup`.
+  - A loopback `url` is refused for any computer but this machine. Windows computers are unverified.
 
 #### droid_events
 

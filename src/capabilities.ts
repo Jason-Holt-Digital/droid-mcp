@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { API_KEY_FIX, type Autonomy } from './config.ts';
+import { DEFAULT_SOURCE, installCommands, setupCommands } from './setup.ts';
 
 export type Check = { name: string; ok: boolean; detail: string; unlocks: string; fix?: string };
 export type ThisMachine = { curlrcUrl?: string; pluginInstalled?: boolean; pluginError?: string };
@@ -15,7 +16,7 @@ export type CapabilityInput = ThisMachine & {
   cap: Autonomy;
 };
 
-export const PLUGIN_INSTALL = 'droid plugin marketplace add Jason-Holt-Digital/droid-mcp && droid plugin install droid-mcp@droid-mcp --scope user';
+export const PLUGIN_INSTALL = installCommands(DEFAULT_SOURCE).join(' && ');
 const HTTP_FIX = 'Run the server with --http <host:port> and DROID_MCP_TOKEN.';
 const REQUIRED = ['api_key', 'http', 'roots'];
 
@@ -32,8 +33,8 @@ export function localOnly(http: string): boolean {
   return host === 'localhost' || host === '::1' || host === '::' || host === '0.0.0.0' || host.startsWith('127.');
 }
 
-export function pasteLine(url: string, computerId: string): string {
-  return `${PLUGIN_INSTALL} && printf 'url = "%s"\\nheader = "x-droid-mcp-computer: %s"\\n' '${url}' '${computerId}' > ~/.factory/droid-mcp.curlrc`;
+export function pasteLine(url: string, computerId: string, source = DEFAULT_SOURCE): string {
+  return setupCommands(source, url, computerId).join(' && ');
 }
 
 function check(name: string, ok: boolean, detail: string, unlocks: string, fix: string): Check {

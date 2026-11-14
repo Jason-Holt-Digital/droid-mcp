@@ -12,6 +12,7 @@ import { createHandler, newServer } from './http.ts';
 import { createRest } from './rest.ts';
 import { Doorbell } from './ring.ts';
 import { KeyStore, Runs } from './runs.ts';
+import { Setup } from './setup.ts';
 import { Subscriptions } from './subscriptions.ts';
 import type { Ctx } from './tools.ts';
 
@@ -67,6 +68,7 @@ async function main(): Promise<void> {
     sessionComputers: new Map(),
     forwarder: new Forwarder({ url: webhookUrl, key: webhookKey }),
     status,
+    setup: rest && new Setup({ rest }),
   };
   const doorbell = new Doorbell(ctx);
   ctx.doorbell = doorbell;
