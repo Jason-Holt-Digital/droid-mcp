@@ -630,6 +630,7 @@ export function registerTools(server: McpServer, ctx: Ctx): void {
           allowLocalResume: a.allowLocalResume ?? false,
           now: Date.now(),
           cap: autonomyCap(ctx.env),
+          closedHere: runs.get(a.session)?.state === 'closed',
         });
         if ('refused' in route) throw route.refused;
         const autonomy: Autonomy | undefined = a.autonomy && resolveAutonomy(a.autonomy, ctx.env);

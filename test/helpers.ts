@@ -96,6 +96,7 @@ export type FakeDroid = {
 };
 
 // A resumeSession stand-in whose sessions never spawn droid; exit() fires the SDK's dead-transport notification.
+// fork() returns the same session, so a fork made through it is driven by the same FakeDroid.
 export function fakeResume(fail?: Error) {
   const made: FakeDroid[] = [];
   const resume = async (id: string, options: FakeDroid['options']) => {
@@ -129,6 +130,7 @@ export function fakeResume(fail?: Error) {
           f.closed = true;
         },
         updateSettings: async () => ({}),
+        fork: async () => f.session,
       },
     };
     made.push(f);

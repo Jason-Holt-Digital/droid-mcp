@@ -7,16 +7,19 @@ export type Route = { via: 'own' } | { via: 'rest' } | { via: 'local-resume' } |
 
 export const RECENT_MS = 30 * 60 * 1000;
 
-export function routeSend(target: Target, opts: { restEnabled: boolean; allowLocalResume: boolean; now: number; cap: Autonomy }): Route {
+// closedHere: this server closed the session itself, so it is free to load at once, and with a key it is
+// resumed locally as before rather than sent over REST, where droid_wait would not see the turn.
+export function routeSend(target: Target, opts: { restEnabled: boolean; allowLocalResume: boolean; now: number; cap: Autonomy; closedHere?: boolean }): Route {
   if (target.kind === 'own') return { via: 'own' };
-  if (opts.restEnabled) return { via: 'rest' };
+  const ours = target.kind === 'local' && opts.closedHere;
+  if (opts.restEnabled && !ours) return { via: 'rest' };
   const refuse = (code: Refused['code'], message: string, fix: string) => ({ refused: new Refused(code, message, fix) });
   if (target.kind === 'unknown') {
     return refuse('needs_api_key', `session ${target.id} is not on this machine; sending to it needs FACTORY_API_KEY`, API_KEY_FIX);
   }
   const r = target.record;
   if (r.workstream) return refuse('needs_api_key', 'workstream sessions need FACTORY_API_KEY; never loaded locally', API_KEY_FIX);
-  if (!opts.allowLocalResume) {
+  if (!opts.restEnabled && !opts.allowLocalResume) {
     return refuse(
       'invalid',
       'sending to a local session without FACTORY_API_KEY resumes it in a new droid process',
@@ -28,7 +31,7 @@ export function routeSend(target: Target, opts: { restEnabled: boolean; allowLoc
   }
   if (r.archived) return refuse('invalid', 'session is archived', 'Start a new session with droid_start.');
   if (isSubagent(r)) return refuse('invalid', 'session is a subagent', 'Send to its parent session instead.');
-  if (opts.now - r.updatedAt < RECENT_MS) {
+  if (!ours && opts.now - r.updatedAt < RECENT_MS) {
     return refuse(
       'busy',
       'session was active in the last 30 minutes and may be open in another droid; refusing to load it twice',

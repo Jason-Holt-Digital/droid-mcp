@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
 import type { SessionRecord } from '../src/catalog.ts';
 import { ToolError } from '../src/config.ts';
 import { move, Runs, type OwnRun, type RunState } from '../src/runs.ts';
@@ -122,4 +122,103 @@ test('a run closed by us stays closed when its process exits afterwards', async 
   made[0].exit();
   assert.equal(run.state, 'closed');
   assert.ok(!run.events.some((e) => e.text === 'dead'));
+});
+
+const IDLE_MS = 1000;
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+async function forked(t: TestContext) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fake = fakeResume();
+  const runs = new Runs({ apiKey: 'k', repoOf: (cwd) => cwd, resumeSession: fake.resume, idleMs: IDLE_MS });
+  const run = await runs.start({ cwd: '/repo', prompt: 'first', autonomy: 'off', settings: { fork: ID } });
+  return { runs, run, made: fake.made };
+}
+
+async function endTurn(run: OwnRun, droid: { finish: () => void }) {
+  droid.finish();
+  await run.turn;
+  assert.equal(run.state, 'idle');
+}
+
+test('a started run closes itself after the idle time, stopping the process and pushing a state event', async (t) => {
+  const { run, made } = await forked(t);
+  await endTurn(run, made[0]);
+  t.mock.timers.tick(IDLE_MS - 1);
+  await flush();
+  assert.equal(run.state, 'idle');
+  t.mock.timers.tick(1);
+  await flush();
+  assert.equal(run.state, 'closed');
+  assert.equal(made[0].closed, true);
+  assert.match(lastState(run) ?? '', /^closed after .* min idle$/);
+  assert.equal(run.idleTimer, undefined);
+});
+
+test('a started run that auto-closed and is resumed keeps auto-closing', async (t) => {
+  const { runs, run, made } = await forked(t);
+  await endTurn(run, made[0]);
+  t.mock.timers.tick(IDLE_MS);
+  await flush();
+  assert.equal(run.state, 'closed');
+  const again = await runs.resume({ id: run.id } as SessionRecord, '/repo', 'more');
+  assert.equal(again.autoClose, true);
+});
+
+test('a send before the idle time resets the timer', async (t) => {
+  const { runs, run, made } = await forked(t);
+  await endTurn(run, made[0]);
+  t.mock.timers.tick(IDLE_MS - 10);
+  await runs.send(run, 'again', 'queue');
+  t.mock.timers.tick(IDLE_MS);
+  await flush();
+  assert.equal(run.state, 'working');
+  await endTurn(run, made[0]);
+  t.mock.timers.tick(IDLE_MS - 10);
+  await flush();
+  assert.equal(run.state, 'idle', 'the timer restarted when the second turn ended');
+  t.mock.timers.tick(10);
+  await flush();
+  assert.equal(run.state, 'closed');
+});
+
+test('a long working or needs_you turn is never closed for idleness', async (t) => {
+  const { run, made } = await forked(t);
+  t.mock.timers.tick(IDLE_MS * 10);
+  await flush();
+  assert.equal(run.state, 'working');
+  void made[0].options.permissionHandler!({ toolUses: [], options: [{ value: 'proceed_once' }] });
+  assert.equal(run.state, 'needs_you');
+  t.mock.timers.tick(IDLE_MS * 10);
+  await flush();
+  assert.equal(run.state, 'needs_you');
+  assert.equal(made[0].closed, false);
+});
+
+test('a dead or closed run has no idle timer', async (t) => {
+  const { runs, run, made } = await forked(t);
+  await endTurn(run, made[0]);
+  made[0].exit();
+  assert.equal(run.state, 'dead');
+  assert.equal(run.idleTimer, undefined);
+  await runs.send(run, 'again', 'queue');
+  await endTurn(run, made[1]);
+  await runs.cancel(run, 'session');
+  assert.equal(run.idleTimer, undefined);
+  t.mock.timers.tick(IDLE_MS * 2);
+  await flush();
+  assert.equal(lastState(run), 'closed');
+});
+
+test('a resumed session of the user is never auto-closed', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const fake = fakeResume();
+  const runs = new Runs({ apiKey: 'k', repoOf: (cwd) => cwd, resumeSession: fake.resume, idleMs: IDLE_MS });
+  const run = await runs.resume({ id: ID } as SessionRecord, '/repo', 'first');
+  await endTurn(run, fake.made[0]);
+  assert.equal(run.idleTimer, undefined);
+  t.mock.timers.tick(IDLE_MS * 10);
+  await flush();
+  assert.equal(run.state, 'idle');
+  assert.equal(fake.made[0].closed, false);
 });

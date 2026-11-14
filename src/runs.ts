@@ -64,6 +64,8 @@ export type OwnRun = {
   lock: Promise<unknown>;
   waiters: Set<() => void>;
   close: () => Promise<void>;
+  autoClose: boolean;
+  idleTimer?: NodeJS.Timeout;
 };
 export type Decision = { decision?: string; comment?: string; answers?: string[]; cancel?: boolean };
 
@@ -76,6 +78,7 @@ type Create = (connection: Connection, handlers: Handlers) => Promise<Opened>;
 export type Change = { settings?: RunSettings; autonomy?: Autonomy };
 
 const PENDING_MS = 30 * 60 * 1000;
+const IDLE_MS = 30 * 60 * 1000;
 const INTERRUPT_GRACE_MS = 15_000;
 const MAX_EVENTS = 1000;
 const WAKE_KINDS = new Set<RunEvent['kind']>(['assistant', 'permission', 'ask_user', 'error', 'state']);
@@ -158,6 +161,7 @@ type OpenOptions = {
   execArgs?: string[];
   create: Create;
   settingsFor?: (session: DroidSession) => SettingsUpdate | undefined;
+  autoClose?: boolean;
 };
 
 export class Runs {
@@ -169,14 +173,23 @@ export class Runs {
   private readonly cap: Autonomy;
   private readonly opening = new Set<Promise<unknown>>();
   private readonly resumeSession: typeof resumeSession;
+  private readonly idleMs: number;
   private closing = false;
 
-  constructor(opts: { apiKey?: string; repoOf: (cwd: string) => string; maxRunning?: number; cap?: Autonomy; resumeSession?: typeof resumeSession }) {
+  constructor(opts: {
+    apiKey?: string;
+    repoOf: (cwd: string) => string;
+    maxRunning?: number;
+    cap?: Autonomy;
+    resumeSession?: typeof resumeSession;
+    idleMs?: number;
+  }) {
     this.apiKey = opts.apiKey;
     this.repoOf = opts.repoOf;
     this.maxRunning = opts.maxRunning ?? 3;
     this.cap = opts.cap ?? 'high';
     this.resumeSession = opts.resumeSession ?? resumeSession;
+    this.idleMs = opts.idleMs ?? IDLE_MS;
   }
 
   get(id: string): OwnRun | undefined {
@@ -222,6 +235,7 @@ export class Runs {
       execArgs: worktreeArgs(s.worktree),
       create,
       settingsFor: () => (Object.keys(u).length ? u : undefined),
+      autoClose: true,
     });
   }
 
@@ -231,6 +245,7 @@ export class Runs {
       prompt,
       create: (connection, handlers) => this.resumeWithinCap(record.id, connection, handlers),
       settingsFor: (session) => changeFor(session, change),
+      autoClose: this.runs.get(record.id)?.autoClose,
     });
   }
 
@@ -360,9 +375,7 @@ export class Runs {
       if (run.state === 'closed') return;
       const stopped = await this.cancelTurn(run);
       if (scope === 'session') {
-        move(run, 'closed');
-        await run.close();
-        this.push(run, { kind: 'state', text: 'closed' });
+        await this.shut(run, 'closed');
       } else if (!stopped) {
         throw new ToolError(
           'busy',
@@ -371,6 +384,29 @@ export class Runs {
         );
       }
     });
+  }
+
+  private async shut(run: OwnRun, note: string): Promise<void> {
+    this.to(run, 'closed');
+    await run.close();
+    this.push(run, { kind: 'state', text: note });
+  }
+
+  // Leaving idle clears the timer, so a timer that is still the run's own means the run has stayed idle.
+  private to(run: OwnRun, state: RunState): void {
+    move(run, state);
+    clearTimeout(run.idleTimer);
+    run.idleTimer = undefined;
+    if (state !== 'idle' || !run.autoClose) return;
+    const timer: NodeJS.Timeout = setTimeout(
+      () =>
+        void this.serial(run, async () => {
+          if (run.idleTimer === timer) await this.shut(run, `closed after ${this.idleMs / 60_000} min idle`);
+        }),
+      this.idleMs,
+    );
+    timer.unref();
+    run.idleTimer = timer;
   }
 
   async closeAll(): Promise<void> {
@@ -422,7 +458,7 @@ export class Runs {
     }
   }
 
-  private async openReserved({ cwd, prompt, execArgs, create, settingsFor }: OpenOptions, repo: string): Promise<OwnRun> {
+  private async openReserved({ cwd, prompt, execArgs, create, settingsFor, autoClose = false }: OpenOptions, repo: string): Promise<OwnRun> {
     try {
       let run: OwnRun | undefined;
       const { session, close } = await this.connect(cwd, execArgs, create, () => run);
@@ -445,6 +481,7 @@ export class Runs {
         lock: Promise.resolve(),
         waiters: new Set(),
         close,
+        autoClose,
       };
       this.runs.set(run.id, run);
       this.reserved.splice(this.reserved.indexOf(repo), 1);
@@ -496,7 +533,7 @@ export class Runs {
 
   private die(run: OwnRun): void {
     if (run.state === 'dead' || run.state === 'closed') return;
-    move(run, 'dead');
+    this.to(run, 'dead');
     for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'cancelled (droid process ended)');
     this.push(run, { kind: 'state', text: 'dead' });
   }
@@ -525,7 +562,7 @@ export class Runs {
       const timer = setTimeout(() => this.settle(run, requestId, cancelValue(kind), 'auto-cancelled after 30 min'), PENDING_MS);
       timer.unref();
       run.pending.set(requestId, { kind, resolve, expires: Date.now() + PENDING_MS, timer, ...extra });
-      if (run.state === 'working') move(run, 'needs_you');
+      if (run.state === 'working') this.to(run, 'needs_you');
       this.push(run, { kind, text: preview(text), requestId, ...extra });
     });
   }
@@ -536,12 +573,12 @@ export class Runs {
     clearTimeout(p.timer);
     run.pending.delete(requestId);
     p.resolve(value);
-    if (run.pending.size === 0 && run.state === 'needs_you') move(run, 'working');
+    if (run.pending.size === 0 && run.state === 'needs_you') this.to(run, 'working');
     this.push(run, { kind: 'state', text: `${note} ${requestId}`, requestId });
   }
 
   private begin(run: OwnRun, prompt: string): number {
-    move(run, 'working');
+    this.to(run, 'working');
     const seq = this.push(run, { kind: 'user', text: preview(prompt) });
     const turn: Promise<void> = this.drain(run, prompt).finally(() => {
       if (run.turn === turn) run.turn = undefined;
@@ -563,7 +600,7 @@ export class Runs {
     } finally {
       for (const [id, p] of run.pending) this.settle(run, id, cancelValue(p.kind), 'turn ended');
       if (run.state === 'working') {
-        move(run, 'idle');
+        this.to(run, 'idle');
         this.push(run, { kind: 'state', text: 'idle' });
       }
     }

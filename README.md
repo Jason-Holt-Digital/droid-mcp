@@ -330,7 +330,7 @@ Terms used below:
   - `needs_you`: the turn is paused on a pending prompt.
   - `idle`: the turn ended and the droid process is still alive.
   - `dead`: the droid process exited or its connection failed without this server closing it. Pending prompts are cancelled, and the next `droid_send` resumes it from its transcript in a new process.
-  - `closed`: closed with `droid_cancel` scope `session` or at server shutdown.
+  - `closed`: closed with `droid_cancel` scope `session`, by auto-close, or at server shutdown.
 
 ## Access at a glance
 
@@ -350,6 +350,8 @@ flowchart LR
 ```
 
 Sessions this server starts live in memory. When the stdio client disconnects, or the process gets SIGINT or SIGTERM, the server closes all of them. After a restart they are ordinary local sessions.
+
+A session started with `droid_start` (including a fork) closes itself after 30 minutes in `idle`. The timer starts when a turn ends and stops on the next send, on close, or when the process dies; a `working` or `needs_you` turn is never timed out. The `state` event reads `closed after 30 min idle`. Sessions resumed from your own local sessions are never auto-closed. Auto-close only stops the process: the session stays resumable with `droid_send` (`src/runs.ts`).
 
 ### Tools
 
@@ -517,6 +519,8 @@ Per-tool differences:
 
 Local resume happens only without a key, only with `allowLocalResume: true`, and only for a standalone session that has readable settings, is not archived, is not a subagent, was not modified in the last 30 minutes, and has a recorded autonomy within the cap. The resumed session becomes an own session.
 
+A session this server closed (with `droid_cancel` scope `session`, auto-close, or shutdown) can be resumed at once: the 30-minute check is skipped because no other droid holds it. With a key, `droid_send` resumes it locally instead of going over REST, so `droid_wait` sees the new turn; without a key it still needs `allowLocalResume: true`. The server remembers these sessions in memory only, so after a restart they fall back to the 30-minute check (`src/route.ts`).
+
 ## Computers and online state
 
 A Droid computer is either your own machine running the Droid daemon (`kind: "own"`) or a Factory cloud computer (`kind: "cloud"`). `droid_computers` sorts each into `online`, `paused` or `offline` (`src/computers.ts`):
@@ -661,6 +665,7 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 
 - At most 3 own sessions `working` or `needs_you` at once, and one per repo. The repo is the nearest ancestor of the cwd that contains `.git` (`src/runs.ts`, `src/catalog.ts`).
 - A pending permission or AskUser prompt is cancelled after 30 minutes (`src/runs.ts`).
+- A session started with `droid_start` is closed after 30 minutes idle (`src/runs.ts`).
 - `mode: "interrupt"` waits up to 15 s for the running turn to stop; if it does not, nothing is sent (`src/runs.ts`).
 - Each own session keeps its last 1000 events; `droid_wait` sets `gap: true` when older events were dropped (`src/runs.ts`).
 
@@ -715,7 +720,7 @@ It needs at least one local workstream session with its orchestrator, and a tran
 - Mission mode is untested live.
 - REST `droid_wait` assumes `getMessages` returns the newest messages (see the comment in `src/tools.ts`).
 - `droid_wait` on a local transcript cannot see pending prompts or tool events.
-- After an own session is closed, `droid_wait` and `droid_result` keep reading its in-memory state. If a later `droid_send` reaches it over REST, they do not see the new turn.
+- After an own session is closed, `droid_wait` and `droid_result` keep reading its in-memory state until a `droid_send` resumes it locally. If a later `droid_send` reaches it over REST (a named remote computer), they do not see the new turn.
 - Linux is untested.
 - `droid_find` and the other tools cannot reach an offline computer; Factory does not wake it.
 - Hooks on cloud computers need a network route to the server URL.

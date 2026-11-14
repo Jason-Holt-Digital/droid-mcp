@@ -17,7 +17,8 @@ const base: SessionRecord = {
   autonomy: 'off',
 };
 const local = (patch: Partial<SessionRecord>): Target => ({ kind: 'local', record: { ...base, ...patch } });
-const route = (target: Target, restEnabled: boolean, allowLocalResume = true) => routeSend(target, { restEnabled, allowLocalResume, now: NOW, cap: 'medium' });
+const route = (target: Target, restEnabled: boolean, allowLocalResume = true, closedHere = false) =>
+  routeSend(target, { restEnabled, allowLocalResume, now: NOW, cap: 'medium', closedHere });
 const refusedWith = (r: ReturnType<typeof routeSend>, text: RegExp, code = 'invalid') => {
   assert.ok('refused' in r, `expected a refusal, got ${JSON.stringify(r)}`);
   assert.match(r.refused.message, text);
@@ -61,4 +62,15 @@ test('standalone local sessions resume locally only when allowed, live, top-leve
   refusedWith(route(local({ autonomy: 'high' }), false), /exceeds the cap 'medium'/);
   assert.deepEqual(route(local({ autonomy: 'medium' }), false), { via: 'local-resume' });
   refusedWith(route(local({ autonomy: undefined }), false), /'unknown' exceeds the cap/);
+});
+
+test('a session this server closed resumes locally at once; other guards still apply', () => {
+  const recent = local({ updatedAt: NOW - 1000 });
+  assert.deepEqual(route(recent, false, true, true), { via: 'local-resume' });
+  refusedWith(route(recent, false, true, false), /last 30 minutes/, 'busy');
+  refusedWith(route(recent, false, false, true), /without FACTORY_API_KEY resumes it/);
+  assert.deepEqual(route(recent, true, false, true), { via: 'local-resume' }, 'with a key it resumes locally instead of going over REST');
+  refusedWith(route(local({ updatedAt: NOW, autonomy: 'high' }), true, false, true), /exceeds the cap/);
+  const unknown: Target = { kind: 'unknown', id: 'elsewhere' };
+  assert.deepEqual(route(unknown, true, false, true), { via: 'rest' });
 });
