@@ -23,7 +23,7 @@ async function lookupConfig(http: string | undefined) {
     lookupSecret('DROID_MCP_WEBHOOK_URL', 'WEBHOOK_URL'),
     lookupSecret('DROID_MCP_WEBHOOK_KEY', 'WEBHOOK_KEY'),
   ]);
-  const status = { http, webhook: Boolean(webhookUrl && webhookKey), eventsToken: Boolean(eventsToken) };
+  const status = { http, webhook: Boolean(webhookUrl && webhookKey), eventsToken: Boolean(eventsToken), httpToken: Boolean(process.env.DROID_MCP_TOKEN) };
   return { apiKey, eventsToken, webhookUrl, webhookKey, status };
 }
 
@@ -35,6 +35,7 @@ async function doctor(http: string | undefined): Promise<number> {
     roots: allowedRoots(),
     missingRoots: missingRoots(allowedRoots()),
     cap: autonomyCap(),
+    eventsUrl: process.env.DROID_MCP_EVENTS_URL || undefined,
     ...(await probeThisMachine()),
   });
   const { lines, code } = doctorReport(checks);

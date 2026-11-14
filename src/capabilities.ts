@@ -12,6 +12,10 @@ export type CapabilityInput = ThisMachine & {
   apiKey: boolean;
   webhook: boolean;
   eventsToken: boolean;
+  // Whether DROID_MCP_TOKEN is set; --http refuses to start without it.
+  httpToken: boolean;
+  // DROID_MCP_EVENTS_URL, when set: the URL droid_setup writes, e.g. behind a proxy.
+  eventsUrl?: string;
   http?: string;
   roots: string[];
   // Roots that do not exist; checkCwd skips them, so droid_start works only under the others.
@@ -55,11 +59,11 @@ function check(name: string, ok: boolean, detail: string, unlocks: string, fix: 
   return ok ? { name, ok, detail, unlocks } : { name, ok, detail, unlocks, fix };
 }
 
-function httpCheck(http: string | undefined): Check {
+function httpCheck(http: string | undefined, token: boolean): Check {
   const unlocks = 'rings from the plugin';
   if (http === undefined) return check('http', true, 'stdio: there is no /events endpoint, so plugin rings cannot reach this server', unlocks, '');
-  const ok = hostPort(http) !== undefined;
-  return check('http', ok, ok ? `events URL is ${eventsUrl(http)}` : `${http} is not host:port`, unlocks, HTTP_FIX);
+  if (hostPort(http) === undefined) return check('http', false, `${http} is not host:port`, unlocks, HTTP_FIX);
+  return check('http', token, token ? `events URL is ${eventsUrl(http)}` : 'DROID_MCP_TOKEN is not set, so --http will not start', unlocks, HTTP_FIX);
 }
 
 function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'): Check {
@@ -68,12 +72,14 @@ function pluginCheck(installed: boolean | undefined, error = 'droid not on PATH'
   return check('plugin', installed === true, `this machine: ${detail}`, 'rings from this machine', fix);
 }
 
-function curlrcCheck(http: string | undefined, url: string | undefined): Check {
+// Either URL reaches this server from this machine: the configured one droid_setup writes, or the --http address.
+function curlrcCheck(http: string | undefined, configured: string | undefined, url: string | undefined): Check {
   const unlocks = 'rings from this machine reaching this server';
-  if (http === undefined || !hostPort(http)) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
-  const want = eventsUrl(http);
-  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : url === want ? `url is ${url}` : `url is ${url}, expected ${want}`;
-  return check('curlrc', url === want, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${want}"`);
+  const accepted = [configured, http && hostPort(http) ? eventsUrl(http) : undefined].filter((u) => u !== undefined);
+  if (!accepted.length) return check('curlrc', false, 'no events URL to point the curlrc at', unlocks, HTTP_FIX);
+  const ok = url !== undefined && accepted.includes(url);
+  const detail = url === undefined ? 'no url in ~/.factory/droid-mcp.curlrc' : ok ? `url is ${url}` : `url is ${url}, expected ${accepted.join(' or ')}`;
+  return check('curlrc', ok, `this machine: ${detail}`, unlocks, `Write this one line to ~/.factory/droid-mcp.curlrc: url = "${accepted[0]}"`);
 }
 
 export function capabilities(input: CapabilityInput): Check[] {
@@ -92,7 +98,7 @@ export function capabilities(input: CapabilityInput): Check[] {
       'waking the agent',
       'Set DROID_MCP_WEBHOOK_URL and DROID_MCP_WEBHOOK_KEY (or Keychain accounts WEBHOOK_URL and WEBHOOK_KEY), then restart.',
     ),
-    httpCheck(input.http),
+    httpCheck(input.http, input.httpToken),
     check(
       'roots',
       input.roots.some((r) => !input.missingRoots.includes(r)),
@@ -102,7 +108,7 @@ export function capabilities(input: CapabilityInput): Check[] {
     ),
     check('autonomy_cap', true, `cap is ${input.cap} (DROID_MCP_MAX_AUTONOMY)`, `autonomy up to ${input.cap}`, ''),
     pluginCheck(input.pluginInstalled, input.pluginError),
-    curlrcCheck(input.http, input.curlrcUrl),
+    curlrcCheck(input.http, input.eventsUrl, input.curlrcUrl),
     check(
       'events_token',
       true,
