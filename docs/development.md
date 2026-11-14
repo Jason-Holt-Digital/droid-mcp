@@ -58,4 +58,6 @@ The redesign lands as a stack of slices. Each `slice-N-*` branch starts from the
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, whatever its base, so each slice in the stack is checked. It runs on Ubuntu with Node 24 and 26, installs `ripgrep`, then runs `npm ci`, `npm run lint`, `npm run fmt:check`, `npm run typecheck` and `npm test`. It does not run the smoke test.
+`.github/workflows/ci.yml` runs on every push to `main` and on every pull request, whatever its base, so each slice in the stack is checked. It runs on Ubuntu with Node 24 and 26, installs `ripgrep`, then runs `npm ci`, `npm run lint`, `npm run fmt:check`, `npm run typecheck`, `npm run codegen:check` and `npm test`. It does not run the smoke test.
+
+After upgrading `@factory/droid-sdk`, run `npm run codegen` and commit `src/generated/catalog.json`. `npm run codegen -- --refresh` also fetches the latest Factory OpenAPI file into `catalog/factory-openapi.json` first.
