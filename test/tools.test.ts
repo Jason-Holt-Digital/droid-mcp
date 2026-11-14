@@ -6,13 +6,14 @@ import { after, before, test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { SessionRecord } from '../src/catalog.ts';
 import { Computers } from '../src/computers.ts';
 import { EventLog } from '../src/events.ts';
 import { createRest } from '../src/rest.ts';
 import { KeyStore, Runs, type OwnRun, type RunEvent } from '../src/runs.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
 import { clampWait, DEFAULT_WAIT_MS, LIMIT_BYTES, MAX_WAIT_MS, pageBytes, registerTools, type Ctx } from '../src/tools.ts';
-import { catalog, fakeApi, FIXTURES, IDS, SECRET } from './helpers.ts';
+import { catalog, fakeApi, fakeResume, FIXTURES, IDS, SECRET } from './helpers.ts';
 
 let dir: string;
 let project: string;
@@ -72,7 +73,7 @@ test('wait timeout is capped at 50 s and defaults to 25 s', () => {
 
 test('Runs.wait returns at the timeout with nothing new, and early when an event arrives', async () => {
   const runs = new Runs({ repoOf: (cwd) => cwd });
-  const run = { state: 'running', events: [] as RunEvent[], waiters: new Set<() => void>() } as unknown as OwnRun;
+  const run = { state: 'working', events: [] as RunEvent[], waiters: new Set<() => void>() } as unknown as OwnRun;
   let t = Date.now();
   assert.deepEqual((await runs.wait(run, 0, 40)).events, []);
   assert.ok(Date.now() - t >= 35);
@@ -204,7 +205,7 @@ test('droid_start checks the cwd allow-list and autonomy cap before starting any
 test('droid_send to an owned run with a running turn is refused as busy', async () => {
   const run = {
     id: '8c1d2e3f-4a5b-5c6d-9e7f-0a1b2c3d4e5f',
-    state: 'running',
+    state: 'working',
     turn: new Promise(() => {}),
     session: { settings: { autonomyLevel: 'off' } },
     lock: Promise.resolve(),
@@ -221,6 +222,27 @@ test('droid_send to an owned run with a running turn is refused as busy', async 
   try {
     const busy = await c.call('droid_send', { session: run.id, prompt: 'hi', idempotencyKey: 'busy1' });
     assert.deepEqual(busy.error, { code: 'busy', message: 'a turn is running', fix: 'Wait for it with droid_wait, or send with mode "interrupt".' });
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_send to a dead owned run resumes it and reports working', async () => {
+  const fake = fakeResume();
+  const runs = new Runs({ apiKey: 'k', repoOf: (cwd) => cwd, resumeSession: fake.resume });
+  const run = await runs.resume({ id: IDS.liveStandalone } as SessionRecord, project, 'first');
+  fake.made[0].exit();
+  await run.turn;
+  const c = await connect({ runs });
+  try {
+    const found = await c.call('droid_wait', { session: run.id });
+    assert.equal(found.json.state, 'dead');
+    const sent = await c.call('droid_send', { session: run.id, prompt: 'again', idempotencyKey: 'dead1' });
+    assert.equal(sent.isError, false, sent.text);
+    assert.equal(sent.json.via, 'own');
+    assert.equal(sent.json.sessionId, IDS.liveStandalone);
+    assert.equal(sent.json.status, 'working');
+    assert.deepEqual(fake.made[1].prompts, ['again']);
   } finally {
     await c.close();
   }
@@ -309,7 +331,7 @@ test('droid_start refuses unknown models and invalid settings before starting an
     get: () => undefined,
     start: async (opts: (typeof started)[number]) => {
       started.push(opts);
-      return { id: 'new-session', state: 'running' };
+      return { id: 'new-session', state: 'working' };
     },
   } as unknown as Runs;
   const c = await connect({ runs });
@@ -839,7 +861,7 @@ test('droid_subscribe and droid_unsubscribe are idempotent, persist, and refuse 
 test('droid_start subscribes by default, not with subscribe: false, and a retry keeps the first choice', async () => {
   const ids = ['1a2b3c4d-5e6f-5a7b-8c9d-0e1f2a3b4c5d', '2b3c4d5e-6f7a-5b8c-9d0e-1f2a3b4c5d6e'];
   let n = 0;
-  const runs = { get: () => undefined, start: async () => ({ id: ids[n++], state: 'running' }) } as unknown as Runs;
+  const runs = { get: () => undefined, start: async () => ({ id: ids[n++], state: 'working' }) } as unknown as Runs;
   const subscriptions = new Subscriptions(join(dir, 'subs-start.json'));
   const c = await connect({ runs, subscriptions });
   try {

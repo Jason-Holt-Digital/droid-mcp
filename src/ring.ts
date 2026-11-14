@@ -118,7 +118,7 @@ export class Doorbell {
         const [requestId, p] = [...run.pending][0] ?? [];
         const text = run.events.findLast((e) => e.requestId === requestId)?.text ?? '';
         return {
-          busy: run.state === 'running' || run.state === 'waiting',
+          busy: run.state === 'working' || run.state === 'needs_you',
           prompt: p && { kind: p.kind === 'permission' ? 'permission' : 'question', text },
           target: { kind: 'own', run },
           cwd: run.cwd,

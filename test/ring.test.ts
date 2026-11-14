@@ -204,7 +204,7 @@ test("a ring for a session this server runs uses the run's own state, not the se
   const run = {
     id: OWN,
     cwd: '/home/dev/repo',
-    state: 'waiting',
+    state: 'needs_you',
     pending: new Map([['r9', { kind: 'permission' }]]),
     events: [{ seq: 1, at: 1, kind: 'permission', text: 'Execute git push', requestId: 'r9' }],
     lastResult: 'Pushed.',

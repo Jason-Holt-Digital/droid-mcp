@@ -325,6 +325,12 @@ Terms used below:
 - **Own session:** a session currently running inside this server, either started with `droid_start` or resumed locally by `droid_send`. It stays own until it is closed.
 - **Autonomy:** what the agent in a session may do without asking: `off` < `low` < `medium` < `high`.
 - **Pending prompt:** a permission request or AskUser question waiting for `droid_respond` (listed in `attention`).
+- **Own session state:** the `state` (`status` from `droid_send`, `run` in `droid_find`) of an own session, one of five (`src/runs.ts`):
+  - `working`: a turn is running.
+  - `needs_you`: the turn is paused on a pending prompt.
+  - `idle`: the turn ended and the droid process is still alive.
+  - `dead`: the droid process exited or its connection failed without this server closing it. Pending prompts are cancelled, and the next `droid_send` resumes it from its transcript in a new process.
+  - `closed`: closed with `droid_cancel` scope `session` or at server shutdown.
 
 ## Access at a glance
 
@@ -435,7 +441,7 @@ The `computer` parameter of `droid_send`, `droid_wait`, `droid_respond`, `droid_
 - Backend: own child process, Factory REST API, or a new `droid exec` (local resume).
 - Credential: own session's existing connection; `FACTORY_API_KEY` for REST; CLI login for local resume (only reachable without a key).
 - Parameters: `session`, `computer`, `prompt`, `idempotencyKey` (required), `mode` (`queue`, `interrupt`), `allowLocalResume`, `autonomy`, settings.
-- Notes: returns `via` (`own`, `local-resume`, `rest`), `nextSeq` for own and resumed sessions, `messageId` for REST. `queue` is refused while a turn is running.
+- Notes: returns `via` (`own`, `local-resume`, `rest`), `nextSeq` for own and resumed sessions, `messageId` for REST. `queue` is refused while a turn is running. A `dead` own session is resumed under the same `sessionId` before the prompt is sent.
 
 #### droid_wait
 
@@ -653,7 +659,7 @@ Ignored settings come back in the `ignored` field of the `droid_send` result; RE
 
 ### Concurrency limits
 
-- At most 3 turns running or waiting on a prompt at once, and one per repo. The repo is the nearest ancestor of the cwd that contains `.git` (`src/runs.ts`, `src/catalog.ts`).
+- At most 3 own sessions `working` or `needs_you` at once, and one per repo. The repo is the nearest ancestor of the cwd that contains `.git` (`src/runs.ts`, `src/catalog.ts`).
 - A pending permission or AskUser prompt is cancelled after 30 minutes (`src/runs.ts`).
 - `mode: "interrupt"` waits up to 15 s for the running turn to stop; if it does not, nothing is sent (`src/runs.ts`).
 - Each own session keeps its last 1000 events; `droid_wait` sets `gap: true` when older events were dropped (`src/runs.ts`).
