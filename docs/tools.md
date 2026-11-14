@@ -88,7 +88,7 @@ Installs the plugin on one computer through a Droid session there. See [Wake-ups
 Reads the event log: up to 500 events from plugin rings and legacy hooks, in memory.
 
 - Parameters: `after`, `limit` (1-200, default 50), `kinds` (`finished`, `question`, `permission`, `ended`).
-- Returns `events` (each with `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text`, `cwd`, `tags`, `forwarded`), `nextAfter`, `missed`, `forwarding` and a note that event text is untrusted.
+- Returns `events` (each with `seq`, `at`, `computer`, `sessionId`, `kind`, `title`, `text`, `cwd`, `tags`, `forwarded` and, when forwarded, `delivery`: `sending`, `delivered` (the webhook answered 2xx) or `failed`), `nextAfter`, `missed`, `forwarding` and a note that event text is untrusted.
 - Errors: none of its own.
 
 ### droid_models
