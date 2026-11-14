@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { connectAndAuthenticate, createWebSocketDaemonClient, MachineType, SDK_VERSION } from '@factory/droid-sdk/node';
 import type { Computers } from './computers.ts';
-import { API_KEY_FIX, autonomyCap, Refused, ToolError } from './config.ts';
+import { API_KEY_FIX, autonomyCap, exceedsCap, Refused, ToolError, type Autonomy } from './config.ts';
 import type { HttpMethod, Rest, RestRequest } from './rest.ts';
 
 type ParamSchema = { type?: string; properties?: Record<string, unknown>; required?: string[]; description?: string };
@@ -46,6 +46,34 @@ export function countOperations() {
   const bySource: Record<string, number> = {};
   for (const o of OPERATIONS) bySource[o.source] = (bySource[o.source] ?? 0) + 1;
   return { total: OPERATIONS.length, bySource };
+}
+
+const AUTONOMY_KEYS = new Set(['autonomyLevel', 'subagentAutonomyLevel']);
+// The deprecated autonomyMode, mapped to the level it grants. An unknown mode counts as above any cap.
+const MODE_LEVEL = new Map<string, Autonomy>([
+  ['normal', 'off'],
+  ['spec', 'off'],
+  ['auto-low', 'low'],
+  ['auto-medium', 'medium'],
+  ['auto-high', 'high'],
+]);
+
+// droid_start and droid_send refuse autonomy above the cap; this keeps droid_call from setting it through params,
+// e.g. rest.updateSession with body.sessionSettings.autonomyLevel. Walks every level of params.
+export function checkAutonomy(value: unknown, cap: Autonomy, path = 'params'): void {
+  if (value === null || typeof value !== 'object') return;
+  for (const [k, v] of Object.entries(value)) {
+    const where = Array.isArray(value) ? `${path}[${k}]` : `${path}.${k}`;
+    const level = AUTONOMY_KEYS.has(k) ? v : k === 'autonomyMode' && typeof v === 'string' ? (MODE_LEVEL.get(v) ?? v) : undefined;
+    if (level !== undefined && level !== null && (typeof level !== 'string' || exceedsCap(level, cap))) {
+      throw new Refused(
+        'invalid',
+        `${where} '${String(v)}' exceeds the autonomy cap '${cap}' (DROID_MCP_MAX_AUTONOMY)`,
+        `Pass '${cap}' or lower, or leave it out.`,
+      );
+    }
+    checkAutonomy(v, cap, where);
+  }
 }
 
 // Shallow on purpose: required keys and unknown top-level keys. Daemon params carry only a signature description.
@@ -93,6 +121,7 @@ export async function callOperation(ctx: OpsContext, a: CallArgs): Promise<unkno
     );
   }
   if (op.destructive && a.confirm !== true) throw new Refused('invalid', `${op.id} is destructive`, 'Confirm with the user, then pass confirm: true.');
+  checkAutonomy(a.params, cap);
   checkParams(op, a.params ?? {});
   if (op.source === 'rest') {
     if (a.computer !== undefined) {

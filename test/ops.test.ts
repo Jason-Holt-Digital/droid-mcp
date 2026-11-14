@@ -437,3 +437,29 @@ test('the relay path connects to this computer through the relay URL Factory rep
   );
   assert.equal(stalled.seen.disconnected, 1);
 });
+
+test('droid_call refuses autonomy above the cap anywhere in params, before sending', async () => {
+  const { fetch, calls } = recordingFetch({});
+  const seen: string[] = [];
+  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: { DROID_MCP_MAX_AUTONOMY: 'medium' }, daemon: async (m) => seen.push(m) });
+  try {
+    const high = await c.call('droid_call', { id: 'rest.updateSession', params: { sessionId: 'abc', body: { sessionSettings: { autonomyLevel: 'high' } } } });
+    assert.deepEqual(high.json, {
+      code: 'invalid',
+      message: "params.body.sessionSettings.autonomyLevel 'high' exceeds the autonomy cap 'medium' (DROID_MCP_MAX_AUTONOMY)",
+      fix: "Pass 'medium' or lower, or leave it out.",
+    });
+    const mode = await c.call('droid_call', { id: 'rest.createSession', params: { body: { sessionSettings: { autonomyMode: 'auto-high' } } } });
+    assert.match(mode.json.message, /autonomyMode 'auto-high' exceeds/);
+    const odd = await c.call('droid_call', { id: 'rest.createSession', params: { body: { sessionSettings: { autonomyMode: 'yolo' } } } });
+    assert.match(odd.json.message, /autonomyMode 'yolo' exceeds/, 'an unknown mode counts as above the cap');
+    const sub = await c.call('droid_call', { id: 'daemon.update_session_defaults', params: { settings: { subagentAutonomyLevel: 'high' } } });
+    assert.match(sub.json.message, /subagentAutonomyLevel 'high' exceeds/);
+    assert.deepEqual([calls.length, seen.length], [0, 0]);
+    const ok = await c.call('droid_call', { id: 'rest.updateSession', params: { sessionId: 'abc', body: { sessionSettings: { autonomyLevel: 'medium' } } } });
+    assert.equal(ok.isError, false, ok.text);
+    assert.equal(calls.length, 1);
+  } finally {
+    await c.close();
+  }
+});
