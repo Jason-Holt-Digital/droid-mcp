@@ -10,14 +10,15 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Computers } from '../src/computers.ts';
 import { API_KEY_FIX } from '../src/config.ts';
 import { EventLog } from '../src/events.ts';
-import { isReadOnly, type DaemonCall } from '../src/ops.ts';
+import { relayDaemon, type DaemonCall, type RelayDeps } from '../src/ops.ts';
 import { createRest } from '../src/rest.ts';
 import { KeyStore, type Runs } from '../src/runs.ts';
 import { Subscriptions } from '../src/subscriptions.ts';
 import { LIMIT_BYTES, registerTools, type Ctx } from '../src/tools.ts';
 import { catalog, FIXTURES } from './helpers.ts';
 
-type Entry = { id: string; summary: string; destructive: boolean; callable: boolean };
+type Entry = { id: string; summary: string; readOnly: boolean; destructive: boolean; secret: boolean };
+const ALLOW = { DROID_MCP_ALLOW_DESTRUCTIVE: '1' };
 const operations: Array<{ source: string }> = JSON.parse(readFileSync(new URL('../src/generated/catalog.json', import.meta.url), 'utf8')).operations;
 
 let dir: string;
@@ -73,26 +74,22 @@ function recordingFetch(reply: unknown = { ok: true }) {
   return { fetch, calls };
 }
 
-test('isReadOnly: REST GET, or a daemon method named get, list, read, search, inspect or count', () => {
-  const table: Array<['rest' | 'daemon', string, boolean]> = [
-    ['rest', 'GET /api/v0/sessions', true],
-    ['rest', 'POST /api/v0/sessions', false],
-    ['rest', 'DELETE /api/v0/sessions/{sessionId}', false],
-    ['rest', 'PATCH /api/v0/sessions/{sessionId}', false],
-    ['daemon', 'getSessionMessages', true],
-    ['daemon', 'listModels', true],
-    ['daemon', 'readFile', true],
-    ['daemon', 'searchSessions', true],
-    ['daemon', 'inspectWorktreeDeletion', true],
-    ['daemon', 'countTokens', true],
-    ['daemon', 'list', true],
-    ['daemon', 'listenForEvents', false],
-    ['daemon', 'getaway', false],
-    ['daemon', 'killWorkerSession', false],
-    ['daemon', 'addUserMessage', false],
-    ['daemon', 'updateSessionSettings', false],
-  ];
-  for (const [source, name, expected] of table) assert.equal(isReadOnly({ source, name }), expected, name);
+test('droid_call decides read-only from the catalog flag, not from the method name', async () => {
+  const daemonCalls: string[] = [];
+  const daemon: DaemonCall = async (method) => {
+    daemonCalls.push(method);
+    return {};
+  };
+  const c = await connect({ env: { DROID_MCP_MAX_AUTONOMY: 'low' }, daemon });
+  try {
+    // Named get…, but it returns any file's contents, so the catalog does not mark it read-only.
+    const file = await c.call('droid_call', { id: 'daemon.get_workspace_file_content', params: {} });
+    assert.match(file.json.message, /is not read-only/);
+    assert.equal((await c.call('droid_call', { id: 'daemon.list_models' })).isError, false);
+    assert.deepEqual(daemonCalls, ['listModels']);
+  } finally {
+    await c.close();
+  }
 });
 
 test('droid_ops without arguments counts operations by source and says how to search', async () => {
@@ -113,7 +110,7 @@ test('droid_ops searches id, name and summary case-insensitively and returns com
     const models = await c.call('droid_ops', { query: 'LIST models' });
     const ids = models.json.operations.map((e: Entry) => e.id);
     assert.ok(ids.includes('daemon.list_models'), ids.join(', '));
-    assert.deepEqual(Object.keys(models.json.operations[0]).sort(), ['callable', 'destructive', 'id', 'summary']);
+    assert.deepEqual(Object.keys(models.json.operations[0]).sort(), ['destructive', 'id', 'readOnly', 'secret', 'summary']);
     const bySummary = await c.call('droid_ops', { query: 'get a session' });
     assert.ok(bySummary.json.operations.some((e: Entry) => e.id === 'rest.getSession'));
     const byPath = await c.call('droid_ops', { query: '/elicitations/{requestId}' });
@@ -146,9 +143,9 @@ test('droid_ops with an id describes the operation in full', async () => {
         properties: { sessionId: { type: 'string', description: 'Session ID' }, computerId: { type: 'string', description: 'Computer ID to query directly' } },
         required: ['sessionId'],
       },
-      destructive: false,
       readOnly: true,
-      callable: true,
+      destructive: false,
+      secret: false,
     });
     const daemon = await c.call('droid_ops', { id: 'daemon.kill_worker_session' });
     assert.equal(daemon.json.destructive, true);
@@ -171,16 +168,37 @@ test('droid_call refuses an unknown id and points at droid_ops', async () => {
   }
 });
 
-test('droid_call refuses a destructive operation without confirm: true, and runs it with confirm', async () => {
+test('droid_call refuses destructive operations unless the server allows them, and then still needs confirm: true', async () => {
   const { fetch, calls } = recordingFetch({});
-  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }) });
+  const locked = await connect({ rest: createRest({ apiKey: 'k', fetch }) });
+  try {
+    for (const id of ['rest.deleteSession', 'daemon.kill_worker_session']) {
+      const res = await locked.call('droid_call', { id, params: { sessionId: 'abc' }, confirm: true });
+      assert.equal(res.isError, true);
+      assert.deepEqual(res.json, {
+        code: 'invalid',
+        message: `${id} is destructive, and this server does not allow destructive operations`,
+        fix: 'Ask the user to do it in the Factory app, or to restart droid-mcp with DROID_MCP_ALLOW_DESTRUCTIVE=1.',
+      });
+    }
+  } finally {
+    await locked.close();
+  }
+  for (const env of [{ DROID_MCP_ALLOW_DESTRUCTIVE: 'true' }, { DROID_MCP_ALLOW_DESTRUCTIVE: '0' }]) {
+    const other = await connect({ rest: createRest({ apiKey: 'k', fetch }), env });
+    try {
+      const res = await other.call('droid_call', { id: 'rest.deleteSession', params: { sessionId: 'abc' }, confirm: true });
+      assert.match(res.json.message, /does not allow destructive operations/, 'only the exact value 1 turns it on');
+    } finally {
+      await other.close();
+    }
+  }
+  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: ALLOW });
   try {
     for (const confirm of [undefined, false]) {
       const res = await c.call('droid_call', { id: 'rest.deleteSession', params: { sessionId: 'abc' }, confirm });
       assert.deepEqual(res.json, { code: 'invalid', message: 'rest.deleteSession is destructive', fix: 'Confirm with the user, then pass confirm: true.' });
     }
-    const daemon = await c.call('droid_call', { id: 'daemon.kill_worker_session', params: {} });
-    assert.equal(daemon.json.fix, 'Confirm with the user, then pass confirm: true.');
     assert.equal(calls.length, 0);
     const ok = await c.call('droid_call', { id: 'rest.deleteSession', params: { sessionId: 'abc' }, confirm: true });
     assert.equal(ok.isError, false, ok.text);
@@ -188,6 +206,22 @@ test('droid_call refuses a destructive operation without confirm: true, and runs
       calls.map((x) => `${x.method} ${x.path}`),
       ['DELETE /api/v0/sessions/abc'],
     );
+  } finally {
+    await c.close();
+  }
+});
+
+test('droid_call refuses operations that return keys or tokens, whatever the settings', async () => {
+  const { fetch, calls } = recordingFetch({});
+  let ran = 0;
+  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: ALLOW, daemon: async () => ran++ });
+  try {
+    for (const id of ['daemon.get_proxy_token', 'rest.createServiceAccountApiKey', 'rest.rotateServiceAccountApiKey']) {
+      const res = await c.call('droid_call', { id, params: {}, confirm: true });
+      assert.equal(res.json.code, 'invalid', id);
+      assert.match(res.json.message, /returns a key or token/, id);
+    }
+    assert.deepEqual([calls.length, ran], [0, 0]);
   } finally {
     await c.close();
   }
@@ -201,7 +235,7 @@ test('droid_call under an off or low autonomy cap runs only read-only operations
       daemonCalls.push(method);
       return {};
     };
-    const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: { DROID_MCP_MAX_AUTONOMY: cap }, daemon });
+    const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: { DROID_MCP_MAX_AUTONOMY: cap, ...ALLOW }, daemon });
     try {
       const post = await c.call('droid_call', { id: 'rest.postMessage', params: { sessionId: 'abc', body: { text: 'hi' } } });
       assert.deepEqual(post.json, {
@@ -229,7 +263,7 @@ test('droid_call under an off or low autonomy cap runs only read-only operations
 
 test('droid_call over REST fills path params, sends the rest as query and params.body as the body, with the key', async () => {
   const { fetch, calls } = recordingFetch({ messages: [{ id: 'm1' }] });
-  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }) });
+  const c = await connect({ rest: createRest({ apiKey: 'k', fetch }), env: ALLOW });
   try {
     const get = await c.call('droid_call', { id: 'rest.getMessages', params: { sessionId: 'abc', limit: 5, role: 'user' } });
     assert.deepEqual(get.json, { id: 'rest.getMessages', result: { messages: [{ id: 'm1' }] } });
@@ -341,4 +375,65 @@ test('droid_call refuses a daemon operation aimed at another computer', async ()
   } finally {
     await c.close();
   }
+});
+
+type FakeClient = { listModels?: (p: unknown) => Promise<unknown>; disconnect: () => void };
+
+function fakeRelay(client: FakeClient, opts: { relayClientUrl?: string; connect?: RelayDeps['connect'] } = {}) {
+  const seen = { created: [] as unknown[], connected: [] as Array<{ url: string; apiKey: string }>, disconnected: 0, computers: [] as string[] };
+  const wrapped = {
+    ...client,
+    disconnect: () => {
+      seen.disconnected++;
+      client.disconnect();
+    },
+  };
+  const deps: RelayDeps = {
+    createClient: ((o: unknown) => {
+      seen.created.push(o);
+      return wrapped;
+    }) as unknown as RelayDeps['createClient'],
+    connect:
+      opts.connect ??
+      ((async (a: { url: string; authParams: { apiKey: string } }) => {
+        seen.connected.push({ url: a.url, apiKey: a.authParams.apiKey });
+      }) as unknown as RelayDeps['connect']),
+    timeoutMs: 20,
+  };
+  const rest = {
+    computer: async (id: string) => {
+      seen.computers.push(id);
+      return { providerType: 'byom', relayClientUrl: 'relayClientUrl' in opts ? opts.relayClientUrl : 'wss://relay.example/c1' };
+    },
+  };
+  return { call: relayDaemon('secret-key', rest, { thisId: async () => 'comp-self' }, deps), seen };
+}
+
+test('the relay path connects to this computer through the relay URL Factory reports, calls the method and disconnects', async () => {
+  const params: unknown[] = [];
+  const ok = fakeRelay({ listModels: async (p) => (params.push(p), { models: [{ id: 'm' }] }), disconnect: () => {} });
+  assert.deepEqual(await ok.call('listModels', { includeDisabled: true }), { models: [{ id: 'm' }] });
+  assert.deepEqual(params, [{ includeDisabled: true }]);
+  assert.deepEqual(ok.seen.computers, ['comp-self']);
+  assert.deepEqual(ok.seen.connected, [{ url: 'wss://relay.example/c1', apiKey: 'secret-key' }]);
+  assert.equal((ok.seen.created[0] as { computerId: string }).computerId, 'comp-self');
+  assert.equal(ok.seen.disconnected, 1);
+
+  const missing = fakeRelay({ disconnect: () => {} });
+  await assert.rejects(
+    missing.call('listModels', undefined),
+    (e: Error & { code: string }) => e.code === 'internal' && /no DaemonClient\.listModels/.test(e.message),
+  );
+  assert.equal(missing.seen.disconnected, 1, 'disconnects after a failed call too');
+
+  const offline = fakeRelay({ disconnect: () => {} }, { relayClientUrl: undefined });
+  await assert.rejects(offline.call('listModels', undefined), (e: Error & { code: string }) => e.code === 'computer_offline');
+  assert.equal(offline.seen.created.length, 0);
+
+  const stalled = fakeRelay({ disconnect: () => {} }, { connect: (() => new Promise(() => {})) as unknown as RelayDeps['connect'] });
+  await assert.rejects(
+    stalled.call('listModels', undefined),
+    (e: Error & { code: string }) => e.code === 'computer_offline' && /did not answer/.test(e.message),
+  );
+  assert.equal(stalled.seen.disconnected, 1);
 });

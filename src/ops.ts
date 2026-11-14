@@ -5,28 +5,33 @@ import { API_KEY_FIX, autonomyCap, Refused, ToolError } from './config.ts';
 import type { HttpMethod, Rest, RestRequest } from './rest.ts';
 
 type ParamSchema = { type?: string; properties?: Record<string, unknown>; required?: string[]; description?: string };
-export type Operation = { id: string; source: 'daemon' | 'rest'; name: string; summary: string; params: ParamSchema; destructive: boolean };
+// readOnly, destructive and secret come from the catalog, where scripts/codegen.ts sets them by HTTP method and hand-checked lists.
+export type Operation = {
+  id: string;
+  source: 'daemon' | 'rest';
+  name: string;
+  summary: string;
+  params: ParamSchema;
+  readOnly: boolean;
+  destructive: boolean;
+  secret: boolean;
+};
 export type DaemonCall = (method: string, params: Record<string, unknown> | undefined) => Promise<unknown>;
-type OpsContext = { env?: NodeJS.ProcessEnv; rest?: Rest; computers: Computers; daemon?: DaemonCall };
+type OpsContext = { env?: NodeJS.ProcessEnv; rest?: Pick<Rest, 'call'>; computers: Pick<Computers, 'resolve'>; daemon?: DaemonCall };
 type CallArgs = { id: string; params?: Record<string, unknown>; confirm?: boolean; computer?: string };
 
 const OPERATIONS: Operation[] = JSON.parse(readFileSync(new URL('./generated/catalog.json', import.meta.url), 'utf8')).operations;
 const BY_ID = new Map(OPERATIONS.map((o) => [o.id, o]));
-// The lookahead keeps names such as listenFor or settings from counting as reads.
-const READ_ONLY_DAEMON = /^(get|list|read|search|inspect|count)(?![a-z])/;
+export const ALLOW_DESTRUCTIVE = 'DROID_MCP_ALLOW_DESTRUCTIVE';
+const RELAY_TIMEOUT_MS = 30_000;
 
-export function isReadOnly(op: Pick<Operation, 'source' | 'name'>): boolean {
-  return op.source === 'rest' ? op.name.startsWith('GET ') : READ_ONLY_DAEMON.test(op.name);
-}
+// The server's owner decides this when starting it; an agent's confirm: true alone is not enough.
+export const allowsDestructive = (env: NodeJS.ProcessEnv = process.env) => env[ALLOW_DESTRUCTIVE] === '1';
 
 export function operation(id: string): Operation {
   const op = BY_ID.get(id);
   if (!op) throw new Refused('invalid', `unknown operation ${id}`, 'Search with droid_ops query, then pass an id it returns.');
   return op;
-}
-
-export function describe(op: Operation) {
-  return { ...op, readOnly: isReadOnly(op), callable: true };
 }
 
 export function searchOperations(query: string): Operation[] {
@@ -65,12 +70,26 @@ function restRequest(op: Operation, params: Record<string, unknown>): [HttpMetho
 
 export async function callOperation(ctx: OpsContext, a: CallArgs): Promise<unknown> {
   const op = operation(a.id);
+  if (op.secret) {
+    throw new Refused(
+      'invalid',
+      `${op.id} returns a key or token, and droid-mcp never hands secrets to an agent`,
+      'Ask the user to do this in the Factory app or CLI.',
+    );
+  }
   const cap = autonomyCap(ctx.env);
-  if ((cap === 'off' || cap === 'low') && !isReadOnly(op)) {
+  if ((cap === 'off' || cap === 'low') && !op.readOnly) {
     throw new Refused(
       'invalid',
       `${op.id} is not read-only, and the autonomy cap is '${cap}' (DROID_MCP_MAX_AUTONOMY)`,
       `Call a read-only operation, or ask the user to raise DROID_MCP_MAX_AUTONOMY above '${cap}'.`,
+    );
+  }
+  if (op.destructive && !allowsDestructive(ctx.env)) {
+    throw new Refused(
+      'invalid',
+      `${op.id} is destructive, and this server does not allow destructive operations`,
+      `Ask the user to do it in the Factory app, or to restart droid-mcp with ${ALLOW_DESTRUCTIVE}=1.`,
     );
   }
   if (op.destructive && a.confirm !== true) throw new Refused('invalid', `${op.id} is destructive`, 'Confirm with the user, then pass confirm: true.');
@@ -89,9 +108,30 @@ export async function callOperation(ctx: OpsContext, a: CallArgs): Promise<unkno
   return ctx.daemon(op.name, a.params);
 }
 
+type DaemonClient = ReturnType<typeof createWebSocketDaemonClient>;
+export type RelayDeps = {
+  createClient?: (opts: Parameters<typeof createWebSocketDaemonClient>[0]) => DaemonClient;
+  connect?: typeof connectAndAuthenticate;
+  timeoutMs?: number;
+};
+
+function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new ToolError('computer_offline', `${what} did not answer within ${ms / 1000} s`, 'Check that the Droid daemon runs here, then retry.')),
+      ms,
+    );
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+
 // Reaches the daemon already running on this machine through Factory's relay, the same route the Factory app uses
-// for a registered computer, so droid-mcp never hosts a daemon of its own.
-export function relayDaemon(apiKey: string, rest: Rest, computers: Computers): DaemonCall {
+// for a registered computer, so droid-mcp never hosts a daemon of its own. One connection per call.
+export function relayDaemon(apiKey: string, rest: Pick<Rest, 'computer'>, computers: Pick<Computers, 'thisId'>, deps: RelayDeps = {}): DaemonCall {
+  const createClient = deps.createClient ?? createWebSocketDaemonClient;
+  const connect = deps.connect ?? connectAndAuthenticate;
+  const timeoutMs = deps.timeoutMs ?? RELAY_TIMEOUT_MS;
   return async (method, params) => {
     const computerId = await computers.thisId();
     if (!computerId) {
@@ -103,16 +143,20 @@ export function relayDaemon(apiKey: string, rest: Rest, computers: Computers): D
     }
     const { providerType, relayClientUrl } = await rest.computer(computerId);
     if (!relayClientUrl) throw new ToolError('computer_offline', 'Factory reports no relay URL for this machine', 'Start the Droid daemon here, then retry.');
-    const client = createWebSocketDaemonClient({ machineType: MachineType.Computer, computerId, providerType, getCredential: async () => ({ apiKey }) });
+    const client = createClient({ machineType: MachineType.Computer, computerId, providerType, getCredential: async () => ({ apiKey }) });
     try {
-      await connectAndAuthenticate({
-        client,
-        url: relayClientUrl,
-        authParams: { apiKey, caller: 'sdk', metadata: { sdk: { language: 'typescript', version: SDK_VERSION } } },
-      });
+      const authParams = { apiKey, caller: 'sdk' as const, metadata: { sdk: { language: 'typescript' as const, version: SDK_VERSION } } };
+      await within(connect({ client, url: relayClientUrl, authParams }), timeoutMs, 'the Droid daemon relay');
       // Catalog daemon names are generated from public DaemonClient methods, and params is their first argument.
-      const fn = (client as unknown as Record<string, (p?: Record<string, unknown>) => Promise<unknown>>)[method];
-      return await fn.call(client, params);
+      const fn = (client as unknown as Record<string, unknown>)[method];
+      if (typeof fn !== 'function') {
+        throw new ToolError(
+          'internal',
+          `the installed @factory/droid-sdk has no DaemonClient.${method}`,
+          'Run npm run codegen after upgrading @factory/droid-sdk.',
+        );
+      }
+      return await within(Promise.resolve(fn.call(client, params)), timeoutMs, `DaemonClient.${method}`);
     } finally {
       client.disconnect();
     }

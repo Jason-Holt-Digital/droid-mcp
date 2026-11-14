@@ -53,9 +53,9 @@ For a Factory API endpoint or Droid daemon method that no other tool covers, suc
 
 1. Search with `droid_ops` and a `query`, then call it with the `id` you picked to read its params.
 2. Run it with `droid_call`. A REST request body goes in `params.body`. Daemon operations run only on the computer that runs droid-mcp.
-3. A destructive operation needs the user's OK first. Ask, then pass `confirm: true`. Never pass it on your own judgment.
+3. A destructive operation runs only if the user started droid-mcp with `DROID_MCP_ALLOW_DESTRUCTIVE=1`. Even then, ask the user first, then pass `confirm: true`. Never pass it on your own judgment. If the server refuses, tell the user; do not look for another way.
 
-With `DROID_MCP_MAX_AUTONOMY` at `off` or `low`, only read-only operations run.
+With `DROID_MCP_MAX_AUTONOMY` at `off` or `low`, only read-only operations run. Operations that return keys or tokens are always refused.
 
 ## When a call fails
 
