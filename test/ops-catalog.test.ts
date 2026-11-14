@@ -68,8 +68,8 @@ test('destructive is REST DELETE or a hand-checked id, never a word in the opera
   }
 });
 
-test('readOnly is exactly REST GET, plus listed daemon methods; nothing is both read-only and destructive', () => {
-  for (const o of operations.filter((x) => x.source === 'rest')) assert.equal(o.readOnly, o.name.startsWith('GET '), o.id);
+test('readOnly is exactly REST GET, plus listed daemon methods, minus secret ones; nothing is both read-only and destructive', () => {
+  for (const o of operations.filter((x) => x.source === 'rest')) assert.equal(o.readOnly, o.name.startsWith('GET ') && !o.secret, o.id);
   assert.equal(byId.get('daemon.list_models')?.readOnly, true);
   assert.equal(byId.get('daemon.get_workspace_file_content')?.readOnly, false, 'arbitrary file contents are not read-only for the cap');
   assert.deepEqual(
@@ -82,6 +82,10 @@ test('operations that return keys or tokens are marked secret and are never read
   const secret = operations.flatMap((o) => (o.secret ? [o.id] : []));
   assert.ok(secret.includes('daemon.get_proxy_token'));
   assert.ok(secret.includes('rest.createServiceAccountApiKey'));
+  // Found from the result's fields, not from the hand list.
+  assert.ok(secret.includes('rest.listEnterpriseControlChangeHistory'));
+  assert.ok(secret.includes('daemon.upsert_model_provider'));
+  assert.ok(!secret.includes('daemon.get_user_preferences_state'), 'a sync token is not a credential');
   for (const id of secret) assert.equal(byId.get(id)?.readOnly, false, id);
 });
 

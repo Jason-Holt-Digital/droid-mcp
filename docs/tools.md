@@ -220,7 +220,7 @@ Sessions droid-mcp starts live in its memory. On SIGINT, SIGTERM, or when the st
 
 - `readOnly`: REST `GET`, or a daemon method on a hand-checked list. Methods that return keys or arbitrary file contents are not on it.
 - `destructive`: REST `DELETE`, or an id on a hand-checked list (39 in all). Multi-action operations, such as `daemon.update_mcp_config` with `action: 'remove'` or `daemon.resolve_queued_user_message` with its `Delete` action, count as destructive as a whole. Names are not guessed from: a new operation whose name, or an action in its params, sounds destructive fails codegen until it is classified by hand.
-- `secret`: the operation returns a key or token (7, such as `daemon.get_proxy_token`).
+- `secret`: the operation returns a key, token or credential, so it is never run for an agent and never counts as read-only. Codegen marks it from the result: a REST response schema, or a daemon return type, with a field such as `apiKey`, `clientSecret`, `token` or `extraHeaders`; plus a hand list. 14 today, such as `daemon.get_proxy_token`, `daemon.load_session` (MCP OAuth secrets) and `rest.listEnterpriseControlChangeHistory`.
 
 Left out on purpose:
 

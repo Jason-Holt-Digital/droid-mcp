@@ -88,8 +88,8 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
-    // A stalled REST call must not hold the exit; setup sessions get 10 s to be interrupted and archived.
-    const setupClosed = ctx.setup?.close() ?? Promise.resolve();
+    // A stalled REST call must not hold the exit: setup gets 4 s to interrupt and 4 s to archive, inside a 10 s bound.
+    const setupClosed = ctx.setup?.close(8000) ?? Promise.resolve();
     await Promise.all([ctx.runs.closeAll(), Promise.race([setupClosed, new Promise((r) => setTimeout(r, 10_000).unref())])]);
     await Promise.all([ctx.keys.flush(), ctx.subscriptions.flush()]);
     process.exit(0);
